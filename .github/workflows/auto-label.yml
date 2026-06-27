@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
   issues: write
 
 jobs:
@@ -148,11 +148,19 @@ jobs:
               return;
             }
 
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr.number,
-              labels: validLabels,
-            });
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: validLabels,
+              });
+            } catch (error) {
+              if (error.status === 403) {
+                core.warning(`Could not add labels because the token has insufficient permission: ${error.message}`);
+                return;
+              }
+              throw error;
+            }
 
             core.info(`Added labels: ${validLabels.join(', ')}`);

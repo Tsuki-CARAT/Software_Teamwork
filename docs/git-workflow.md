@@ -7,7 +7,6 @@ fork 的独立分支向主仓库 `develop` 发起 Pull Request。
 
 - `Sakayori-Iroha-168/Software_Teamwork` 是主仓库。
 - `YOUR_NAME/Software_Teamwork` 是你的个人 fork。
-- `L1nggTeam`、`PrimeTeam`、`JerryTeam` 是可选小组 label。
 - `TARGET_BRANCH` 默认设为 `develop`。
 
 ## 1. 登录 GitHub CLI

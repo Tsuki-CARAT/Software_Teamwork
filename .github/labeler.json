@@ -1,22 +1,60 @@
 {
   "accountLabels": [
     {
-      "accounts": ["Sakayori-Iroha-168", "266454825"],
-      "labels": ["documentation"]
+      "accounts": [
+        "Sakayori-Iroha-168",
+        "AKTNL",
+        "EIR9264",
+        "zllll1213",
+        "Fisherman6a"
+      ],
+      "labels": [
+        "L1nggTeam"
+      ]
+    },
+    {
+      "accounts": [
+        "Jackeyliu37"
+      ],
+      "labels": [
+        "PrimeTeam"
+      ]
+    },
+    {
+      "accounts": [],
+      "labels": [
+        "JerryTeam"
+      ]
     }
   ],
   "pathLabels": [
     {
-      "paths": ["frontend/**"],
-      "labels": ["frontend"]
+      "paths": [
+        "frontend/**"
+      ],
+      "labels": [
+        "frontend"
+      ]
     },
     {
-      "paths": ["services/**", "shared/**"],
-      "labels": ["backend"]
+      "paths": [
+        "services/**",
+        "shared/**"
+      ],
+      "labels": [
+        "backend"
+      ]
     },
     {
-      "paths": ["docs/**", "*.md", ".github/**", ".trellis/spec/**"],
-      "labels": ["documentation"]
+      "paths": [
+        "docs/**",
+        "*.md",
+        ".github/**",
+        ".trellis/spec/**"
+      ],
+      "labels": [
+        "documentation"
+      ]
     }
   ]
 }

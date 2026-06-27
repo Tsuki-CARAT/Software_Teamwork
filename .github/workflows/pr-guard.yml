@@ -15,20 +15,26 @@ jobs:
       - name: Enforce collaboration rules
         uses: actions/github-script@v7
         env:
-          REQUIRED_BASE_BRANCH: develop
+          ALLOWED_BASE_BRANCHES: develop,keep-shitting
           OWNER_DIRECT_BRANCH_USERS: Sakayori-Iroha-168
         with:
           script: |
             const pr = context.payload.pull_request;
-            const requiredBase = process.env.REQUIRED_BASE_BRANCH;
+            const allowedBaseBranches = process.env.ALLOWED_BASE_BRANCHES
+              .split(',')
+              .map((branch) => branch.trim())
+              .filter(Boolean);
             const ownerDirectBranchUsers = process.env.OWNER_DIRECT_BRANCH_USERS
               .split(',')
               .map((login) => login.trim())
               .filter(Boolean);
             const failures = [];
 
-            if (pr.base.ref !== requiredBase) {
-              failures.push(`PR base must be '${requiredBase}', got '${pr.base.ref}'.`);
+            if (!allowedBaseBranches.includes(pr.base.ref)) {
+              failures.push(
+                `PR base must be one of: ${allowedBaseBranches.join(', ')}. ` +
+                `Got '${pr.base.ref}'.`
+              );
             }
 
             if (!pr.head.repo) {
@@ -58,9 +64,9 @@ jobs:
 
                 if (!['ahead', 'identical'].includes(comparison.status)) {
                   failures.push(
-                    `PR branch must include the latest '${requiredBase}'. ` +
+                    `PR branch must include the latest '${pr.base.ref}'. ` +
                     `Current comparison status is '${comparison.status}'. ` +
-                    `Run: git fetch upstream && git rebase upstream/${requiredBase}`
+                    `Run: git fetch upstream && git rebase upstream/${pr.base.ref}`
                   );
                 }
               } catch (error) {

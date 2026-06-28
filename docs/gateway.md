@@ -17,7 +17,8 @@
 | --- | --- |
 | Public API surface | 暴露前端使用的 `/api/v1/**` HTTP API。 |
 | Routing | 将请求转发到 `auth`、`file`、`knowledge`、`qa`、`document` 等内部服务。 |
-| Auth context | 校验或委托校验用户身份，并向下游传递用户、角色、权限和 request id。 |
+| Auth context | 基于 Redis 会话缓存读取用户身份，并向下游传递用户、角色、权限和 request id。 |
+| Session cache | 登录或注册成功后缓存 auth 返回的会话身份信息，后续请求优先从 Redis 获取会话上下文。 |
 | Response contract | 对前端保持统一成功响应、分页响应和错误响应结构。 |
 | Request correlation | 生成或透传 `X-Request-Id`，并要求下游服务保留该 request id。 |
 | Cross-service aggregation | 仅为明确页面场景提供少量聚合读接口，例如管理后台概览。 |
@@ -28,7 +29,7 @@
 
 | 领域 | 归属服务 | Gateway 不做什么 |
 | --- | --- | --- |
-| 用户、密码、会话、角色权限数据 | `auth` | 不保存密码，不维护用户表，不实现 RBAC 持久化。 |
+| 用户、密码、会话、角色权限源数据 | `auth` | 不保存密码，不维护用户表，不实现 RBAC 持久化；只在 Redis 保存运行时会话缓存。 |
 | 文件对象、文件元数据、对象存储协调 | `file` | 不直接操作 MinIO，不生成业务 object key。 |
 | 知识库、文档切片、向量索引、检索策略 | `knowledge` | 不执行切片、嵌入、Qdrant 查询或重排序。 |
 | 问答、意图识别、RAG、LLM 调用 | `qa` | 不拼 prompt，不执行 RAG pipeline，不保存对话业务状态。 |
@@ -67,13 +68,47 @@
 
 ## 认证与上下文传递
 
-认证机制后续可选择 token 或 cookie，但公开契约先约定上下文传递规则。
+认证机制初期采用 bearer token + Redis 会话缓存。Auth 服务负责认证、签发会话身份和撤销会话；Gateway 负责在登录或注册成功后写入 Redis，并在后续请求中从 Redis 读取会话上下文。
 
 前端请求：
 
 - 登录类接口不要求认证。
 - 业务接口必须携带认证凭据。
 - 前端不直接设置用户身份 header，用户身份由 gateway 认证后注入。
+- 后续请求使用 `Authorization: Bearer <accessToken>` 携带 gateway 返回的访问令牌。
+
+会话缓存流程：
+
+1. 前端调用 `/api/v1/auth/login` 或 `/api/v1/auth/register`。
+2. Gateway 将请求转发给 auth 服务。
+3. Auth 服务校验凭证，返回用户身份、角色、权限、`sessionId`、`accessToken` 和 `expiresAt`。
+4. Gateway 将完整会话身份写入 Redis，缓存键使用 `gateway:session:<accessTokenHash>`，TTL 与 `expiresAt` 对齐。
+5. 前端后续请求携带 `Authorization: Bearer <accessToken>`。
+6. Gateway 从 Redis 查询会话；命中且未过期时，不需要每次调用 auth 服务。
+7. Gateway 基于缓存的会话身份向下游服务注入 `X-User-Id`、`X-User-Roles`、`X-User-Permissions` 和 `X-Request-Id`。
+8. 登出时 Gateway 调用 auth 撤销会话，并删除 Redis 中的对应缓存。
+
+Redis 会话缓存值应至少包含：
+
+| 字段 | 说明 |
+| --- | --- |
+| `sessionId` | Auth 服务签发的会话 ID。 |
+| `userId` | 已认证用户 ID。 |
+| `username` | 用户名，用于审计和调试，不作为权限判断唯一依据。 |
+| `roles` | 角色列表。 |
+| `permissions` | 权限字符串列表。 |
+| `accessTokenHash` | 访问令牌哈希，避免把原始 token 当作可读缓存字段。 |
+| `expiresAt` | 会话过期时间，使用 RFC 3339 / OpenAPI `date-time`。 |
+| `issuedAt` | 会话签发时间。 |
+
+缓存规则：
+
+- Redis 是运行时会话缓存，不是用户、角色、权限的持久化源数据。
+- 每条会话缓存必须设置明确 TTL。
+- Gateway 日志和错误响应不得输出原始 token、session secret 或 Redis 连接信息。
+- Redis 未命中、会话过期或缓存内容无效时，Gateway 返回 `401 unauthorized`，前端回到登录流程。
+- Redis 不可用时，业务接口返回 `502 dependency_error`；登录、注册和登出等 auth 流程可以按实现策略选择失败或降级，但必须保持错误 envelope 一致。
+- 权限变更、用户禁用或安全事件需要让旧会话失效时，auth 服务应提供撤销能力，Gateway 删除对应 Redis 会话缓存。
 
 Gateway 调用下游服务时应传递：
 
@@ -87,6 +122,41 @@ Gateway 调用下游服务时应传递：
 | `X-Forwarded-Proto` | 原始协议。 |
 
 下游服务仍需在自己的边界做权限校验，不能只依赖前端传参。
+
+## Gateway Auth 接口
+
+Gateway 对前端暴露 auth 相关公开接口，具体 schema 以 [`docs/api/gateway.openapi.yaml`](api/gateway.openapi.yaml) 为准。
+
+| Method | Path | Auth | Gateway 行为 | Auth service 行为 |
+| --- | --- | --- | --- | --- |
+| `POST` | `/api/v1/auth/register` | 不需要 | 转发注册请求，成功后写入 Redis 会话缓存并返回统一 envelope。 | 创建用户、计算角色权限、签发会话身份。 |
+| `POST` | `/api/v1/auth/login` | 不需要 | 转发登录请求，成功后写入 Redis 会话缓存并返回统一 envelope。 | 校验凭证、计算角色权限、签发会话身份。 |
+| `POST` | `/api/v1/auth/logout` | 需要 | 从 Redis 定位当前会话，调用 auth 撤销会话，删除 Redis 缓存。 | 撤销会话或令牌，记录安全事件。 |
+| `GET` | `/api/v1/auth/me` | 需要 | 从 Redis 会话缓存读取当前用户并返回 `UserResponse`。 | 拥有用户和权限源数据；默认不参与每次 `/me` 查询。 |
+
+登录和注册成功响应包含：
+
+```json
+{
+  "data": {
+    "user": {
+      "id": "usr_123",
+      "username": "alice",
+      "roles": ["admin"],
+      "permissions": ["knowledge:read", "document:upload"]
+    },
+    "session": {
+      "sessionId": "sess_123",
+      "accessToken": "eyJ...",
+      "tokenType": "Bearer",
+      "expiresAt": "2026-06-28T12:00:00Z"
+    }
+  },
+  "requestId": "req_123"
+}
+```
+
+Gateway 必须只把 `data.session.accessToken` 返回给前端，不得把 Redis key、token hash、内部 auth URL 或 session secret 暴露给前端。
 
 ## 响应约定
 

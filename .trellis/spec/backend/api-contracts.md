@@ -233,3 +233,112 @@ gateway.openapi.yaml has no matching public path
 docs/file.md references /api/v1/documents/{documentId}/download
 gateway.openapi.yaml owns the same public path and owner-service marker
 ```
+
+## Scenario: Gateway Redis Session Cache
+
+### 1. Scope / Trigger
+
+- Trigger: adding or changing auth login/register/logout/current-user
+  behavior, gateway auth middleware, or session identity fields.
+- Applies to `services/gateway/`, `services/auth/`, `docs/auth.md`,
+  `docs/gateway.md`, `docs/frontend-backend-contract.md`, and
+  `docs/api/gateway.openapi.yaml`.
+
+### 2. Signatures
+
+Public auth routes stay under:
+
+```text
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+POST /api/v1/auth/logout
+GET  /api/v1/auth/me
+```
+
+Auth success responses must include `data.user` and `data.session`.
+
+### 3. Contracts
+
+`data.user` must include:
+
+- `id`
+- `username`
+- `roles`
+- `permissions`
+
+`data.session` must include:
+
+- `sessionId`
+- `accessToken`
+- `tokenType`
+- `expiresAt`
+
+Gateway must store the runtime session in Redis using:
+
+```text
+gateway:session:<accessTokenHash>
+```
+
+The cached value must include enough fields to inject `X-User-Id`,
+`X-User-Roles`, and `X-User-Permissions` without calling auth on every
+business request. The Redis TTL must not outlive `data.session.expiresAt`.
+Redis is not the durable source of user, role, permission, or session truth.
+
+### 4. Validation & Error Matrix
+
+| Condition | Public response |
+| --- | --- |
+| Missing bearer credential | `401 unauthorized` |
+| Redis session miss, expired session, or malformed cache value | `401 unauthorized` |
+| Auth rejects login credentials | `401 unauthorized` |
+| Gateway cannot access Redis for an authenticated business request | `502 dependency_error` |
+| Auth service or durable auth store is unavailable during login/logout | `502 dependency_error` |
+
+Do not expose raw tokens, token hashes, Redis keys, session secrets, or auth
+internal URLs to frontend responses or logs.
+
+### 5. Good/Base/Bad Cases
+
+- Good: login response returns `user` plus `session`; gateway hashes the access
+  token for the Redis key, sets TTL from `expiresAt`, and injects downstream
+  identity headers from the cache.
+- Base: `/auth/me` reads the Redis session cache and returns `UserResponse`
+  without calling auth for every request.
+- Bad: gateway stores original access tokens in logs or treats Redis as the
+  durable source of permissions.
+
+### 6. Tests Required
+
+When implementation exists:
+
+- Auth handler/client tests assert `AuthResponse` includes `user.permissions`
+  and `session`.
+- Gateway auth middleware tests cover Redis hit, miss, expired session,
+  malformed session, and Redis dependency failure.
+- Gateway downstream client tests assert `X-User-Id`, `X-User-Roles`,
+  `X-User-Permissions`, and `X-Request-Id` are propagated.
+- Logout tests assert auth revocation is called and Redis cache is deleted.
+
+For documentation-only changes:
+
+- Parse `docs/api/gateway.openapi.yaml`.
+- Verify `AuthResponse` requires `user` and `session`.
+- Verify docs mention `gateway:session:<accessTokenHash>` and Redis TTL.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```text
+gateway receives Authorization: Bearer token
+gateway calls auth service on every business request
+gateway logs the raw token on failures
+```
+
+#### Correct
+
+```text
+gateway receives Authorization: Bearer token
+gateway hashes token and reads gateway:session:<accessTokenHash>
+gateway injects cached user, roles, and permissions into downstream headers
+```

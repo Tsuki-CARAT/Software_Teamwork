@@ -23,8 +23,11 @@
 
 - 登录、注册接口不要求认证。
 - 业务接口默认要求认证，OpenAPI 中使用 `bearerAuth` 标记。
+- 登录或注册成功后，前端从响应的 `data.session.accessToken` 读取访问令牌。
+- 前端后续请求使用 `Authorization: Bearer <accessToken>`。
 - 前端只发送认证凭据，不发送 `X-User-Id`、`X-User-Roles`、`X-User-Permissions`。
-- 用户身份、角色和权限由 gateway 校验后传递给下游服务。
+- 用户身份、角色和权限由 gateway 从 Redis 会话缓存读取后传递给下游服务。
+- Redis 会话缓存由 gateway 在 auth 返回身份/会话信息后写入；前端不直接访问 Redis 或 auth 内部地址。
 - `401 unauthorized` 表示未登录或认证失效；前端应回到登录流程。
 - `403 forbidden` 表示已登录但权限不足；前端应展示权限不足状态。
 

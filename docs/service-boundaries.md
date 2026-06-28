@@ -6,8 +6,8 @@
 
 | Service | Owns | Exposes to gateway | Must not own |
 | --- | --- | --- | --- |
-| `gateway` | Public API, routing, auth context propagation, response/error envelope, request id, lightweight aggregation. | `/api/v1/**`, `/healthz`, `/readyz`. | Domain persistence, document parsing, vector search, LLM workflows, report generation business logic. |
-| `auth` | Users, credentials, roles, permissions, sessions or tokens. | Login, logout, current user, permission checks. | File metadata, knowledge indexing, QA messages, report records. |
+| `gateway` | Public API, routing, Redis-backed session cache, auth context propagation, response/error envelope, request id, lightweight aggregation. | `/api/v1/**`, `/healthz`, `/readyz`. | Durable user/role/permission persistence, document parsing, vector search, LLM workflows, report generation business logic. |
+| `auth` | Users, credentials, roles, permissions, sessions or tokens, session identity issuing and revocation. | Login, logout, current user, permission checks, session identity for gateway caching. | File metadata, knowledge indexing, QA messages, report records. |
 | `file` | Uploads, original files, object storage coordination, file metadata lifecycle. | Upload, download, file metadata, file deletion. | Knowledge chunking, vector index, RAG, report generation. |
 | `knowledge` | Knowledge bases, document ingestion state, chunks, embeddings, retrieval policies, search. | Knowledge base CRUD, document processing state, chunk list, search. | User identity, raw object storage, LLM answer generation, DOCX export. |
 | `qa` | Chat sessions, messages, intent routing for QA, RAG answer generation, citations. | Chat session APIs, non-stream and stream answer APIs. | Knowledge base CRUD, file upload, report record management. |
@@ -17,8 +17,8 @@
 
 | Workflow | Gateway role | Owner service | Notes |
 | --- | --- | --- | --- |
-| Register / login | Public entrypoint, response normalization. | `auth` | Password validation and session/token issuing stay in auth. |
-| Current user | Route and normalize. | `auth` | Gateway may cache only if a future policy explicitly allows it. |
+| Register / login | Public entrypoint, response normalization, Redis session cache write. | `auth` | Password validation and session/token issuing stay in auth; auth returns identity/session payload for gateway caching. |
+| Current user | Read Redis session cache and normalize response. | `auth` | Auth owns user/session source data; gateway owns runtime cache lookup and downstream context injection. |
 | Knowledge base CRUD | Route and normalize. | `knowledge` | Knowledge service owns metadata and retrieval strategy. |
 | Upload document to knowledge base | Public workflow entrypoint. | `file` and `knowledge` with one explicit workflow owner to be finalized. | File service owns raw upload; knowledge service owns ingestion/indexing state. Gateway must not implement parsing or indexing. |
 | Document processing retry | Route and normalize. | `knowledge` | Retry means re-run ingestion/indexing, not re-upload original file. |

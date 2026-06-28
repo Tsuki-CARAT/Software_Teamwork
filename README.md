@@ -65,6 +65,7 @@ postgres + redis + qdrant + minio
 Gateway 基础契约文档：
 
 - Gateway 服务规划：[docs/gateway.md](docs/gateway.md)
+- Auth 服务接口文档：[docs/auth.md](docs/auth.md)
 - File 服务接口文档：[docs/file.md](docs/file.md)
 - Gateway OpenAPI 契约：[docs/api/gateway.openapi.yaml](docs/api/gateway.openapi.yaml)
 - 服务边界矩阵：[docs/service-boundaries.md](docs/service-boundaries.md)

@@ -837,7 +837,7 @@ components:
           format: password
     UserSummary:
       type: object
-      required: [id, username, roles]
+      required: [id, username, roles, permissions]
       properties:
         id:
           type: string
@@ -847,19 +847,38 @@ components:
           type: array
           items:
             type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    SessionSummary:
+      type: object
+      required: [sessionId, accessToken, tokenType, expiresAt]
+      properties:
+        sessionId:
+          type: string
+        accessToken:
+          type: string
+          description: Bearer credential sent by the frontend on later requests.
+        tokenType:
+          type: string
+          enum: [Bearer]
+          default: Bearer
+        expiresAt:
+          type: string
+          format: date-time
     AuthResponse:
       type: object
       required: [data, requestId]
       properties:
         data:
           type: object
-          required: [user]
+          required: [user, session]
           properties:
             user:
               $ref: "#/components/schemas/UserSummary"
-            accessToken:
-              type: string
-              description: Present only when token-based auth is selected.
+            session:
+              $ref: "#/components/schemas/SessionSummary"
         requestId:
           type: string
     UserResponse:

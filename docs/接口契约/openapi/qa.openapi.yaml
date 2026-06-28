@@ -1,0 +1,530 @@
+openapi: 3.0.3
+info:
+  title: QA API
+  version: 0.1.0
+  description: RESTful API contract for conversations, messages, SSE answering, citations, settings, retrieval tests, and stats.
+servers:
+  - url: /api/v1
+security:
+  - cookieSession: []
+  - bearerAuth: []
+tags:
+  - name: Conversations
+  - name: Messages
+  - name: Citations
+  - name: Reasoning
+  - name: Intents
+  - name: Settings
+  - name: RetrievalTests
+  - name: Stats
+paths:
+  /qa/conversations:
+    get:
+      tags: [Conversations]
+      summary: List conversations
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Conversation list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationPage' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Conversations]
+      summary: Create conversation
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateConversationRequest' }
+      responses:
+        '201':
+          description: Created conversation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        default: { $ref: '#/components/responses/Error' }
+  /qa/conversations/{conversationId}:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    get:
+      tags: [Conversations]
+      summary: Get conversation
+      responses:
+        '200':
+          description: Conversation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Conversations]
+      summary: Update conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateConversationRequest' }
+      responses:
+        '200':
+          description: Updated conversation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Conversations]
+      summary: Delete conversation
+      responses:
+        '204': { description: Deleted }
+        default: { $ref: '#/components/responses/Error' }
+  /qa/conversations/{conversationId}/messages:
+    get:
+      tags: [Messages]
+      summary: List messages
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Message list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessagePage' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Messages]
+      summary: Ask question and return full answer
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AskRequest' }
+      responses:
+        '200':
+          description: Full answer
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AskResponse' }
+        default: { $ref: '#/components/responses/Error' }
+  /qa/conversations/{conversationId}/messages:stream:
+    post:
+      tags: [Messages]
+      summary: Ask question and stream answer via SSE
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AskRequest' }
+      responses:
+        '200':
+          description: SSE stream. Events include message.created, intent.detected, retrieval.completed, answer.delta, citation.delta, reasoning.step, answer.completed, error.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        default: { $ref: '#/components/responses/Error' }
+  /qa/messages/{messageId}:cancel:
+    post:
+      tags: [Messages]
+      summary: Cancel generating message
+      parameters:
+        - $ref: '#/components/parameters/MessageId'
+      responses:
+        '200':
+          description: Cancelled message
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        default: { $ref: '#/components/responses/Error' }
+  /qa/messages/{messageId}/citations:
+    get:
+      tags: [Citations]
+      summary: List message citations
+      parameters:
+        - $ref: '#/components/parameters/MessageId'
+      responses:
+        '200':
+          description: Citation list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Citation' }
+        default: { $ref: '#/components/responses/Error' }
+  /qa/citations/{citationId}:
+    get:
+      tags: [Citations]
+      summary: Get citation detail
+      parameters:
+        - name: citationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Citation detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CitationDetail' }
+        default: { $ref: '#/components/responses/Error' }
+  /qa/messages/{messageId}/reasoning-steps:
+    get:
+      tags: [Reasoning]
+      summary: List reasoning or process summary steps
+      parameters:
+        - $ref: '#/components/parameters/MessageId'
+      responses:
+        '200':
+          description: Reasoning steps
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReasoningStep' }
+        default: { $ref: '#/components/responses/Error' }
+  /qa/intents:detect:
+    post:
+      tags: [Intents]
+      summary: Detect user intent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DetectIntentRequest' }
+      responses:
+        '200':
+          description: Intent result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetectIntentResponse' }
+        default: { $ref: '#/components/responses/Error' }
+  /qa/settings:
+    get:
+      tags: [Settings]
+      summary: Get QA settings
+      responses:
+        '200':
+          description: QA settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QaSettings' }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Settings]
+      summary: Update QA settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QaSettingsUpdate' }
+      responses:
+        '200':
+          description: Updated timestamp
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpdatedAt' }
+        default: { $ref: '#/components/responses/Error' }
+  /qa/retrieval-tests:
+    post:
+      tags: [RetrievalTests]
+      summary: Run QA retrieval test
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RetrievalTestRequest' }
+      responses:
+        '200':
+          description: Retrieval test result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RetrievalTestResponse' }
+        default: { $ref: '#/components/responses/Error' }
+  /qa/stats/overview:
+    get:
+      tags: [Stats]
+      summary: Get QA overview stats
+      responses:
+        '200':
+          description: QA stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QaStats' }
+        default: { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      schema: { type: string }
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      schema: { type: string }
+  responses:
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    Conversation:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        ownerUserId: { type: string }
+        status: { type: string, enum: [active, deleted] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        lastMessageAt: { type: string, format: date-time }
+    CreateConversationRequest:
+      type: object
+      properties:
+        title: { type: string }
+    UpdateConversationRequest:
+      type: object
+      properties:
+        title: { type: string }
+    ConversationPage:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Conversation' }
+    Message:
+      type: object
+      properties:
+        id: { type: string }
+        conversationId: { type: string }
+        role: { type: string, enum: [user, assistant, system] }
+        content: { type: string }
+        intent: { $ref: '#/components/schemas/Intent' }
+        status: { type: string, enum: [queued, generating, completed, failed, cancelled] }
+        createdAt: { type: string, format: date-time }
+    MessagePage:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Message' }
+    Intent:
+      type: string
+      enum: [knowledge_qa, general_chat, report_generation, data_analysis, unknown]
+    AskRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        mode: { $ref: '#/components/schemas/Intent' }
+        knowledgeBaseIds:
+          type: array
+          items: { type: string }
+        retrieval: { $ref: '#/components/schemas/RetrievalOptions' }
+    RetrievalOptions:
+      type: object
+      properties:
+        topK: { type: integer }
+        scoreThreshold: { type: number }
+        rerankThreshold: { type: number }
+        enableRerank: { type: boolean }
+        tagFilters:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+    AskResponse:
+      type: object
+      properties:
+        userMessage: { $ref: '#/components/schemas/Message' }
+        assistantMessage: { $ref: '#/components/schemas/Message' }
+        citations:
+          type: array
+          items: { $ref: '#/components/schemas/Citation' }
+        reasoningSteps:
+          type: array
+          items: { $ref: '#/components/schemas/ReasoningStep' }
+    Citation:
+      type: object
+      properties:
+        id: { type: string }
+        messageId: { type: string }
+        chunkId: { type: string }
+        documentId: { type: string }
+        knowledgeBaseId: { type: string }
+        documentName: { type: string }
+        sectionPath: { type: string }
+        contentPreview: { type: string }
+        score: { type: number }
+        rerankScore: { type: number, nullable: true }
+        chunkType: { type: string }
+        isSourceAvailable: { type: boolean }
+    CitationDetail:
+      allOf:
+        - $ref: '#/components/schemas/Citation'
+        - type: object
+          properties:
+            content: { type: string }
+            source:
+              type: object
+              properties:
+                available: { type: boolean }
+                reason: { type: string }
+                downloadEndpoint: { type: string }
+    ReasoningStep:
+      type: object
+      properties:
+        id: { type: string }
+        messageId: { type: string }
+        type: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        status: { type: string, enum: [queued, running, completed, failed] }
+        createdAt: { type: string, format: date-time }
+    DetectIntentRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        conversationId: { type: string }
+    DetectIntentResponse:
+      type: object
+      properties:
+        intent: { $ref: '#/components/schemas/Intent' }
+        confidence: { type: number }
+        allowed: { type: boolean }
+        route:
+          type: object
+          properties:
+            module: { type: string }
+            suggestedEndpoint: { type: string }
+    QaSettings:
+      type: object
+      properties:
+        defaultKnowledgeBaseIds:
+          type: array
+          items: { type: string }
+        retrieval: { $ref: '#/components/schemas/RetrievalOptions' }
+        llm: { $ref: '#/components/schemas/ModelConfigPublic' }
+    QaSettingsUpdate:
+      allOf:
+        - $ref: '#/components/schemas/QaSettings'
+        - type: object
+          properties:
+            llm: { $ref: '#/components/schemas/ModelConfigWritable' }
+    ModelConfigPublic:
+      type: object
+      properties:
+        provider: { type: string }
+        model: { type: string }
+        baseUrl: { type: string }
+        timeoutSeconds: { type: integer }
+    ModelConfigWritable:
+      allOf:
+        - $ref: '#/components/schemas/ModelConfigPublic'
+        - type: object
+          properties:
+            apiKey: { type: string, writeOnly: true }
+    RetrievalTestRequest:
+      type: object
+      required: [question]
+      properties:
+        question: { type: string }
+        knowledgeBaseIds:
+          type: array
+          items: { type: string }
+        retrieval: { $ref: '#/components/schemas/RetrievalOptions' }
+    RetrievalTestResponse:
+      type: object
+      properties:
+        id: { type: string }
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              documentName: { type: string }
+              sectionPath: { type: string }
+              score: { type: number }
+              rerankScore: { type: number }
+              contentPreview: { type: string }
+        createdAt: { type: string, format: date-time }
+    QaStats:
+      type: object
+      properties:
+        totalQuestionCount: { type: integer }
+        conversationCount: { type: integer }
+        trend30d:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              questionCount: { type: integer }
+    UpdatedAt:
+      type: object
+      properties:
+        updatedAt: { type: string, format: date-time }
+    Page:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [validation_error, unauthorized, forbidden, not_found, conflict, rate_limited, dependency_error, internal_error]
+            message: { type: string }
+            requestId: { type: string }
+            fields:
+              type: object
+              additionalProperties: { type: string }

@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/api-contracts.md", "reason": "Verify gateway OpenAPI operations, RESTful resource paths, response envelopes, and owner-service markers."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify data model and implementation plan align with document-owned PostgreSQL and MinIO responsibilities."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify public and service errors follow stable error categories and avoid leaking internals."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify logs and operation audit fields avoid secrets, prompts, MinIO keys, and full document content."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify service-local quality, testing, and build expectations."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Verify public API fields, database fields, workflow events, and MCP outputs stay consistent across layers."}

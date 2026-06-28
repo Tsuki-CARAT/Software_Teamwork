@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend service ownership and pre-development checklist for services/document implementation."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Service-local Go module layout and directory responsibilities for services/document."}
+{"file": ".trellis/spec/backend/api-contracts.md", "reason": "Gateway-first RESTful API contract, response envelope, owner service, and context header rules."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "PostgreSQL, migration, transaction, MinIO, and repository rules for document-owned persistence."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Stable error categories and propagation rules for handlers and services."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Structured logging and sensitive-data restrictions for jobs, MCP calls, and MinIO operations."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Service-local build, test, and implementation quality requirements."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer field mapping and data flow checks across gateway, service, database, MinIO, and MCP."}

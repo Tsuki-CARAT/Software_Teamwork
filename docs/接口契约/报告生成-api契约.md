@@ -984,8 +984,8 @@ GET /api/v1/reports/settings
 {
   "llm": {
     "provider": "ai-gateway",
+    "profileId": "mp_chat_default",
     "model": "llm-model-name",
-    "baseUrl": "https://ai-gateway.example.com/v1",
     "timeoutSeconds": 120
   },
   "defaultTemplates": {
@@ -1012,9 +1012,8 @@ PATCH /api/v1/reports/settings
 {
   "llm": {
     "provider": "ai-gateway",
+    "profileId": "mp_chat_default",
     "model": "llm-model-name",
-    "baseUrl": "https://ai-gateway.example.com/v1",
-    "apiKey": "secret",
     "timeoutSeconds": 120
   },
   "defaultTemplates": {
@@ -1039,8 +1038,7 @@ PATCH /api/v1/reports/settings
 
 规则：
 
-- `apiKey` 只允许写入，不允许明文读取。
-- `baseUrl` 指向 AI gateway 的 OpenAI-compatible API 地址；`document` 服务不直接适配多个模型供应商。
+- `profileId` 指向 AI Gateway 中的 chat profile；`document` 不保存 provider `baseUrl` 或 `apiKey`，也不直接适配多个模型供应商。
 - 默认模板必须存在且状态可用。
 - `defaultNumberingMode` 首期固定为 `global`；`defaultStyleProfileId` 不传时使用系统默认样式。
 
@@ -1082,7 +1080,7 @@ GET /api/v1/reports/stats/overview
 | 生成 DOCX | MinIO + export metadata | `file` / `document` |
 | 生成任务状态 | PostgreSQL 持久化，Redis 队列和短期状态辅助；自动重试最多 3 次 | `document` |
 | 报告支撑材料 | 独立资源元数据 + file metadata + MinIO；需要检索时复用 Qdrant | `knowledge` / `file` |
-| LLM 配置 | PostgreSQL 或安全配置存储，密钥需加密；调用统一走 `ai-gateway` | `document` / `ai-gateway` |
+| LLM 配置 | PostgreSQL 保存业务默认参数和 AI Gateway profile 引用；provider 密钥由 AI Gateway 管理 | `document` / `ai-gateway` |
 
 ## 14. 已确认决策与后续跟踪
 

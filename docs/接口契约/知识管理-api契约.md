@@ -893,14 +893,14 @@ GET /api/v1/knowledge/settings
 {
   "embeddingModel": {
     "provider": "ai-gateway",
+    "profileId": "mp_embedding_default",
     "model": "embedding-model-name",
-    "baseUrl": "https://ai-gateway.example.com/v1",
     "dimension": 1024
   },
   "rerankModel": {
     "provider": "ai-gateway",
+    "profileId": "mp_rerank_default",
     "model": "rerank-model-name",
-    "baseUrl": "https://ai-gateway.example.com/v1",
     "topN": 20
   },
   "parser": {
@@ -923,16 +923,14 @@ PATCH /api/v1/knowledge/settings
 {
   "embeddingModel": {
     "provider": "ai-gateway",
+    "profileId": "mp_embedding_default",
     "model": "embedding-model-name",
-    "baseUrl": "https://ai-gateway.example.com/v1",
-    "apiKey": "secret",
     "dimension": 1024
   },
   "rerankModel": {
     "provider": "ai-gateway",
+    "profileId": "mp_rerank_default",
     "model": "rerank-model-name",
-    "baseUrl": "https://ai-gateway.example.com/v1",
-    "apiKey": "secret",
     "topN": 20
   },
   "parser": {
@@ -955,8 +953,7 @@ PATCH /api/v1/knowledge/settings
 
 规则：
 
-- `apiKey` 只允许写入，不允许明文读取。
-- `baseUrl` 指向 AI gateway 的 OpenAI-compatible API 地址；业务服务不直接适配多个模型供应商。
+- 模型配置中的 `profileId` 指向 AI Gateway 中的 embedding 或 rerank profile；`knowledge` 不保存 provider `baseUrl` 或 `apiKey`，也不直接适配多个模型供应商。
 - 配置变更应记录变更人和时间。
 - `parser.backend` 首期固定为 `external_api`；`parser.apiKey` 只允许写入，不允许明文读取。
 - embedding 维度或模型族变化时创建新的 Qdrant collection 版本，并通过后台任务重建索引；旧 collection 保留到切换完成后清理。
@@ -993,7 +990,7 @@ GET /api/v1/knowledge/stats/overview
 | 切片元数据 | PostgreSQL | `knowledge` |
 | 向量和检索 payload | Qdrant | `knowledge` |
 | 处理任务状态 | PostgreSQL 持久化，Redis 队列和短期状态辅助；自动重试最多 3 次 | `knowledge` |
-| 模型配置 | PostgreSQL 或安全配置存储，密钥需加密；调用统一走 `ai-gateway` | `knowledge` / `ai-gateway` |
+| 模型配置 | PostgreSQL 保存业务默认参数和 AI Gateway profile 引用；provider 密钥由 AI Gateway 管理 | `knowledge` / `ai-gateway` |
 
 ## 12. 已确认决策与后续跟踪
 

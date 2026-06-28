@@ -678,8 +678,8 @@ GET /api/v1/qa/settings
   },
   "llm": {
     "provider": "ai-gateway",
+    "profileId": "mp_chat_default",
     "model": "llm-model-name",
-    "baseUrl": "https://ai-gateway.example.com/v1",
     "timeoutSeconds": 60
   }
 }
@@ -704,9 +704,8 @@ PATCH /api/v1/qa/settings
   },
   "llm": {
     "provider": "ai-gateway",
+    "profileId": "mp_chat_default",
     "model": "llm-model-name",
-    "baseUrl": "https://ai-gateway.example.com/v1",
-    "apiKey": "secret",
     "timeoutSeconds": 60
   }
 }
@@ -722,8 +721,7 @@ PATCH /api/v1/qa/settings
 
 规则：
 
-- `apiKey` 只允许写入，不允许明文读取。
-- `baseUrl` 指向 `ai-gateway` 的 OpenAI-compatible endpoint；QA 不实现供应商适配层。
+- `profileId` 指向 AI Gateway 中的 chat profile；QA 不保存 provider `baseUrl` 或 `apiKey`，也不实现供应商适配层。
 - 配置变更应记录操作人和时间。
 - 默认知识库必须存在且管理员有配置权限。
 
@@ -805,7 +803,7 @@ GET /api/v1/qa/stats/overview
 | 数据 | 存储 | 所有者 |
 | --- | --- | --- |
 | 会话、消息、引用、处理过程摘要 | PostgreSQL | `qa` |
-| 问答配置 | PostgreSQL 或安全配置存储，密钥需加密；模型调用配置指向 `ai-gateway` | `qa` / `ai-gateway` |
+| 问答配置 | PostgreSQL 保存业务默认参数和 AI Gateway profile 引用；provider 密钥由 AI Gateway 管理 | `qa` / `ai-gateway` |
 | 检索候选片段 | 来自 `knowledge` API | `knowledge` |
 | 原始文档与下载 URL | MinIO + file metadata | `file` / `knowledge` |
 | 流式生成短期状态 | Redis 可缓存 | `qa` |
@@ -821,5 +819,5 @@ GET /api/v1/qa/stats/overview
 | Q4 | “思考过程展示”只展示处理摘要，不返回原始模型推理链。 |
 | Q5 | 统计指标本期实现；Excel/表格类数据分析意图本期不实现，命中后返回 `unsupported_intent`。 |
 | Q6 | 首期按角色级 RBAC 控制管理员能力；管理员和超级管理员可查看、软删除全站会话。 |
-| Q7 | LLM 通过 `ai-gateway` 的 OpenAI-compatible API 调用；业务服务通过配置修改 `baseURL`、`apiKey` 和模型名。 |
+| Q7 | LLM 通过 `ai-gateway` 的 OpenAI-compatible API 调用；业务服务通过配置引用 `profileId`、模型名和业务默认参数，provider `baseURL` 与 `apiKey` 由 AI Gateway 管理。 |
 | Q8 | 回答引用保存片段快照，同时保留 chunkId/documentId 便于追溯。 |

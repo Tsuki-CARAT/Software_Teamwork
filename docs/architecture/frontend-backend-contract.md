@@ -10,18 +10,22 @@
 /api/v1
 ```
 
-前端不得直接调用 `auth`、`file`、`knowledge`、`qa`、`document` 的内部地址。内部服务地址只应存在于 gateway 或部署配置中。
+前端不得直接调用 `auth`、`file`、`knowledge`、`qa`、`document`、`ai-gateway` 的内部地址。内部服务地址只应存在于 gateway、领域服务或部署配置中。
 
 管理端、其他后端模块和 MCP 工具等 HTTP 调用方同样必须通过 gateway `/api/v1` 访问公开业务接口，不得绕过 gateway 直连内部服务。
+
+AI Gateway 是内部模型服务，只提供 `/internal/v1/**` 给 `qa`、`knowledge`、`document` 等后端服务使用。前端即使需要问答、报告生成或模型配置能力，也必须先调用 public gateway 的 `/api/v1/**`，不能直接调用 AI Gateway 的 OpenAI-compatible endpoint。
 
 ## OpenAPI 作为协作源
 
 - `docs/api/gateway.openapi.yaml` 是前端与 gateway 的第一版契约源。
+- `docs/接口契约/openapi/ai-gateway.openapi.yaml` 是 AI Gateway 内部服务契约源，不生成前端 API client。
 - 前端可以基于 OpenAPI 生成类型、mock server 或手写 API client。
 - 后端实现 endpoint 前，应先更新 OpenAPI。
 - 破坏性字段变更必须同步更新 OpenAPI 和本契约文档。
 - 所有前端到 gateway、gateway 到下游服务的 HTTP API 必须使用 RESTful 资源路径，由 HTTP method 表达动作；健康检查是唯一已允许的非 `/api/v1` 例外。
-- 本轮把 gateway 健康检查、auth、file-owned 接口、knowledge-owned 知识库/文档处理/切片/检索接口，以及 `document` 拥有的报告生成接口列为已确定契约；`qa` 和管理后台聚合接口暂缺，见 OpenAPI 顶层 `x-missing-contracts`。
+- 本轮把 gateway 健康检查、auth、file-owned 接口、knowledge-owned 知识库/文档处理/切片/检索接口，以及 `document` 拥有的报告生成接口列为已确定公开契约；`qa` 和管理后台聚合接口暂缺，见 OpenAPI 顶层 `x-missing-contracts`。
+- AI Gateway 的 chat、embedding 和 rerank 契约已经作为内部服务契约补齐，但不改变前端只能调用 gateway 的约束。
 
 ## 认证约定
 
@@ -139,7 +143,7 @@
 
 ## SSE 与流式 UI
 
-问答和报告生成的流式接口暂缺，当前 OpenAPI 不提供稳定 SSE endpoint。报告生成当前可使用 `GET /api/v1/reports/{reportId}/events` 轮询事件列表；后续补齐 SSE 时，前端处理原则如下：
+问答和报告生成的公开流式接口暂缺，当前 gateway OpenAPI 不提供稳定 SSE endpoint。AI Gateway 内部 `POST /internal/v1/chat/completions` 支持 OpenAI-compatible streaming chunk，但该能力只供后端领域服务使用，不等同于前端可调用的 gateway SSE contract。报告生成当前可使用 `GET /api/v1/reports/{reportId}/events` 轮询事件列表；后续补齐 SSE 时，前端处理原则如下：
 
 - 根据 `Content-Type: text/event-stream` 进入流式读取。
 - `message` 事件用于文本增量。
@@ -172,4 +176,5 @@
 - 前端以 OpenAPI 中已存在的 active paths 为准，不等待所有内部服务完成。
 - OpenAPI `x-missing-contracts` 中列出的范围只能作为待办，不应生成可调用 API client 方法。
 - 各后端服务以 gateway OpenAPI 和服务边界矩阵确认自己需要提供的能力。
+- 领域服务需要模型能力时，以 AI Gateway OpenAPI 和 [AI Gateway API 契约](../接口契约/AI网关-api契约.md) 为准，不把 provider 细节暴露给前端。
 - 如果实现发现契约不合理，先更新 OpenAPI 和相关文档，再改代码。

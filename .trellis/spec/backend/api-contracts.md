@@ -172,10 +172,138 @@ gateway -> normalized KnowledgeQueryResponse or ErrorResponse
 
 ## Related Documents
 
-- `docs/gateway.md`
+- `docs/services/gateway.md`
 - `docs/api/gateway.openapi.yaml`
-- `docs/service-boundaries.md`
-- `docs/frontend-backend-contract.md`
+- `docs/architecture/service-boundaries.md`
+- `docs/architecture/frontend-backend-contract.md`
+
+## Scenario: Internal Service Contract API
+
+### 1. Scope / Trigger
+
+- Trigger: adding or changing an internal service-to-service HTTP API, including
+  model invocation APIs owned by `ai-gateway`.
+- Applies to `docs/接口契约/openapi/<service>.openapi.yaml`,
+  `services/<service>/api/openapi.yaml`, service interface docs, and matching
+  service-boundary documentation.
+
+### 2. Signatures
+
+Internal service routes use:
+
+```text
+GET /healthz
+GET /readyz
+/internal/v1/**
+```
+
+AI Gateway model invocation routes intentionally use OpenAI-compatible paths
+inside the internal prefix:
+
+```text
+POST /internal/v1/chat/completions
+POST /internal/v1/embeddings
+POST /internal/v1/rerankings
+```
+
+`/internal/v1/rerankings` is an OpenAI-style extension because OpenAI does not
+define a native rerank endpoint.
+
+### 3. Contracts
+
+Internal project-owned configuration or metadata APIs use the standard project
+envelope:
+
+```json
+{ "data": {}, "requestId": "req_123" }
+```
+
+```json
+{ "error": { "code": "validation_error", "message": "request validation failed", "requestId": "req_123" } }
+```
+
+AI Gateway chat completion and embedding APIs use OpenAI-compatible request,
+success response, streaming chunk, and error body shapes. They must not wrap
+successful model responses in the project `data/requestId` envelope. The
+request id is carried through `X-Request-Id` response headers and logs.
+
+Internal services must accept or propagate these headers when available:
+
+| Header | Purpose |
+| --- | --- |
+| `X-Request-Id` | Correlate public gateway, domain service, AI Gateway, and provider logs. |
+| `X-Service-Token` | Authenticate service-to-service calls. |
+| `X-Caller-Service` | Identify the calling service, such as `qa`, `knowledge`, or `document`. |
+| `X-User-Id` | Audit the user that triggered the model call when applicable. |
+| `X-User-Roles` | Audit or quota context. |
+| `X-User-Permissions` | Audit or quota context. |
+
+Internal responses and logs must not expose raw API keys, provider bearer
+tokens, prompt secrets, raw provider error bodies, storage object keys, vector
+payloads, SQL details, or internal URLs.
+
+### 4. Validation & Error Matrix
+
+| Condition | Internal response |
+| --- | --- |
+| Invalid request shape or field value | `400 validation_error` or OpenAI-style `invalid_request_error` |
+| Missing or invalid service credential | `401 unauthorized` or OpenAI-style `authentication_error` |
+| Caller service lacks permission | `403 forbidden` or OpenAI-style `permission_error` |
+| Profile or resource does not exist | `404 not_found` |
+| State or configuration conflict | `409 conflict` |
+| Rate or quota exceeded | `429 rate_limited` or OpenAI-style `rate_limit_error` |
+| Provider or infrastructure failed | `502 dependency_error` or OpenAI-style `upstream_error` |
+| Unexpected service failure | `500 internal_error` |
+
+### 5. Good/Base/Bad Cases
+
+- Good: `qa` calls `ai-gateway` with `POST /internal/v1/chat/completions`,
+  keeps conversation/message/citation state in `qa`, and stores only the
+  normalized assistant response.
+- Base: `knowledge` calls `POST /internal/v1/embeddings` and writes the returned
+  vectors to its own Qdrant collections without exposing vector payloads to
+  gateway responses.
+- Bad: public `gateway` directly calls an OpenAI-compatible provider, stores an
+  API key, or exposes `/internal/v1/chat/completions` to frontend clients.
+
+### 6. Tests Required
+
+For documentation-only contract changes:
+
+- Parse the affected OpenAPI YAML file.
+- Verify all `$ref` targets resolve.
+- Verify internal business paths use `/internal/v1/**`, except `/healthz` and
+  `/readyz`.
+- Verify AI Gateway model invocation operations document OpenAI-compatible
+  success and error shapes.
+- Check Markdown links resolve.
+
+When implementation exists:
+
+- Handler tests assert project envelope or OpenAI-compatible response shape as
+  appropriate for the endpoint.
+- Cross-service client tests assert `X-Request-Id`, `X-Service-Token`, and
+  `X-Caller-Service` propagation.
+- Sensitive-data tests assert API keys, provider tokens, prompts, raw provider
+  errors, and vector payloads are not logged or returned.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```text
+frontend -> gateway -> /internal/v1/chat/completions
+gateway stores provider API key and streams raw provider chunks
+```
+
+#### Correct
+
+```text
+frontend -> gateway /api/v1/qa-sessions/{sessionId}/messages
+gateway -> qa service
+qa service -> ai-gateway /internal/v1/chat/completions
+qa owns messages, citations, and public SSE event shape
+```
 
 ## Scenario: Missing Downstream API Contracts
 
@@ -550,4 +678,3 @@ gateway receives Authorization: Bearer token
 gateway hashes token and reads gateway:session:<accessTokenHash>
 gateway injects cached user, roles, and permissions into downstream headers
 ```
-

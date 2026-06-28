@@ -855,20 +855,14 @@ components:
           type: string
           description: Fixed to ai-gateway for MVP.
           example: ai-gateway
-        model: { type: string }
-        baseUrl:
+        profileId:
           type: string
-          description: AI gateway OpenAI-compatible base URL.
+          description: AI Gateway model profile id.
+        model: { type: string }
         timeoutSeconds: { type: integer }
     ModelConfigWritable:
       allOf:
         - $ref: '#/components/schemas/ModelConfigPublic'
-        - type: object
-          properties:
-            apiKey:
-              type: string
-              writeOnly: true
-              description: AI gateway API key or secret reference.
     ReportStats:
       type: object
       properties:

@@ -178,7 +178,7 @@ Knowledge 相关接口使用项目统一错误码：
 | `not_found` | `404` | 知识库、文档或切片不存在，或对当前用户隐藏。 |
 | `conflict` | `409` | 当前资源状态不允许修改、删除或重新处理。 |
 | `rate_limited` | `429` | 检索、上传或处理任务超过配额。 |
-| `dependency_error` | `502` | PostgreSQL、Qdrant、Redis、embedding provider 或其他依赖失败。 |
+| `dependency_error` | `502` | PostgreSQL、Qdrant、Redis、AI Gateway 或其他依赖失败。 |
 | `internal_error` | `500` | 未预期服务端错误。 |
 
 错误响应不得包含 SQL、object key、MinIO 内部路径、原始向量、prompt、API key、token 或堆栈。

@@ -70,7 +70,7 @@ ORDER BY table_name;
 | --- | --- | --- |
 | 运行配置与管理 | `qa_config_versions` | QA 检索参数配置版本。 |
 | 运行配置与管理 | `qa_config_knowledge_bases` | 某个 QA 配置版本绑定的默认知识库快照。 |
-| 运行配置与管理 | `llm_config_versions` | LLM provider、模型、超时、生成参数和密钥引用版本。 |
+| 运行配置与管理 | `llm_config_versions` | AI Gateway profile、模型、超时和生成参数版本。 |
 | 运行配置与管理 | `admin_audit_logs` | 管理员配置变更审计日志。 |
 | 对话与流式问答 | `conversations` | QA 会话。 |
 | 对话与流式问答 | `messages` | 会话内消息。 |
@@ -150,17 +150,18 @@ retrieval_test_runs 1 ── N retrieval_test_results
 
 ### llm_config_versions
 
-保存 LLM 配置版本。密钥正文不应保存在前端响应和日志中；schema 只保留密钥引用与后四位。
+保存 LLM 配置版本。Provider 密钥由 AI Gateway 管理；QA 只保存 profile 引用、模型名、超时和生成参数。
 
 关键字段：
 
 | 字段 | 说明 |
 | --- | --- |
-| `provider` | 供应商类型，例如 `openai-compatible`。 |
-| `api_url` | 模型 API 地址。 |
+| `provider` | 首期固定为 `ai-gateway`，用于兼容旧配置视图。 |
+| `profile_id` | AI Gateway 模型 profile ID。 |
+| `api_url` | 废弃字段；首期不写入 provider 地址，模型入口由 AI Gateway profile 决定。 |
 | `model_name` | 模型名称。 |
-| `api_key_secret_ref` | 密钥服务或环境中的密钥引用。 |
-| `api_key_last4` | 密钥后四位，用于脱敏展示。 |
+| `api_key_secret_ref` | 废弃字段；provider 密钥不归 QA 保存。 |
+| `api_key_last4` | 废弃字段；provider 密钥不归 QA 展示。 |
 | `timeout_seconds` | 请求超时时间，默认 `60`。 |
 | `temperature` | 生成温度，默认 `0.70`。 |
 | `max_tokens` | 最大输出 token，默认 `4096`。 |
@@ -452,7 +453,7 @@ qa updates retrieval_test_runs(status, result_count, latency_ms)
 
 | 表 | 数据 |
 | --- | --- |
-| `llm_config_versions` | `version_no = 1`，`provider = openai-compatible`，`api_url = https://api.example.com/v1`，`model_name = gpt-4o-mini`，`is_active = true`。 |
+| `llm_config_versions` | `version_no = 1`，`provider = ai-gateway`，`profile_id = mp_chat_default`，`model_name = gpt-4o-mini`，`is_active = true`。 |
 | `qa_config_versions` | `version_no = 1`，`top_k = 5`，`similarity_threshold = 0.7000`，`use_rerank = false`，`is_active = true`。 |
 
 这些数据仅用于本地开发，不应作为生产配置。

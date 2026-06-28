@@ -1,12 +1,13 @@
 # Gateway 服务规划
 
-本文档定义 `gateway` 服务在项目初期的职责边界和基础契约。目标是让前端只依赖一个稳定入口，同时让 `auth`、`file`、`knowledge`、`qa`、`document` 等服务可以按清晰边界并行开发。
+本文档定义 `gateway` 服务在项目初期的职责边界和基础契约。目标是让前端只依赖一个稳定入口，同时让 `auth`、`file`、`knowledge`、`qa`、`document`、`ai-gateway` 等服务可以按清晰边界并行开发。
 
 ## 设计原则
 
 - `gateway` 是面向前端、管理端、其他后端模块和工具调用方的后端统一入口，不是业务大单体。
 - 所有公开业务请求都必须先进入 `gateway` 暴露的 `/api/v1/**` 接口，不直接调用内部服务。
 - `gateway` 通过 HTTP/REST 调用内部服务，不 import 其他服务的 Go `internal/` 包。
+- AI Gateway 是内部模型服务；前端不得直接调用其 `/internal/v1/**` 或 OpenAI-compatible endpoint。
 - 所有稳定公开 API 和服务间 HTTP API 必须使用 RESTful 资源路径，由 HTTP method 表达动作；除 `/healthz`、`/readyz` 外，不在 path 中使用 `login`、`logout`、`register`、`download`、`search`、`generate`、`export`、`retry`、`revoke` 等动作词。
 - 领域业务规则尽量留在拥有该领域数据和流程的服务中。
 - 跨服务聚合接口必须有明确前端场景，不能把所有服务编排都放进 `gateway`。
@@ -35,6 +36,7 @@
 | 知识库、文档切片、向量索引、检索策略 | `knowledge` | 不执行切片、嵌入、Qdrant 查询或重排序。 |
 | 问答、意图识别、RAG、LLM 调用 | `qa` | 不拼 prompt，不执行 RAG pipeline，不保存对话业务状态。 |
 | 报告大纲、章节生成、DOCX 导出 | `document` | 不生成报告内容，不操作报告模板业务规则。 |
+| 模型 provider 配置、API key、chat/embedding/rerank 调用 | `ai-gateway` | 不保存 provider API key，不直连 OpenAI-compatible 或 SiliconFlow-compatible provider，不把内部模型接口暴露给前端。 |
 | 服务数据库迁移 | 各领域服务 | 不拥有其他服务的 migrations。 |
 
 ## Public API 命名
@@ -90,7 +92,7 @@
 | `GET/POST /api/v1/qa-sessions`、`GET/DELETE /api/v1/qa-sessions/{sessionId}`、`GET/POST /api/v1/qa-sessions/{sessionId}/messages`、`GET /api/v1/qa-sessions/{sessionId}/events` | `qa` | 缺失：会话、消息、非流式/流式回答、引用事件格式未定。 |
 | `GET /api/v1/admin-overview`、`GET /api/v1/admin-metrics` | `gateway` + domain services | 缺失：聚合指标来源和展示字段未定。 |
 
-当某个 endpoint 涉及两个服务时，文档必须显式标注 workflow owner。默认规则是：拥有核心业务状态的服务拥有流程，gateway 只做入口和上下文传递。
+当某个 endpoint 涉及两个服务时，文档必须显式标注 workflow owner。默认规则是：拥有核心业务状态的服务拥有流程，gateway 只做入口和上下文传递。若流程需要模型能力，领域服务应通过 [AI Gateway 服务接口文档](ai-gateway.md) 和 [AI Gateway API 契约](../接口契约/AI网关-api契约.md) 调用内部模型接口，不能让 public gateway 直接拼 prompt 或直连 provider。
 
 ## 认证与上下文传递
 
@@ -262,6 +264,8 @@ Gateway 对前端暴露 knowledge 相关公开接口，具体 schema 以 [`docs/
 ## 缺失下游接口
 
 问答和管理后台聚合的前后端接口尚未完全确定。当前 OpenAPI 只在顶层 `x-missing-contracts` 标记这些缺失范围，不把这些 endpoint 作为可依赖的公开契约。
+
+AI Gateway 的内部模型调用接口已经有独立契约：[`docs/接口契约/openapi/ai-gateway.openapi.yaml`](../接口契约/openapi/ai-gateway.openapi.yaml)。该契约不属于前端可调用的 gateway OpenAPI，也不应生成到前端 API client。
 
 后续补齐任一缺失接口时，需要同步更新：
 

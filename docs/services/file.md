@@ -2,20 +2,22 @@
 
 本文档定义 `file` 服务在项目初期的职责边界和接口契约。当前仓库已落地 `services/file/` MVP；公开契约仍以现有 gateway OpenAPI、服务边界矩阵和前后端集成契约为准，内部服务契约见 `services/file/api/openapi.yaml`。
 
-详细的前端公开路径以 [`docs/api/gateway.openapi.yaml`](../api/gateway.openapi.yaml) 为准。前端不得直接调用 file 服务内部地址，只能通过 gateway 暴露的 `/api/v1/**` 入口访问文件能力。公开和内部 HTTP API 都必须使用 RESTful 资源路径，原始文件流使用 `documents/{documentId}/content` 子资源表示。
+详细的前端公开路径以 [`docs/api/gateway.openapi.yaml`](../api/gateway.openapi.yaml) 为准。前端不得直接调用 file 服务内部地址，只能通过 gateway 暴露的 `/api/v1/**` 入口访问文件能力。公开和内部 HTTP API 都必须使用 RESTful 资源路径。知识库原始文件流使用 `documents/{documentId}/content` 子资源表示；报告模板、素材和导出文件使用 `document` 服务拥有的 report 资源路径，由 `document` 在服务边界内复用 file 服务的基础文件能力。
 
 ## 职责边界
 
 | 范围 | 说明 |
 | --- | --- |
 | 原始文件上传 | 接收上传文件，校验文件基础属性，将对象写入 MinIO。 |
-| 文件元数据 | 维护文件 ID、知识库 ID、原始文件名、内容类型、文件大小、标签、上传人和创建时间等元数据。 |
+| 文件元数据 | 维护文件 ID、业务归属引用、原始文件名、内容类型、文件大小、标签、上传人和创建时间等 file-owned 元数据。当前公开知识库文档上传返回 `knowledgeBaseId`；报告相关业务元数据由 `document` 服务持有。 |
 | 对象存储协调 | 生成服务端 object key，管理 bucket/object 写入、读取和删除，不向前端暴露内部存储路径。 |
 | 文件内容读取 | 根据文档 ID、用户上下文和权限校验结果返回原始文件流。 |
 | 文件删除 | 负责文件元数据生命周期和原始对象删除或延迟清理流程。 |
 | 上传工作流入口 | 保存原始文件并为后续 `knowledge` ingestion 预留上下文；内部 handoff 机制需在实现时确认。 |
 
-`file` 不负责知识库 CRUD、文档解析、文本切片、embedding、向量索引、RAG、问答生成或报告内容生成。`knowledge` 服务拥有文档处理状态、chunks 和索引状态，并通过 gateway OpenAPI 暴露对应公开接口；`file` 服务只承诺原始文件和 file-owned 元数据契约。
+`file` 是后端内与文件对象和 MinIO 交互的基础中间件服务。它不负责知识库 CRUD、文档解析、文本切片、embedding、向量索引、RAG、问答生成、报告内容生成、报告素材业务状态或报告模板配置。`knowledge` 服务拥有知识库文档处理状态、chunks 和索引状态，并通过 gateway OpenAPI 暴露对应公开接口；`document` 服务拥有报告模板、报告素材、报告文件和生成流程业务状态。`file` 服务只承诺原始文件、对象存储协调和 file-owned 元数据契约。
+
+> Discussion #48 对 D5 的结论是：报告支撑材料是独立资源，但复用 file service 处理基础文件能力。因此不要把报告素材、模板或导出文件直接套进 `/api/v1/knowledge-bases/{knowledgeBaseId}/documents`；这些资源的公开 API 归 `document`，底层对象存储通过 file 服务适配。
 
 ## 接入模型
 
@@ -25,16 +27,22 @@ frontend
    v
 gateway /api/v1/knowledge-bases/{knowledgeBaseId}/documents
 gateway /api/v1/documents/{documentId}/content
+gateway /api/v1/report-materials
+gateway /api/v1/report-files/{reportFileId}/content
    |
    v
-file service
+owner service (file for knowledge documents, document for report resources)
    |
-   +--> PostgreSQL metadata
-   +--> MinIO object storage
-   +--> knowledge service ingestion handoff (implementation detail)
+   +--> file service base file APIs
+        |
+        +--> PostgreSQL file metadata
+        +--> MinIO object storage
+   +--> owner-service business metadata and workflow state
 ```
 
 前端侧调用 gateway 公开接口；gateway 将认证后的请求转发给 file，并统一处理响应 envelope、request id 和错误归一化。
+
+对于报告模板、素材和导出文件，gateway 转发给 `document` 服务；`document` 保存业务状态和 file reference，并通过内部 client 调用 file 服务完成对象写入、读取和删除。前端仍只看到 `reportTemplateId`、`materialId`、`reportFileId` 和 content 子资源，不接触 file 内部 ID、bucket、object key 或 MinIO URL。
 
 Gateway 调用 file 服务时应传递：
 
@@ -65,6 +73,8 @@ Gateway 调用 file 服务时应传递：
 | `GET` | `/api/v1/knowledge-bases/{knowledgeBaseId}/documents` | `knowledge` | 查询知识库内文档列表和处理状态。 |
 | `GET` | `/api/v1/documents/{documentId}` | `knowledge` | 查询文档详情和处理状态。 |
 | `GET` | `/api/v1/documents/{documentId}/chunks` | `knowledge` | 查询文档切片。 |
+| `GET/POST/DELETE` | `/api/v1/report-materials`、`/api/v1/report-materials/{materialId}` | `document` | 报告素材是独立业务资源；document 拥有素材元数据和引用关系，底层原文件通过 file 服务存储。 |
+| `GET/POST/GET content` | `/api/v1/report-files`、`/api/v1/report-files/{reportFileId}`、`/api/v1/report-files/{reportFileId}/content` | `document` | 报告导出文件由 document 拥有业务状态，底层生成文件可通过 file 服务保存和读取。 |
 
 ## 通用响应结构
 
@@ -133,7 +143,7 @@ Content-Type: multipart/form-data
 uploaded | parsing | chunking | embedding | ready | failed
 ```
 
-`uploaded` 可由上传流程产生；`parsing`、`chunking`、`embedding`、`ready`、`failed` 由 `knowledge` ingestion 流程维护。File 服务不得自行伪造解析、切片或向量化状态。
+`uploaded` 是 file-owned 初始状态；`parsing`、`chunking`、`embedding`、`ready`、`failed` 是 knowledge-owned ingestion 状态。File 服务不得自行伪造解析、切片或向量化状态。公开 `DocumentSummary.status` 同时承载上传响应和 knowledge 文档详情的展示需要；实现时应避免把完整状态机放进 file 服务。
 
 ### DocumentSummary
 
@@ -363,7 +373,7 @@ Authorization: Bearer <accessToken>
 
 ## 内部服务接口初稿
 
-公开契约由 gateway OpenAPI 决定。后续落地 `services/file/` 时，可先让 gateway 使用与公开路径接近的内部 HTTP API，便于联调和测试：
+公开契约由 gateway OpenAPI 决定。当前 `services/file/` MVP 已落地知识库文档适配接口，可让 gateway 使用与公开路径接近的内部 HTTP API，便于联调和测试：
 
 | Method | File Service Path | 说明 |
 | --- | --- | --- |
@@ -377,18 +387,20 @@ Authorization: Bearer <accessToken>
 
 内部接口也应使用稳定 JSON error shape，并保留 `X-Request-Id`。除文件内容成功响应外，不要返回裸数据结构。当前内部契约以 `services/file/api/openapi.yaml` 为准；内部元数据响应可包含 `contentType`、`sizeBytes` 等 file-owned 对接字段，但不得包含 bucket、object key、内部对象 URL 或存储凭据。
 
+为支撑 Discussion #48 中“报告支撑材料独立资源，复用 file service”的结论，后续应在 `services/file/api/openapi.yaml` 中补一个不绑定知识库路径的基础文件内部契约，例如 `POST /internal/v1/files`、`GET /internal/v1/files/{fileId}/content` 或等价资源模型。该契约只表达文件对象和 file-owned 元数据，不表达 report material、template、report file 等业务语义；业务语义仍由 `document` 服务保存。
+
 ## 权限与上下文要求
 
-File 服务需要基于 gateway 注入的认证上下文做服务边界校验。初始权限可按以下语义设计，具体权限字符串需与 auth 服务实现保持一致：
+File 服务需要基于 gateway 注入的认证上下文做服务边界校验。Discussion #48 已确认首期数据权限采用角色级 RBAC；file 服务不在 MVP 中实现组织、电厂、专业、知识库 ACL 或资源所有者等细粒度权限模型。具体权限字符串需与 auth 服务实现保持一致：
 
 | 能力 | 建议权限语义 |
 | --- | --- |
-| 上传文件 | `document:upload` 或知识库级写权限。 |
-| 更新标签 | `document:update` 或知识库级写权限。 |
-| 删除文件 | `document:delete` 或知识库级管理权限。 |
-| 读取文件内容 | `document:read`、知识库级读权限或资源所有者权限。 |
+| 上传文件 | 角色级上传权限，例如 `document:upload`。 |
+| 更新标签 | 角色级更新权限，例如 `document:update`。 |
+| 删除文件 | 角色级删除权限，例如 `document:delete`。 |
+| 读取文件内容 | 角色级读取权限，例如 `document:read`。 |
 
-资源不存在和无权访问都可以返回 `404 not_found`，用于隐藏资源存在性；需要前端明确展示“无权限”时才返回 `403 forbidden`。
+资源不存在和无权访问都可以返回 `404 not_found`，用于隐藏资源存在性；需要前端明确展示“无权限”时才返回 `403 forbidden`。业务资源可见性由 owner service 判断：知识库文档由 `knowledge` 定义，报告素材、模板和报告文件由 `document` 定义，file 不复制这些业务权限规则。
 
 ## 对象存储与元数据要求
 
@@ -397,7 +409,7 @@ File 服务需要基于 gateway 注入的认证上下文做服务边界校验。
 - Object key、bucket、内部对象 URL、MinIO 错误和 access key 不得进入前端响应。
 - 上传文件名必须做展示层安全处理，不能直接用于 object key。
 - 文件删除应优先保证公开 API 视角下不可访问；物理删除失败时应有可重试的清理机制。
-- 如果生成报告文件也复用 file 服务存储，应由 `document` 服务拥有报告业务状态，file 只提供对象存储和内容读取能力。
+- 报告模板文件、报告素材和生成报告文件复用 file 服务存储时，由 `document` 服务拥有报告业务状态、引用关系和软删除规则；file 只提供对象存储和内容读取能力。
 
 ## 错误码约定
 
@@ -421,6 +433,7 @@ File 相关接口使用项目统一错误码：
 - 文件名来自用户输入，写入响应头前必须安全转义，避免 header injection。
 - 所有跨服务 HTTP client 后续实现必须设置超时，并传递 `context.Context`。
 - 上传大小、内容类型白名单、危险文件扫描和租户配额属于实现前必须明确的安全策略。
+- File 服务可以记录文件域内结构化日志和 request id，但不拥有全局审计日志查询能力；后续如审计日志独立成服务，file/domain 服务应只对接审计事件生产或查询授权契约。
 
 ## 后续实现建议
 
@@ -453,7 +466,7 @@ services/file/
 - File 与 knowledge 的 ingestion handoff 实现方式。
 - 删除时 knowledge chunks、向量索引和原始对象之间的一致性策略。
 - 是否支持秒传、checksum 去重、断点续传、预签名内容 URL 或 Range 内容读取。
-- 报告文件是否通过 file 服务存储，以及 document 服务与 file 服务之间的内部接口。
+- 补齐 document 服务复用 file 服务的内部接口，包括报告模板、素材和导出文件的 file reference、内容读取和删除/清理语义。
 
 如果上述决策影响公开字段、错误码或状态码，必须同步更新：
 

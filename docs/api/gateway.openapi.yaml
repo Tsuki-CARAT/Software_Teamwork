@@ -305,7 +305,7 @@ paths:
       summary: Upload a document to a knowledge base
       operationId: uploadKnowledgeBaseDocument
       x-owner-service: file
-      description: Gateway exposes the file upload workflow. File service owns raw upload and file metadata; knowledge service owns ingestion state, chunks, embeddings, and retrieval after handoff.
+      description: Gateway exposes the knowledge-base document upload workflow. File service owns raw upload and file-owned metadata for this knowledge document context; knowledge service owns ingestion state, chunks, embeddings, and retrieval after handoff. Report templates, report materials, and generated report files are separate document-owned resources and must not be modeled through this path.
       requestBody:
         required: true
         content:
@@ -1189,7 +1189,7 @@ paths:
       summary: Create report file
       operationId: createReportFile
       x-owner-service: document
-      description: Creates generated report files such as DOCX without exposing MinIO object keys to frontend clients.
+      description: Creates generated report files such as DOCX without exposing storage internals to frontend clients. Document service owns report-file business metadata and should use file service for underlying object storage/content access instead of duplicating public file semantics.
       requestBody:
         required: true
         content:

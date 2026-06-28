@@ -31,7 +31,7 @@
 | 领域 | 归属服务 | Gateway 不做什么 |
 | --- | --- | --- |
 | 用户、密码、会话、角色权限源数据 | `auth` | 不保存密码，不维护用户表，不实现 RBAC 持久化；只在 Redis 保存运行时会话缓存。 |
-| 文件对象、文件元数据、对象存储协调 | `file` | 不直接操作 MinIO，不生成业务 object key。 |
+| 文件对象、file-owned 元数据、对象存储协调 | `file` | 不直接操作 MinIO，不生成业务 object key。 |
 | 知识库、文档切片、向量索引、检索策略 | `knowledge` | 不执行切片、嵌入、Qdrant 查询或重排序。 |
 | 问答、意图识别、RAG、LLM 调用 | `qa` | 不拼 prompt，不执行 RAG pipeline，不保存对话业务状态。 |
 | 报告大纲、章节生成、DOCX 导出 | `document` | 不生成报告内容，不操作报告模板业务规则。 |
@@ -64,7 +64,7 @@
 | `/api/v1/users/me` | `auth` | 获取当前用户。 |
 | `/api/v1/knowledge-bases` | `knowledge` | 创建知识库、分页查询知识库。 |
 | `/api/v1/knowledge-bases/{knowledgeBaseId}` | `knowledge` | 查询、更新、删除知识库。 |
-| `POST /api/v1/knowledge-bases/{knowledgeBaseId}/documents` | `file` | 文件上传入口。File 保存原文件和 file-owned 元数据；Knowledge 拥有后续入库状态、切片和向量索引。 |
+| `POST /api/v1/knowledge-bases/{knowledgeBaseId}/documents` | `file` | 知识库文档上传入口。File 保存原文件和 file-owned 元数据；Knowledge 拥有后续入库状态、切片和向量索引。 |
 | `GET /api/v1/knowledge-bases/{knowledgeBaseId}/documents` | `knowledge` | 查询知识库内文档列表和处理状态。 |
 | `GET /api/v1/documents/{documentId}` | `knowledge` | 查询文档处理详情。 |
 | `PATCH/DELETE /api/v1/documents/{documentId}` | `file` | 更新 file-owned 文档元数据、删除原始文件记录。 |
@@ -73,13 +73,13 @@
 | `/api/v1/knowledge-queries` | `knowledge` | 创建一次知识检索查询，返回召回结果和 trace。 |
 | `/api/v1/report-types` | `document` | 查询报告类型。 |
 | `/api/v1/report-templates`、`/api/v1/report-templates/{reportTemplateId}`、`/api/v1/report-templates/{reportTemplateId}/structure` | `document` | 报告模板上传、查询、更新、删除和结构配置。 |
-| `/api/v1/report-materials`、`/api/v1/report-materials/{materialId}` | `document` | 报告素材上传、查询和删除。 |
+| `/api/v1/report-materials`、`/api/v1/report-materials/{materialId}` | `document` | 报告素材上传、查询和删除。素材是 document-owned 独立资源，底层文件对象复用 file 服务。 |
 | `/api/v1/reports`、`/api/v1/reports/{reportId}` | `document` | 报告草稿、记录、详情、基础信息更新和删除。 |
 | `/api/v1/reports/{reportId}/outlines`、`/api/v1/reports/{reportId}/outlines/{outlineId}`、`/api/v1/reports/{reportId}/outlines/{outlineId}/sections/{sectionId}` | `document` | 报告大纲版本查询、保存、编辑和章节删除。 |
 | `/api/v1/reports/{reportId}/sections`、`/api/v1/reports/{reportId}/sections/{sectionId}`、`/api/v1/reports/{reportId}/sections/{sectionId}/versions` | `document` | 报告章节查询、编辑和章节版本创建。 |
 | `/api/v1/reports/{reportId}/jobs`、`/api/v1/report-jobs/{jobId}`、`/api/v1/report-jobs/{jobId}/attempts` | `document` | 报告生成、重新生成、文件创建等长任务资源及任务尝试记录。 |
 | `/api/v1/reports/{reportId}/events` | `document` | 报告生成事件列表，用于轮询进度或审计。 |
-| `/api/v1/report-files`、`/api/v1/report-files/{reportFileId}`、`/api/v1/report-files/{reportFileId}/content` | `document` | 报告文件创建、元数据查询和生成文件内容读取。 |
+| `/api/v1/report-files`、`/api/v1/report-files/{reportFileId}`、`/api/v1/report-files/{reportFileId}/content` | `document` | 报告文件创建、元数据查询和生成文件内容读取。生成文件是 document-owned 业务资源，底层对象存取复用 file 服务。 |
 | `/api/v1/report-statistics/overview`、`/api/v1/report-statistics/daily` | `document` | 报告统计概览和每日趋势。 |
 | `/api/v1/report-operation-logs` | `document` | 报告相关操作日志查询。 |
 
@@ -202,7 +202,9 @@ Gateway 对前端暴露 knowledge 相关公开接口，具体 schema 以 [`docs/
 
 检索被建模为 `knowledge-queries` 资源创建，因此公开路径使用 `POST /api/v1/knowledge-queries`，不使用 `/search` 或 `/retrieval/search`。
 
-同一个公开资源可能按 method 分属不同服务：`POST /api/v1/knowledge-bases/{knowledgeBaseId}/documents` 仍由 `file` 拥有原文件上传；`GET /api/v1/knowledge-bases/{knowledgeBaseId}/documents` 由 `knowledge` 拥有文档处理状态列表。`PATCH/DELETE /api/v1/documents/{documentId}` 当前仍是 file-owned 元数据和原文件生命周期操作，Knowledge 索引清理需要通过后续实现或内部协调完成，Gateway 不直接操作 Qdrant。
+同一个公开资源可能按 method 分属不同服务：`POST /api/v1/knowledge-bases/{knowledgeBaseId}/documents` 仍由 `file` 拥有知识库原文件上传；`GET /api/v1/knowledge-bases/{knowledgeBaseId}/documents` 由 `knowledge` 拥有文档处理状态列表。`PATCH/DELETE /api/v1/documents/{documentId}` 当前仍是 file-owned 元数据和原文件生命周期操作，Knowledge 索引清理需要通过后续实现或内部协调完成，Gateway 不直接操作 Qdrant。
+
+报告素材、模板和导出文件不得复用知识库文档上传路径建模。它们的公开资源由 `document` 拥有，`document` 在内部通过 file 服务保存、读取或删除底层文件对象；Gateway 只做入口、认证上下文传递和响应归一化。
 
 ## 响应约定
 

@@ -10,10 +10,10 @@
 | --- | --- | --- | --- |
 | `gateway` | Public API for frontend, admin, backend-module, and tool callers; routing; Redis-backed session cache; auth context propagation; response/error envelope; request id; lightweight aggregation. | `/api/v1/**`, `/healthz`, `/readyz`. | Durable user/role/permission persistence, document parsing, vector search, LLM workflows, report generation business logic. |
 | `auth` | Users, credentials, roles, permissions, sessions or tokens, session identity issuing and revocation. | User creation, session creation/deletion, current user, permission checks, session identity for gateway caching. | File metadata, knowledge indexing, QA messages, report records. |
-| `file` | Uploads, original files, object storage coordination, file metadata lifecycle. | Upload, file content, file metadata, file deletion. | Knowledge chunking, vector index, RAG, report generation. |
+| `file` | Basic file upload/content APIs, original objects, object storage coordination, file-owned metadata lifecycle, MinIO middleware for backend services. | Knowledge document upload/content today; internal file-object APIs for other services once finalized. | Knowledge chunking, vector index, RAG, report generation, report material/template/report-file business state. |
 | `knowledge` | Knowledge bases, document ingestion state, chunks, embeddings, retrieval policies, retrieval queries. | Knowledge base CRUD, document processing details, chunk listing, and knowledge queries through gateway. | User identity, raw object storage, LLM answer generation, DOCX export. |
 | `qa` | Chat sessions, messages, intent routing for QA, RAG answer generation, citations. | Missing/TBD: frontend-backend contract not finalized. | Knowledge base CRUD, file upload, report record management. |
-| `document` | Report templates, materials, report records, outlines, section content, report jobs, generated files, statistics, and report operation logs. | Report generation routes under `/api/v1/report-*` and `/api/v1/reports/**`. | QA chat, knowledge indexing, auth persistence. |
+| `document` | Report templates, materials, report records, outlines, section content, report jobs, generated file metadata, statistics, and report operation logs. | Report generation routes under `/api/v1/report-*` and `/api/v1/reports/**`; uses file service for file-object storage and content when files are involved. | QA chat, knowledge indexing, auth persistence, direct exposure of MinIO object keys or storage URLs. |
 
 ## Workflow Ownership
 
@@ -30,11 +30,11 @@
 | Chat answer generation | Missing public contract. | `qa` | Placeholder only. Streaming/non-streaming message and citation formats are not stable. |
 | Citation source lookup | Missing public contract. | `qa` or `knowledge`, depending on final citation model. | Placeholder only. The service storing citation references will own lookup. |
 | Report template management | Public entrypoint and auth context propagation. | `document` | Document service owns template metadata, template structure, and template file references. |
-| Report material management | Public entrypoint and auth context propagation. | `document` | Document service owns material metadata and material file references used by report jobs. |
+| Report material management | Public entrypoint and auth context propagation. | `document` | Document service owns material metadata and material file references used by report jobs; raw file object storage should reuse file service instead of treating materials as knowledge-base documents. |
 | Report record management | Public entrypoint and auth context propagation. | `document` | Document service owns report drafts, lifecycle state, outlines, sections, and soft deletion rules. |
 | Report outline generation | Public job resource creation and status lookup. | `document` | Long-running outline generation and regeneration are represented as `ReportJob` resources. |
 | Report section generation | Public job or section-version resource creation and status lookup. | `document` | Long-running content generation and section regeneration stay inside document service. |
-| Report file creation and content | Public file resource creation, metadata lookup, and content stream. | `document` | Document service owns generated file metadata and may use MinIO or file service behind its boundary. |
+| Report file creation and content | Public file resource creation, metadata lookup, and content stream. | `document` | Document service owns generated file metadata and should use file service for object storage/content access where possible; generated files are not knowledge documents. |
 | Report statistics and operation logs | Public read entrypoint and auth context propagation. | `document` | Document service owns report-specific statistics and audit-friendly operation logs. |
 | Admin overview | Missing public contract. | `gateway` aggregates; each service owns its metric. | Placeholder only. Metrics and aggregation shape are not stable. |
 
@@ -79,4 +79,5 @@ Before adding a gateway endpoint, answer these questions in the endpoint doc or 
 - Duplicating permission logic in frontend, gateway, and domain service without a single owner.
 - Letting gateway translate one frontend action into a long business workflow when one domain service should own the workflow.
 - Returning downstream service internals directly to the frontend.
+- Letting `document` duplicate file-service object storage semantics for report templates, materials, or generated files when a file-service internal resource can model the raw object.
 - Creating shared Go packages before at least three services need the same stable abstraction.

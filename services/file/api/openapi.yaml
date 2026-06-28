@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: File Service Internal API
   version: 0.1.0
-  description: Internal file-service API used by gateway and future backend integration. Public frontend contracts remain in docs/api/gateway.openapi.yaml.
+  description: Internal file-service API used by gateway and future backend integration. Public frontend contracts remain in docs/api/gateway.openapi.yaml. This MVP exposes a knowledge-document shaped upload route; report templates, report materials, and generated report files require a future generic file-object internal API and must not reuse the knowledge-base document path.
 servers:
   - url: http://localhost:8082
 tags:
@@ -246,4 +246,3 @@ components:
               type: object
               additionalProperties:
                 type: string
-

@@ -2,7 +2,7 @@
 
 ## 1. 文档说明
 
-本文定义报告生成模块的核心数据模型，用于支撑后端接口、MCP 工具、数据库持久化和 MinIO 文件引用。
+本文定义报告生成模块的核心数据模型，用于支撑后端接口、MCP 工具、数据库持久化和 file 服务文件引用。
 
 本文只描述逻辑数据模型，不提供具体 SQL 建表语句。后续实现可根据 Go 服务和数据库规范转换为 PostgreSQL migration。
 
@@ -24,16 +24,16 @@
 - 操作日志。
 - 统计聚合数据或查询视图。
 
-### 2.2 MinIO
+### 2.2 文件对象
 
-MinIO 保存文件类对象：
+文件类对象通过 file 服务保存，file 服务负责与 MinIO 等对象存储交互：
 
 - 报告模板文件。
 - 专业素材文件。
 - 导出的 DOCX 文件。
 - 后续可能保存的生成结果快照文件。
 
-数据库中只保存 MinIO 对象引用，不直接保存文件二进制内容。
+`document` 数据库中只保存 file 服务返回的内部文件引用和展示所需元数据，不直接保存文件二进制内容，也不把 object key、bucket、内部 URL 或 file 内部 ID 返回给公开 API。
 
 ## 3. 实体关系概览
 
@@ -238,7 +238,7 @@ Report 1 ── N OperationLog
 | `template_name` | string | 模板名称 |
 | `report_type` | string | 绑定报告类型 |
 | `version` | int | 模板版本 |
-| `file_object_key` | string | MinIO 模板文件对象引用 |
+| `file_ref` | string | file 服务内部文件引用 |
 | `file_name` | string | 原始模板文件名 |
 | `file_size` | int64 | 模板文件大小 |
 | `structure_json` | json | 大纲结构配置 |
@@ -260,7 +260,7 @@ Report 1 ── N OperationLog
 | `material_name` | string | 素材名称 |
 | `material_type` | string | 文件类型 |
 | `category` | string | 分类 |
-| `file_object_key` | string | MinIO 素材文件对象引用 |
+| `file_ref` | string | file 服务内部文件引用 |
 | `file_name` | string | 原始素材文件名 |
 | `file_size` | int64 | 素材文件大小 |
 | `description` | string | 描述 |
@@ -372,7 +372,7 @@ Report 1 ── N OperationLog
 
 说明：
 
-- 事件用于对外展示进度和状态，不应包含 prompt、MinIO object key、内部 URL 或敏感配置。
+- 事件用于对外展示进度和状态，不应包含 prompt、MinIO object key、file 内部 ID、内部 URL 或敏感配置。
 - 稳定 SSE 契约未确定前，事件模型先支撑列表轮询。
 
 ### 6.4 ReportFile
@@ -386,7 +386,7 @@ Report 1 ── N OperationLog
 | `job_id` | uuid | 文件创建任务 ID |
 | `file_name` | string | 文件名 |
 | `file_type` | string | 文件类型，例如 `docx` |
-| `object_key` | string | MinIO 对象引用 |
+| `file_ref` | string | file 服务内部文件引用 |
 | `file_size` | int64 | 文件大小 |
 | `file_status` | string | 文件状态 |
 | `created_by` | string | 创建人 |
@@ -398,7 +398,7 @@ Report 1 ── N OperationLog
 |---|---|
 | `file_type` | `format` |
 | `file_status` | `status` |
-| `object_key` | 不返回；公开接口返回 `id`、`contentPath` 或通过 content 接口获取文件内容 |
+| `file_ref` | 不返回；公开接口返回 `id`、`contentPath` 或通过 content 接口获取文件内容 |
 
 文件状态枚举建议：
 
@@ -486,11 +486,11 @@ Report 1 ── N OperationLog
 - AI 重新生成必须创建新的 `ReportJob`。
 - 任务重试必须创建新的 `ReportJobAttempt`，不得覆盖原任务失败记录。
 - AI 重新生成指定章节时必须创建新的 `ReportSectionVersion`，并更新 `ReportSection.version` 或当前版本引用。
-- `ReportEvent` 只保存可对外展示的进度和状态摘要，不得保存 prompt、内部 URL、MinIO object key 或敏感配置。
+- `ReportEvent` 只保存可对外展示的进度和状态摘要，不得保存 prompt、内部 URL、MinIO object key、file 内部 ID 或敏感配置。
 - 重新生成不得删除报告基础信息。
 - 重新生成正文或章节时，应更新对应章节的 `last_job_id`。
 - 删除模板时，如果已有报告使用该模板，建议只允许停用或软删除。
 - 删除素材时，如果已有任务引用该素材，建议只允许软删除。
-- 导出文件的 `object_key` 必须能在 MinIO 中定位文件。
-- `file_object_key` 和 `object_key` 只作为服务内部存储引用，不得作为公开 API 字段返回；公开接口应返回文件 ID 或 content 接口路径。
+- 导出文件的 `file_ref` 必须能通过 file 服务定位并读取底层文件对象。
+- `file_ref` 只作为服务内部存储引用，不得作为公开 API 字段返回；公开接口应返回文件 ID 或 content 接口路径。
 - 操作日志不得记录密钥、完整下载签名等敏感信息。

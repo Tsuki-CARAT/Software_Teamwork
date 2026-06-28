@@ -4,6 +4,8 @@
 
 Public frontend routes remain owned by gateway and are documented in `docs/api/gateway.openapi.yaml`. This service exposes internal RESTful routes under `/internal/v1/**` for gateway and future backend integration.
 
+The implemented MVP route is still knowledge-document shaped. Report templates, report materials, and generated report files are document-owned business resources; they should use a future generic file-object internal API rather than reusing `/internal/v1/knowledge-bases/{knowledgeBaseId}/documents`.
+
 ## Current Scope
 
 Implemented now:
@@ -22,6 +24,7 @@ Out of scope for this MVP:
 - Production MinIO adapter
 - PostgreSQL repository
 - Knowledge ingestion handoff
+- Generic file-object internal API for report templates, report materials, and generated report files
 - Public knowledge-owned document list/detail/chunks contracts
 
 ## Local Run
@@ -93,4 +96,3 @@ JSON errors use:
 Internal metadata responses include file-owned fields such as `contentType` and `sizeBytes` for gateway and module integration. They never expose bucket names, object keys, internal storage URLs, or storage credentials.
 
 Content reads return raw bytes on success and the same JSON error envelope on failure.
-

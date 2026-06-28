@@ -534,7 +534,7 @@ components:
           properties:
             code:
               type: string
-              enum: [validation_error, unauthorized, forbidden, not_found, conflict, rate_limited, dependency_error, internal_error]
+              enum: [validation_error, unauthorized, forbidden, not_found, conflict, rate_limited, dependency_error, internal_error, unsupported_intent, unsupported_mode, unsupported_numbering_mode]
             message: { type: string }
             requestId: { type: string }
             fields:

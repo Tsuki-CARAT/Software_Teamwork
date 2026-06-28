@@ -203,6 +203,25 @@ paths:
           description: Deleted
         default:
           $ref: '#/components/responses/Error'
+  /knowledge/documents:batch-delete:
+    post:
+      tags: [Documents]
+      summary: Batch delete documents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchDeleteRequest'
+      responses:
+        '200':
+          description: Batch delete result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchDeleteResult'
+        default:
+          $ref: '#/components/responses/Error'
   /knowledge/documents/{documentId}:retry:
     post:
       tags: [Documents]
@@ -265,6 +284,27 @@ paths:
                 $ref: '#/components/schemas/ProcessingJob'
         default:
           $ref: '#/components/responses/Error'
+  /knowledge/bases/{knowledgeBaseId}:reprocess:
+    post:
+      tags: [ProcessingJobs]
+      summary: Reprocess documents in a knowledge base
+      parameters:
+        - $ref: '#/components/parameters/KnowledgeBaseId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReprocessRequest'
+      responses:
+        '200':
+          description: Reprocess jobs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReprocessResponse'
+        default:
+          $ref: '#/components/responses/Error'
   /knowledge/retrieval/search:
     post:
       tags: [Retrieval]
@@ -282,6 +322,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RetrievalSearchResponse'
+        default:
+          $ref: '#/components/responses/Error'
+  /knowledge/retrieval/tests:
+    post:
+      tags: [Retrieval]
+      summary: Run retrieval test
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetrievalTestRequest'
+      responses:
+        '200':
+          description: Retrieval test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetrievalTestResponse'
         default:
           $ref: '#/components/responses/Error'
   /knowledge/support-materials:
@@ -320,6 +379,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SupportMaterial'
+        default:
+          $ref: '#/components/responses/Error'
+  /knowledge/support-materials/{materialId}:
+    parameters:
+      - $ref: '#/components/parameters/MaterialId'
+    patch:
+      tags: [SupportMaterials]
+      summary: Update support material metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSupportMaterialRequest'
+      responses:
+        '200':
+          description: Updated support material
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportMaterial'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [SupportMaterials]
+      summary: Delete support material
+      responses:
+        '204':
+          description: Deleted
         default:
           $ref: '#/components/responses/Error'
   /knowledge/settings:
@@ -406,6 +494,12 @@ components:
       required: true
       schema:
         type: string
+    MaterialId:
+      name: materialId
+      in: path
+      required: true
+      schema:
+        type: string
   responses:
     Error:
       description: Error response
@@ -467,8 +561,14 @@ components:
       allOf:
         - $ref: '#/components/schemas/KnowledgeBaseWritable'
     UpdateKnowledgeBaseRequest:
-      allOf:
-        - $ref: '#/components/schemas/KnowledgeBaseWritable'
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        documentType: { $ref: '#/components/schemas/DocumentType' }
+        visibility: { type: string, enum: [private, team, public] }
+        segmentation: { $ref: '#/components/schemas/SegmentationConfig' }
+        retrieval: { $ref: '#/components/schemas/RetrievalConfig' }
     KnowledgeBaseWritable:
       type: object
       required: [name, documentType]
@@ -593,6 +693,21 @@ components:
               finishedAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    ReprocessRequest:
+      type: object
+      properties:
+        documentIds:
+          type: array
+          items: { type: string }
+        reason:
+          type: string
+          enum: [segmentation_changed, retrieval_changed, parser_changed, embedding_model_changed, manual]
+    ReprocessResponse:
+      type: object
+      properties:
+        jobIds:
+          type: array
+          items: { type: string }
     RetrievalSearchRequest:
       type: object
       required: [query]
@@ -618,6 +733,20 @@ components:
         results:
           type: array
           items: { $ref: '#/components/schemas/RetrievalResult' }
+    RetrievalTestRequest:
+      allOf:
+        - $ref: '#/components/schemas/RetrievalSearchRequest'
+        - type: object
+          properties:
+            name: { type: string }
+    RetrievalTestResponse:
+      type: object
+      properties:
+        id: { type: string }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/RetrievalResult' }
+        createdAt: { type: string, format: date-time }
     RetrievalResult:
       type: object
       properties:
@@ -649,6 +778,14 @@ components:
       required: [fileId, name, materialType]
       properties:
         fileId: { type: string }
+        name: { type: string }
+        materialType: { type: string }
+        tags:
+          type: object
+          additionalProperties: { type: string }
+    UpdateSupportMaterialRequest:
+      type: object
+      properties:
         name: { type: string }
         materialType: { type: string }
         tags:
@@ -795,7 +932,7 @@ components:
           properties:
             code:
               type: string
-              enum: [validation_error, unauthorized, forbidden, not_found, conflict, rate_limited, dependency_error, internal_error]
+              enum: [validation_error, unauthorized, forbidden, not_found, conflict, rate_limited, dependency_error, internal_error, unsupported_intent, unsupported_mode, unsupported_numbering_mode]
             message: { type: string }
             requestId: { type: string }
             fields:

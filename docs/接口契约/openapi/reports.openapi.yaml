@@ -83,6 +83,24 @@ paths:
       responses:
         '204': { description: Deleted }
         default: { $ref: '#/components/responses/Error' }
+  /report-templates/{templateId}/structure:
+    patch:
+      tags: [Templates]
+      summary: Update report template structure
+      parameters:
+        - $ref: '#/components/parameters/TemplateId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTemplateStructureRequest' }
+      responses:
+        '200':
+          description: Updated template structure
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateStructure' }
+        default: { $ref: '#/components/responses/Error' }
   /reports:
     get:
       tags: [Reports]
@@ -283,6 +301,25 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ReportSection' }
         default: { $ref: '#/components/responses/Error' }
+  /reports/{reportId}/sections/{sectionId}:regenerate:
+    post:
+      tags: [Sections]
+      summary: Regenerate one report section
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+        - $ref: '#/components/parameters/SectionId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegenerateSectionRequest' }
+      responses:
+        '200':
+          description: Regeneration job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobRef' }
+        default: { $ref: '#/components/responses/Error' }
   /reports/{reportId}/exports:
     get:
       tags: [Exports]
@@ -332,6 +369,24 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/DownloadUrl' }
         default: { $ref: '#/components/responses/Error' }
+  /reports/{reportId}:reexport:
+    post:
+      tags: [Exports]
+      summary: Re-export report from saved data
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateExportRequest' }
+      responses:
+        '200':
+          description: Export job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportRef' }
+        default: { $ref: '#/components/responses/Error' }
   /reports/jobs/{jobId}:
     get:
       tags: [Jobs]
@@ -344,6 +399,37 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ReportJob' }
+        default: { $ref: '#/components/responses/Error' }
+  /reports/jobs/{jobId}:cancel:
+    post:
+      tags: [Jobs]
+      summary: Cancel report generation job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Cancelled report job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReportJob' }
+        default: { $ref: '#/components/responses/Error' }
+  /reports/{reportId}/materials:
+    get:
+      tags: [Reports]
+      summary: List support materials used by a report
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+      responses:
+        '200':
+          description: Report material list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReportMaterial' }
         default: { $ref: '#/components/responses/Error' }
   /reports/settings:
     get:
@@ -466,8 +552,34 @@ components:
           type: object
           additionalProperties: true
     UpdateTemplateRequest:
+      type: object
+      properties:
+        name: { type: string }
+        reportType: { $ref: '#/components/schemas/ReportType' }
+        fileId: { type: string }
+        styleProfile:
+          type: object
+          additionalProperties: true
+    TemplateStructure:
+      type: object
+      properties:
+        outlineSchema:
+          type: array
+          items: { $ref: '#/components/schemas/OutlineSeedNode' }
+        materialMappings:
+          type: array
+          items:
+            type: object
+            properties:
+              sectionTitle: { type: string }
+              tagFilters:
+                type: object
+                additionalProperties:
+                  type: array
+                  items: { type: string }
+    UpdateTemplateStructureRequest:
       allOf:
-        - $ref: '#/components/schemas/CreateTemplateRequest'
+        - $ref: '#/components/schemas/TemplateStructure'
     TemplatePage:
       allOf:
         - $ref: '#/components/schemas/Page'
@@ -502,8 +614,15 @@ components:
         templateId: { type: string }
         topic: { type: string }
     UpdateReportRequest:
-      allOf:
-        - $ref: '#/components/schemas/CreateReportRequest'
+      type: object
+      properties:
+        title: { type: string }
+        reportType: { $ref: '#/components/schemas/ReportType' }
+        specialty: { type: string }
+        plantName: { type: string }
+        year: { type: integer }
+        templateId: { type: string }
+        topic: { type: string }
     ReportPage:
       allOf:
         - $ref: '#/components/schemas/Page'
@@ -525,6 +644,15 @@ components:
         children:
           type: array
           items: { $ref: '#/components/schemas/OutlineNode' }
+    OutlineSeedNode:
+      type: object
+      properties:
+        title: { type: string }
+        sectionType: { $ref: '#/components/schemas/SectionType' }
+        required: { type: boolean }
+        children:
+          type: array
+          items: { $ref: '#/components/schemas/OutlineSeedNode' }
     GenerateOutlineRequest:
       type: object
       properties:
@@ -610,6 +738,13 @@ components:
         imageFileIds:
           type: array
           items: { type: string }
+    RegenerateSectionRequest:
+      type: object
+      properties:
+        instruction: { type: string }
+        preserveUserEdits:
+          type: boolean
+          default: true
     ReportExport:
       type: object
       properties:
@@ -678,6 +813,18 @@ components:
               finishedAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    ReportMaterial:
+      type: object
+      properties:
+        materialId: { type: string }
+        name: { type: string }
+        materialType: { type: string }
+        tags:
+          type: object
+          additionalProperties: { type: string }
+        usedBySections:
+          type: array
+          items: { type: string }
     ReportSettings:
       type: object
       properties:
@@ -759,7 +906,7 @@ components:
           properties:
             code:
               type: string
-              enum: [validation_error, unauthorized, forbidden, not_found, conflict, rate_limited, dependency_error, internal_error]
+              enum: [validation_error, unauthorized, forbidden, not_found, conflict, rate_limited, dependency_error, internal_error, unsupported_intent, unsupported_mode, unsupported_numbering_mode]
             message: { type: string }
             requestId: { type: string }
             fields:

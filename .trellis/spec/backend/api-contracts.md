@@ -332,6 +332,116 @@ docs/file.md references /api/v1/documents/{documentId}/content
 gateway.openapi.yaml owns the same public path and owner-service marker
 ```
 
+## Scenario: Internal Domain Service APIs
+
+### 1. Scope / Trigger
+
+- Trigger: implementing a domain service HTTP API that gateway or another backend
+  service will call directly, even when the public gateway contract is unchanged.
+- Applies to `services/<service>/api/openapi.yaml`, `services/<service>/internal/http/`,
+  service README files, and matching domain docs such as `docs/file.md`.
+
+### 2. Signatures
+
+Internal domain-service routes must use service-local versioned resource paths:
+
+```text
+GET /healthz
+GET /readyz
+/internal/v1/**
+```
+
+Business routes under `/internal/v1/**` must remain RESTful and resource-oriented.
+They may be close to public gateway paths, but they are not public frontend
+contracts unless the same operation is active in `docs/api/gateway.openapi.yaml`.
+
+### 3. Contracts
+
+Every implemented domain service should document internal API signatures in:
+
+```text
+services/<service>/api/openapi.yaml
+```
+
+Internal JSON responses use the same envelope and error shapes as gateway:
+
+```json
+{ "data": {}, "requestId": "req_123" }
+```
+
+```json
+{ "error": { "code": "validation_error", "message": "request validation failed", "requestId": "req_123" } }
+```
+
+Internal metadata responses may include service-owned integration fields that
+are not yet public frontend fields, for example `contentType` or `sizeBytes`
+for file-owned metadata. They must not expose storage object keys, bucket names,
+internal URLs, SQL details, tokens, credentials, vector payloads, or prompts.
+
+Domain services must accept gateway context headers when present:
+
+| Header | Purpose |
+| --- | --- |
+| `X-Request-Id` | Correlate gateway, service logs, and downstream calls. |
+| `X-User-Id` | Authenticated user identity injected by gateway. |
+| `X-User-Roles` | Comma-separated roles injected by gateway. |
+| `X-User-Permissions` | Comma-separated permissions injected by gateway. |
+| `X-Forwarded-For` | Original client address chain. |
+| `X-Forwarded-Proto` | Original request protocol. |
+
+### 4. Validation & Error Matrix
+
+| Condition | Internal response |
+| --- | --- |
+| Invalid request shape or field value | `400 validation_error` |
+| Missing required gateway user context | `401 unauthorized` |
+| Authenticated caller lacks permission | `403 forbidden` |
+| Resource does not exist, is deleted, or should be hidden | `404 not_found` |
+| State conflict | `409 conflict` |
+| Infrastructure dependency failed | `502 dependency_error` |
+| Unexpected service failure | `500 internal_error` |
+
+### 5. Good/Base/Bad Cases
+
+- Good: file service adds `GET /internal/v1/documents/{documentId}` for
+  file-owned metadata and documents it in `services/file/api/openapi.yaml`,
+  while public `GET /api/v1/documents/{documentId}` remains a knowledge-owned
+  missing contract.
+- Base: gateway proxies an active public route to a matching internal route and
+  normalizes any service-owned extra fields before returning to frontend.
+- Bad: a domain service adds a public-looking `/api/v1/**` route or exposes raw
+  object keys, bucket names, MinIO URLs, SQL errors, prompts, or vector payloads
+  in an internal response body.
+
+### 6. Tests Required
+
+When implementation exists:
+
+- Handler tests assert envelope shape, request id propagation, and expected
+  status codes for validation, auth context failure, not found, and dependency
+  failures where applicable.
+- DTO or handler tests assert service-owned integration fields are returned only
+  by internal contracts when they are not public gateway fields.
+- Content or streaming endpoints assert binary success responses and JSON error
+  responses separately.
+- Cross-service client tests assert gateway context headers are propagated.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```text
+services/file exposes GET /api/v1/documents/{documentId}
+response includes objectKey: documents/doc_123
+```
+
+#### Correct
+
+```text
+services/file exposes GET /internal/v1/documents/{documentId}
+response includes contentType and sizeBytes, but no objectKey
+public GET /api/v1/documents/{documentId} stays missing until knowledge contract is finalized
+```
 ## Scenario: Gateway Redis Session Cache
 
 ### 1. Scope / Trigger
@@ -440,3 +550,4 @@ gateway receives Authorization: Bearer token
 gateway hashes token and reads gateway:session:<accessTokenHash>
 gateway injects cached user, roles, and permissions into downstream headers
 ```
+

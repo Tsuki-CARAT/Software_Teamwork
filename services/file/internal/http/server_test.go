@@ -54,6 +54,9 @@ func TestUploadGetPatchAndContent(t *testing.T) {
 	if uploadBody.Data.ID == "" || uploadBody.Data.KnowledgeBaseID != "kb_123" || uploadBody.Data.Status != "uploaded" {
 		t.Fatalf("upload data = %+v", uploadBody.Data)
 	}
+	if uploadBody.Data.Name != "policy.pdf" {
+		t.Fatalf("upload name = %q", uploadBody.Data.Name)
+	}
 	if uploadBody.Data.ContentType != "application/pdf" || uploadBody.Data.SizeBytes != int64(len("content")) {
 		t.Fatalf("upload file metadata = %+v", uploadBody.Data)
 	}
@@ -135,6 +138,25 @@ func TestBusinessRoutesRequireGatewayUser(t *testing.T) {
 	var errBody errorResponseBody
 	decodeJSON(t, res.Body, &errBody)
 	if errBody.Error.Code != "unauthorized" {
+		t.Fatalf("error code = %q", errBody.Error.Code)
+	}
+}
+
+func TestBusinessRoutesRequirePermission(t *testing.T) {
+	server := newHTTPTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/internal/v1/documents/doc_123", nil)
+	req.Header.Set("X-Request-Id", "req_no_permission")
+	req.Header.Set("X-User-Id", "usr_123")
+	res := httptest.NewRecorder()
+
+	server.ServeHTTP(res, req)
+
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("status = %d", res.Code)
+	}
+	var errBody errorResponseBody
+	decodeJSON(t, res.Body, &errBody)
+	if errBody.Error.Code != "forbidden" {
 		t.Fatalf("error code = %q", errBody.Error.Code)
 	}
 }

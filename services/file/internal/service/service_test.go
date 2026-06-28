@@ -37,6 +37,9 @@ func TestUploadDocumentStoresMetadataAndContent(t *testing.T) {
 	if doc.ID != "doc_test" {
 		t.Fatalf("document id = %q", doc.ID)
 	}
+	if doc.Name != "policy.pdf" {
+		t.Fatalf("document name = %q", doc.Name)
+	}
 	if doc.Status != service.DocumentStatusUploaded {
 		t.Fatalf("status = %q", doc.Status)
 	}
@@ -106,6 +109,20 @@ func TestUploadDocumentRequiresActor(t *testing.T) {
 	}
 }
 
+func TestUploadDocumentRequiresPermission(t *testing.T) {
+	documents := newTestService(t)
+	_, err := documents.UploadDocument(context.Background(), service.RequestContext{UserID: "usr_123"}, service.UploadDocumentInput{
+		KnowledgeBaseID: "kb_123",
+		FileName:        "policy.pdf",
+		ContentType:     "application/pdf",
+		SizeBytes:       1,
+		Content:         strings.NewReader("x"),
+	})
+	if !hasCode(err, service.CodeForbidden) {
+		t.Fatalf("UploadDocument() error = %v, want forbidden", err)
+	}
+}
+
 func TestNormalizeTagsRejectsControlCharacters(t *testing.T) {
 	_, err := service.NormalizeTags([]string{"ok", "bad\n"})
 	if err == nil {
@@ -141,7 +158,11 @@ func uploadTestDocument(t *testing.T, documents *service.Service) service.Docume
 }
 
 func actorContext() service.RequestContext {
-	return service.RequestContext{RequestID: "req_test", UserID: "usr_123"}
+	return service.RequestContext{
+		RequestID:   "req_test",
+		UserID:      "usr_123",
+		Permissions: []string{"document:upload", "document:read", "document:update", "document:delete"},
+	}
 }
 
 func hasCode(err error, code service.Code) bool {

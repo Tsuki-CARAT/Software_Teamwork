@@ -49,6 +49,10 @@ func UnauthorizedError() *AppError {
 	return &AppError{Code: CodeUnauthorized, Message: "authentication is required"}
 }
 
+func ForbiddenError(message string) *AppError {
+	return &AppError{Code: CodeForbidden, Message: message}
+}
+
 func NotFoundError(message string) *AppError {
 	return &AppError{Code: CodeNotFound, Message: message, Err: ErrNotFound}
 }

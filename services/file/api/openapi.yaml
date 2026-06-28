@@ -67,6 +67,8 @@ paths:
           $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /internal/v1/documents/{documentId}:
     get:
       tags: [documents]
@@ -82,6 +84,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/DocumentResponse'
         '401':
+          $ref: '#/components/responses/Error'
+        '403':
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
@@ -108,6 +112,8 @@ paths:
           $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
     delete:
@@ -120,6 +126,8 @@ paths:
         '204':
           description: Document deleted.
         '401':
+          $ref: '#/components/responses/Error'
+        '403':
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
@@ -146,6 +154,8 @@ paths:
                 type: string
                 format: binary
         '401':
+          $ref: '#/components/responses/Error'
+        '403':
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
@@ -219,6 +229,13 @@ components:
         createdAt:
           type: string
           format: date-time
+        contentType:
+          type: string
+          description: Stored original content type, defaulting to application/octet-stream when unknown.
+        sizeBytes:
+          type: integer
+          format: int64
+          description: Stored original file size in bytes.
     DocumentResponse:
       type: object
       required: [data, requestId]

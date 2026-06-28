@@ -15,6 +15,11 @@ import (
 const (
 	maxTags      = 32
 	maxTagLength = 64
+
+	permissionUpload = "document:upload"
+	permissionRead   = "document:read"
+	permissionUpdate = "document:update"
+	permissionDelete = "document:delete"
 )
 
 type DocumentRepository interface {
@@ -73,6 +78,9 @@ func (s *Service) UploadDocument(ctx context.Context, reqCtx RequestContext, inp
 		return Document{}, err
 	}
 
+	if err := requirePermission(reqCtx, permissionUpload); err != nil {
+		return Document{}, err
+	}
 	fields := map[string]string{}
 	knowledgeBaseID := strings.TrimSpace(input.KnowledgeBaseID)
 	if knowledgeBaseID == "" {
@@ -142,6 +150,9 @@ func (s *Service) GetDocument(ctx context.Context, reqCtx RequestContext, docume
 	if err := validateActor(reqCtx); err != nil {
 		return Document{}, err
 	}
+	if err := requirePermission(reqCtx, permissionRead); err != nil {
+		return Document{}, err
+	}
 	id := strings.TrimSpace(documentID)
 	if id == "" {
 		return Document{}, ValidationError("request validation failed", map[string]string{"documentId": "is required"})
@@ -156,6 +167,9 @@ func (s *Service) GetDocument(ctx context.Context, reqCtx RequestContext, docume
 
 func (s *Service) UpdateDocument(ctx context.Context, reqCtx RequestContext, input UpdateDocumentInput) (Document, error) {
 	if err := validateActor(reqCtx); err != nil {
+		return Document{}, err
+	}
+	if err := requirePermission(reqCtx, permissionUpdate); err != nil {
 		return Document{}, err
 	}
 	id := strings.TrimSpace(input.DocumentID)
@@ -178,6 +192,9 @@ func (s *Service) DeleteDocument(ctx context.Context, reqCtx RequestContext, doc
 	if err := validateActor(reqCtx); err != nil {
 		return err
 	}
+	if err := requirePermission(reqCtx, permissionDelete); err != nil {
+		return err
+	}
 	id := strings.TrimSpace(documentID)
 	if id == "" {
 		return ValidationError("request validation failed", map[string]string{"documentId": "is required"})
@@ -194,9 +211,21 @@ func (s *Service) DeleteDocument(ctx context.Context, reqCtx RequestContext, doc
 }
 
 func (s *Service) GetDocumentContent(ctx context.Context, reqCtx RequestContext, documentID string) (DocumentContent, error) {
-	doc, err := s.GetDocument(ctx, reqCtx, documentID)
-	if err != nil {
+	if err := validateActor(reqCtx); err != nil {
 		return DocumentContent{}, err
+	}
+	if err := requirePermission(reqCtx, permissionRead); err != nil {
+		return DocumentContent{}, err
+	}
+
+	id := strings.TrimSpace(documentID)
+	if id == "" {
+		return DocumentContent{}, ValidationError("request validation failed", map[string]string{"documentId": "is required"})
+	}
+
+	doc, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return DocumentContent{}, mapRepositoryError(err, "document not found")
 	}
 
 	object, err := s.store.Get(ctx, doc.ObjectKey)
@@ -262,8 +291,17 @@ func validateActor(reqCtx RequestContext) error {
 	return nil
 }
 
+func requirePermission(reqCtx RequestContext, permission string) error {
+	for _, candidate := range reqCtx.Permissions {
+		if strings.TrimSpace(candidate) == permission {
+			return nil
+		}
+	}
+	return ForbiddenError("permission is required")
+}
+
 func normalizeFileName(name string) (string, error) {
-	trimmed := strings.TrimSpace(strings.ReplaceAll(name, "", "/"))
+	trimmed := strings.TrimSpace(strings.ReplaceAll(name, "\\", "/"))
 	trimmed = path.Base(trimmed)
 	if trimmed == "." || trimmed == "/" || trimmed == "" {
 		return "", fmt.Errorf("filename is required")

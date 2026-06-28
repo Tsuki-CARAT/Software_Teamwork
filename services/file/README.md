@@ -44,6 +44,10 @@ X-User-Roles: admin
 X-User-Permissions: document:upload,document:read,document:update,document:delete
 ```
 
+The service enforces the permission header for business routes. Missing user
+context returns `401 unauthorized`; missing operation permission returns
+`403 forbidden`.
+
 ## Configuration
 
 | Variable | Default | Description |

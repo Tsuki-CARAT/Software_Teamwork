@@ -1,0 +1,8 @@
+{"file":"docs/services/gateway.md","reason":"Check the QA draft remains consistent with gateway responsibilities, public API prefix, auth context, and missing-contract status."}
+{"file":"docs/architecture/frontend-backend-contract.md","reason":"Check frontend-facing request, response, pagination, auth, and SSE conventions."}
+{"file":"docs/architecture/service-boundaries.md","reason":"Check ownership statements and ensure gateway does not take QA business logic."}
+{"file":"docs/api/gateway.openapi.yaml","reason":"Check the QA draft does not conflict with current active OpenAPI paths or placeholders."}
+{"file":".trellis/spec/backend/api-contracts.md","reason":"Check RESTful naming, standard envelopes, error matrix, and service-document compliance."}
+{"file":"D:/ACADEMIC/By_Course/3.大三下学期/软件项目综合实践/0628/qa-system-design/db/init/02_schema.sql","reason":"Check documented resources align with the provided QA database model."}
+{"file":"D:/ACADEMIC/By_Course/3.大三下学期/软件项目综合实践/0628/qa-system-design/db/README.md","reason":"Check local deployment and migration instructions in the QA database documentation."}
+{"file":"D:/ACADEMIC/By_Course/3.大三下学期/软件项目综合实践/0628/qa-system-design/db/init/03_seed_dev.sql","reason":"Check development seed data descriptions in the QA database documentation."}

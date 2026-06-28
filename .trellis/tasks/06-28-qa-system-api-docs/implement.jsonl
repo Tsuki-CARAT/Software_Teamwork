@@ -1,0 +1,11 @@
+{"file":"docs/services/gateway.md","reason":"Defines gateway responsibility, public prefix, auth context propagation, envelopes, and current missing QA placeholders."}
+{"file":"docs/architecture/frontend-backend-contract.md","reason":"Defines frontend-to-gateway rules for auth, request/response envelopes, pagination, SSE, and mock behavior."}
+{"file":"docs/architecture/service-boundaries.md","reason":"Defines QA, knowledge, file, auth, and gateway ownership boundaries for the new API document."}
+{"file":"docs/api/gateway.openapi.yaml","reason":"Current machine-readable public contract and x-missing-contracts placeholders that the QA draft must not contradict."}
+{"file":"docs/requirements/smart_quote_system.md","reason":"Functional requirements for intelligent conversation, RAG, citations, thinking steps, admin config, and statistics."}
+{"file":".trellis/spec/backend/api-contracts.md","reason":"Contract-first RESTful API rules, standard envelopes, error matrix, and service-document requirements."}
+{"file":"D:/ACADEMIC/By_Course/3.大三下学期/软件项目综合实践/0628/qa-system-design/db/init/02_schema.sql","reason":"External QA database resource model for conversations, messages, response runs, stream events, citations, configs, and retrieval tests."}
+{"file":"D:/ACADEMIC/By_Course/3.大三下学期/软件项目综合实践/0628/qa-system-design/er/er-model.dot","reason":"External ER model summary for QA resource boundaries and relationships."}
+{"file":"D:/ACADEMIC/By_Course/3.大三下学期/软件项目综合实践/0628/qa-system-design/db/README.md","reason":"External QA database local deployment and migration notes for the database documentation."}
+{"file":"D:/ACADEMIC/By_Course/3.大三下学期/软件项目综合实践/0628/qa-system-design/db/init/01_extensions.sql","reason":"External QA database extension and timezone setup for the database documentation."}
+{"file":"D:/ACADEMIC/By_Course/3.大三下学期/软件项目综合实践/0628/qa-system-design/db/init/03_seed_dev.sql","reason":"External QA database development seed data for the database documentation."}

@@ -206,3 +206,42 @@ Converted gateway-facing auth and file contracts to resource-oriented RESTful pa
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: QA service API documentation
+
+**Date**: 2026-06-28
+**Task**: `06-28-qa-system-api-docs`
+**Branch**: `develop`
+
+### Summary
+
+Created a QA service API draft by adapting the provided WeChat frontend interface document to the project's gateway-first RESTful API contract, using the existing public docs and the external QA database model as source material.
+
+### Main Changes
+
+- Created Trellis task `.trellis/tasks/06-28-qa-system-api-docs` and wrote `prd.md`, `implement.jsonl`, and `check.jsonl` with the source documents and verification context.
+- Drafted `docs/services/qa.md` covering QA sessions, messages, SSE events, citations, QA/LLM configuration versions, retrieval test runs, QA metrics, ownership boundaries, and OpenAPI promotion steps.
+- Added `docs/services/qa-database.md` documenting the QA PostgreSQL schema, table groups, relationships, write flows, indexes, local Docker setup, seed data, and migration rules.
+- Updated `docs/README.md` so the QA service API draft is discoverable while noting that QA routes still need OpenAPI promotion before becoming stable public contracts.
+- Referenced the external database design under `D:\ACADEMIC\By_Course\3.大三下学期\软件项目综合实践\0628\qa-system-design`, especially conversations, messages, response runs, stream events, citations, config versions, retrieval tests, and audit logs.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| - | Not committed in this session |
+
+### Testing
+
+- [OK] Markdown relative link check passed: `missing markdown links: 0`.
+- [OK] IDE lint check reported no errors for edited Markdown files.
+- [OK] Git diff reviewed for docs index and workspace journal updates.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Decide in a follow-up task whether to promote QA paths from `x-missing-contracts` into `docs/api/gateway.openapi.yaml`.

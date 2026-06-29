@@ -23,6 +23,15 @@ const menuItems: AdminMenuItem[] = [
     path: '/admin/stats',
   },
   {
+    key: 'reports',
+    label: '报告生成',
+    children: [
+      { key: 'report-generate', label: '生成向导', path: '/reports/generate' },
+      { key: 'report-records', label: '报告记录', path: '/reports/records' },
+      { key: 'report-templates', label: '模板素材', path: '/reports/templates' },
+    ],
+  },
+  {
     key: 'templates',
     label: '模板管理',
     path: '/admin/templates',
@@ -56,7 +65,7 @@ const menuItems: AdminMenuItem[] = [
 export function AdminSidebar() {
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(['system', 'rag']))
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(['system', 'reports', 'rag']))
 
   const toggle = (key: string) => {
     setExpanded((prev) => {
@@ -125,8 +134,7 @@ export function AdminSidebar() {
                         to={child.path!}
                         className={cn(
                           'block px-4 py-1.5 pl-10 text-sm text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary',
-                          isActive(child.path) &&
-                            'text-primary bg-primary/10 font-medium',
+                          isActive(child.path) && 'text-primary bg-primary/10 font-medium',
                         )}
                       >
                         {child.label}

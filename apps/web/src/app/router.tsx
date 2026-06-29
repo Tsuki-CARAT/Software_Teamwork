@@ -22,6 +22,9 @@ import { SystemSettings } from '@/pages/admin/system-settings'
 import { TemplateManagement } from '@/pages/admin/template-management'
 import { UserManagement } from '@/pages/admin/user-management'
 import { ChatPage } from '@/pages/qa/chat/page'
+import { ReportGeneratePage } from '@/pages/reports/generate/page'
+import { ReportRecordsPage } from '@/pages/reports/records/page'
+import { ReportTemplatesPage } from '@/pages/reports/templates/page'
 
 // ── Root route ──────────────────────────────────────────────
 const rootRoute = createRootRoute({
@@ -48,6 +51,39 @@ const chatRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'chat',
   component: ChatPage,
+})
+
+// Reports
+const reportsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'reports',
+  component: Outlet,
+})
+
+const reportsIndexRoute = createRoute({
+  getParentRoute: () => reportsRoute,
+  path: '/',
+  beforeLoad: () => {
+    throw redirect({ to: '/reports/generate' })
+  },
+})
+
+const reportGenerateRoute = createRoute({
+  getParentRoute: () => reportsRoute,
+  path: 'generate',
+  component: ReportGeneratePage,
+})
+
+const reportRecordsRoute = createRoute({
+  getParentRoute: () => reportsRoute,
+  path: 'records',
+  component: ReportRecordsPage,
+})
+
+const reportTemplatesRoute = createRoute({
+  getParentRoute: () => reportsRoute,
+  path: 'templates',
+  component: ReportTemplatesPage,
 })
 
 // ── Admin layout route ──────────────────────────────────────
@@ -147,6 +183,12 @@ const adminStatsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   chatRoute,
+  reportsRoute.addChildren([
+    reportsIndexRoute,
+    reportGenerateRoute,
+    reportRecordsRoute,
+    reportTemplatesRoute,
+  ]),
   adminRoute.addChildren([
     adminIndexRoute,
     adminUsersRoute,

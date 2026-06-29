@@ -33,35 +33,32 @@ export function useStreamChat(handlers: SSEHandlers) {
 
     setIsStreaming(true)
 
-    const { abort } = streamChat(
-      params,
-      {
-        onIntentStatus: (data) => {
-          handlersRef.current.onIntentStatus?.(data)
-        },
-        onThinkingStep: (data) => {
-          handlersRef.current.onThinkingStep?.(data)
-        },
-        onToken: (data) => {
-          handlersRef.current.onToken?.(data)
-        },
-        onCitation: (data) => {
-          handlersRef.current.onCitation?.(data)
-        },
-        onDone: (data) => {
+    const { abort } = streamChat(params, {
+      onIntentStatus: (data) => {
+        handlersRef.current.onIntentStatus?.(data)
+      },
+      onThinkingStep: (data) => {
+        handlersRef.current.onThinkingStep?.(data)
+      },
+      onToken: (data) => {
+        handlersRef.current.onToken?.(data)
+      },
+      onCitation: (data) => {
+        handlersRef.current.onCitation?.(data)
+      },
+      onDone: (data) => {
+        setIsStreaming(false)
+        abortRef.current = null
+        handlersRef.current.onDone?.(data)
+      },
+      onError: (data) => {
+        if (data.fatal) {
           setIsStreaming(false)
           abortRef.current = null
-          handlersRef.current.onDone?.(data)
-        },
-        onError: (data) => {
-          if (data.fatal) {
-            setIsStreaming(false)
-            abortRef.current = null
-          }
-          handlersRef.current.onError?.(data)
-        },
+        }
+        handlersRef.current.onError?.(data)
       },
-    )
+    })
 
     abortRef.current = abort
   }, [])

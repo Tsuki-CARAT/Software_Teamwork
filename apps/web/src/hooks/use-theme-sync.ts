@@ -7,16 +7,7 @@ import { useThemeStore } from '@/stores/theme-store'
 /* -------------------------------------------------------------------------- */
 
 export type ColorKey =
-  | 'neutral'
-  | 'blue'
-  | 'green'
-  | 'purple'
-  | 'orange'
-  | 'red'
-  | 'teal'
-  | 'pink'
-  | 'yellow'
-  | 'slate'
+  'neutral' | 'blue' | 'green' | 'purple' | 'orange' | 'red' | 'teal' | 'pink' | 'yellow' | 'slate'
 
 export type ColorPreset = {
   light: string

@@ -34,9 +34,7 @@ interface BatchCitationsRequest {
  * Retrieve full citation detail (including surrounding context) for a
  * single chunk.
  */
-export async function getCitation(
-  chunkId: string,
-): Promise<CitationDetail> {
+export async function getCitation(chunkId: string): Promise<CitationDetail> {
   return doRequest<CitationDetail>(`/citations/${encodeURIComponent(chunkId)}`)
 }
 
@@ -47,9 +45,7 @@ export async function getCitation(
 /**
  * Retrieve citation details for multiple chunks at once.
  */
-export async function batchGetCitations(
-  chunkIds: string[],
-): Promise<CitationDetail[]> {
+export async function batchGetCitations(chunkIds: string[]): Promise<CitationDetail[]> {
   return doRequest<CitationDetail[]>('/citations/batch', {
     method: 'POST',
     body: JSON.stringify({ chunk_ids: chunkIds } satisfies BatchCitationsRequest),

@@ -105,9 +105,7 @@ export function getLLMConfig(): Promise<LLMConfigResponse> {
 }
 
 /** PUT /api/admin/llm-config */
-export async function updateLLMConfig(
-  config: Partial<LLMConfig>,
-): Promise<LLMConfigResponse> {
+export async function updateLLMConfig(config: Partial<LLMConfig>): Promise<LLMConfigResponse> {
   return doRequest<LLMConfigResponse>('/admin/llm-config', {
     method: 'PUT',
     body: JSON.stringify(config),
@@ -115,9 +113,7 @@ export async function updateLLMConfig(
 }
 
 /** POST /api/admin/llm-config/test */
-export async function testLLMConnection(
-  params: LLMTestRequest,
-): Promise<LLMTestResponse> {
+export async function testLLMConnection(params: LLMTestRequest): Promise<LLMTestResponse> {
   return doRequest<LLMTestResponse>('/admin/llm-config/test', {
     method: 'POST',
     body: JSON.stringify(params),
@@ -148,9 +144,7 @@ export async function updateKnowledgeConfig(
 // =========================================================================
 
 /** POST /api/admin/rag/test */
-export async function ragTest(
-  params: RAGTestRequest,
-): Promise<RAGTestResponse> {
+export async function ragTest(params: RAGTestRequest): Promise<RAGTestResponse> {
   return doRequest<RAGTestResponse>('/admin/rag/test', {
     method: 'POST',
     body: JSON.stringify(params),
@@ -167,45 +161,30 @@ export function getStatsOverview(): Promise<StatsOverview> {
 }
 
 /** GET /api/admin/stats/trend?days=N */
-export async function getStatsTrend(
-  days = 30,
-): Promise<StatsTrendResponse> {
-  const res = await fetch(
-    `${apiClient.baseUrl}/admin/stats/trend?days=${days}`,
-  )
+export async function getStatsTrend(days = 30): Promise<StatsTrendResponse> {
+  const res = await fetch(`${apiClient.baseUrl}/admin/stats/trend?days=${days}`)
   if (!res.ok) throw new ApiError(res.status, '获取趋势数据失败')
-  const json: { code: number; message: string; data: StatsTrendResponse } =
-    await res.json()
+  const json: { code: number; message: string; data: StatsTrendResponse } = await res.json()
   if (json.code !== 0) throw new ApiError(json.code, json.message)
   return json.data
 }
 
 /** GET /api/admin/stats/top-queries?limit=N&days=N */
-export async function getTopQueries(
-  limit = 10,
-  daysParam = 7,
-): Promise<TopQueriesResponse> {
+export async function getTopQueries(limit = 10, daysParam = 7): Promise<TopQueriesResponse> {
   const params = new URLSearchParams({
     limit: String(limit),
     days: String(daysParam),
   })
-  const res = await fetch(
-    `${apiClient.baseUrl}/admin/stats/top-queries?${params}`,
-  )
+  const res = await fetch(`${apiClient.baseUrl}/admin/stats/top-queries?${params}`)
   if (!res.ok) throw new ApiError(res.status, '获取热门问题失败')
-  const json: { code: number; message: string; data: TopQueriesResponse } =
-    await res.json()
+  const json: { code: number; message: string; data: TopQueriesResponse } = await res.json()
   if (json.code !== 0) throw new ApiError(json.code, json.message)
   return json.data
 }
 
 /** GET /api/admin/stats/intent-distribution?days=N */
-export async function getIntentDistribution(
-  daysParam = 7,
-): Promise<IntentDistributionResponse> {
-  const res = await fetch(
-    `${apiClient.baseUrl}/admin/stats/intent-distribution?days=${daysParam}`,
-  )
+export async function getIntentDistribution(daysParam = 7): Promise<IntentDistributionResponse> {
+  const res = await fetch(`${apiClient.baseUrl}/admin/stats/intent-distribution?days=${daysParam}`)
   if (!res.ok) throw new ApiError(res.status, '获取意图分布失败')
   const json: {
     code: number
@@ -237,10 +216,7 @@ export async function createKnowledgeBase(
 
 /** DELETE /api/admin/knowledge-bases/:id */
 export async function deleteKnowledgeBase(id: string): Promise<void> {
-  await doRequest<void>(
-    `/admin/knowledge-bases/${encodeURIComponent(id)}`,
-    { method: 'DELETE' },
-  )
+  await doRequest<void>(`/admin/knowledge-bases/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 // =========================================================================
@@ -251,30 +227,22 @@ export function listUsers(): Promise<AdminUser[]> {
   return doRequest<AdminUser[]>('/admin/users')
 }
 
-export async function createUser(
-  body: Record<string, unknown>,
-): Promise<AdminUser> {
+export async function createUser(body: Record<string, unknown>): Promise<AdminUser> {
   return doRequest<AdminUser>('/admin/users', {
     method: 'POST',
     body: JSON.stringify(body),
   })
 }
 
-export async function updateUser(
-  id: string,
-  body: Record<string, unknown>,
-): Promise<AdminUser> {
-  return doRequest<AdminUser>(
-    `/admin/users/${encodeURIComponent(id)}`,
-    { method: 'PUT', body: JSON.stringify(body) },
-  )
+export async function updateUser(id: string, body: Record<string, unknown>): Promise<AdminUser> {
+  return doRequest<AdminUser>(`/admin/users/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  await doRequest<void>(
-    `/admin/users/${encodeURIComponent(id)}`,
-    { method: 'DELETE' },
-  )
+  await doRequest<void>(`/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 // =========================================================================
@@ -285,28 +253,20 @@ export function listRoles(): Promise<AdminRole[]> {
   return doRequest<AdminRole[]>('/admin/roles')
 }
 
-export async function createRole(
-  body: Record<string, unknown>,
-): Promise<AdminRole> {
+export async function createRole(body: Record<string, unknown>): Promise<AdminRole> {
   return doRequest<AdminRole>('/admin/roles', {
     method: 'POST',
     body: JSON.stringify(body),
   })
 }
 
-export async function updateRole(
-  id: string,
-  body: Record<string, unknown>,
-): Promise<AdminRole> {
-  return doRequest<AdminRole>(
-    `/admin/roles/${encodeURIComponent(id)}`,
-    { method: 'PUT', body: JSON.stringify(body) },
-  )
+export async function updateRole(id: string, body: Record<string, unknown>): Promise<AdminRole> {
+  return doRequest<AdminRole>(`/admin/roles/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function deleteRole(id: string): Promise<void> {
-  await doRequest<void>(
-    `/admin/roles/${encodeURIComponent(id)}`,
-    { method: 'DELETE' },
-  )
+  await doRequest<void>(`/admin/roles/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }

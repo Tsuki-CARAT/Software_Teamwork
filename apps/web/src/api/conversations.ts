@@ -14,9 +14,7 @@ import { doRequest } from './client'
 // 2.1  Create session
 // ---------------------------------------------------------------------------
 
-export async function createSession(
-  title = '新对话',
-): Promise<Conversation> {
+export async function createSession(title = '新对话'): Promise<Conversation> {
   return doRequest<Conversation>('/qa-sessions', {
     method: 'POST',
     body: JSON.stringify({ title }),
@@ -36,38 +34,26 @@ export async function listSessions(
     page_size: String(pageSize),
     sort: 'updated_at_desc',
   })
-  return doRequest<{ items: ConversationListItem[]; total: number }>(
-    `/qa-sessions?${params}`,
-  )
+  return doRequest<{ items: ConversationListItem[]; total: number }>(`/qa-sessions?${params}`)
 }
 
 // ---------------------------------------------------------------------------
 // 2.3  Get session detail
 // ---------------------------------------------------------------------------
 
-export async function getSession(
-  id: string,
-): Promise<Conversation> {
-  return doRequest<Conversation>(
-    `/qa-sessions/${encodeURIComponent(id)}`,
-  )
+export async function getSession(id: string): Promise<Conversation> {
+  return doRequest<Conversation>(`/qa-sessions/${encodeURIComponent(id)}`)
 }
 
 // ---------------------------------------------------------------------------
 // 2.4  Rename session (PATCH)
 // ---------------------------------------------------------------------------
 
-export async function renameSession(
-  sessionId: string,
-  title: string,
-): Promise<Conversation> {
-  return doRequest<Conversation>(
-    `/qa-sessions/${encodeURIComponent(sessionId)}`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify({ title }),
-    },
-  )
+export async function renameSession(sessionId: string, title: string): Promise<Conversation> {
+  return doRequest<Conversation>(`/qa-sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ title }),
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -75,20 +61,13 @@ export async function renameSession(
 // ---------------------------------------------------------------------------
 
 export async function deleteSession(id: string): Promise<void> {
-  await doRequest<void>(
-    `/qa-sessions/${encodeURIComponent(id)}`,
-    { method: 'DELETE' },
-  )
+  await doRequest<void>(`/qa-sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 // ---------------------------------------------------------------------------
 // 2.6  Get session messages
 // ---------------------------------------------------------------------------
 
-export async function getSessionMessages(
-  sessionId: string,
-): Promise<Message[]> {
-  return doRequest<Message[]>(
-    `/qa-sessions/${encodeURIComponent(sessionId)}/messages`,
-  )
+export async function getSessionMessages(sessionId: string): Promise<Message[]> {
+  return doRequest<Message[]>(`/qa-sessions/${encodeURIComponent(sessionId)}/messages`)
 }

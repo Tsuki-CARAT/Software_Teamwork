@@ -37,11 +37,7 @@ export interface SSEHandlers {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function dispatch(
-  event: SSEEventType,
-  data: unknown,
-  handlers: SSEHandlers,
-): void {
+function dispatch(event: SSEEventType, data: unknown, handlers: SSEHandlers): void {
   switch (event) {
     case 'intent_status':
       handlers.onIntentStatus?.(data as SSEIntentStatusData)
@@ -93,9 +89,7 @@ export function streamChat(
   signal?: AbortSignal,
 ): { abort: () => void } {
   const controller = new AbortController()
-  const combinedSignal = signal
-    ? anyAbort(signal, controller.signal)
-    : controller.signal
+  const combinedSignal = signal ? anyAbort(signal, controller.signal) : controller.signal
 
   // Shared across then/catch so connection-level errors can compute a seq
   // that passes the consumer-side monotonic-seq check.
@@ -124,18 +118,15 @@ export function streamChat(
     if (Object.keys(p).length) body.params = p
   }
 
-  fetch(
-    `${apiClient.baseUrl}/qa-sessions/${params.conversation_id}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-      },
-      body: JSON.stringify(body),
-      signal: combinedSignal,
+  fetch(`${apiClient.baseUrl}/qa-sessions/${params.conversation_id}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
     },
-  )
+    body: JSON.stringify(body),
+    signal: combinedSignal,
+  })
     .then(async (res) => {
       if (!res.ok) {
         const text = await res.text().catch(() => '')
@@ -256,9 +247,7 @@ export interface RAGSearchResponse {
  * RAG semantic search.
  * API doc 5.1 — debug/search endpoint, no LLM involved.
  */
-export async function ragSearch(
-  params: RAGSearchRequest,
-): Promise<RAGSearchResponse> {
+export async function ragSearch(params: RAGSearchRequest): Promise<RAGSearchResponse> {
   const res = await fetch(`${apiClient.baseUrl}/rag/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -268,8 +257,7 @@ export async function ragSearch(
     const text = await res.text().catch(() => '')
     throw new Error(text || 'RAG 检索失败')
   }
-  const json: { code: number; message: string; data: RAGSearchResponse } =
-    await res.json()
+  const json: { code: number; message: string; data: RAGSearchResponse } = await res.json()
   if (json.code !== 0) throw new Error(json.message || 'RAG 检索失败')
   return json.data
 }

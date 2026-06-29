@@ -127,48 +127,43 @@ export function StyleManagement() {
         </div>
 
         <div className="grid grid-cols-5 gap-3">
-          {(Object.entries(PRIMARY_COLORS) as [ColorKey, ColorPreset][]).map(
-            ([key, preset]) => {
-              const isSelected = primaryColor === key
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setPrimaryColor(key)}
-                  className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg py-2 transition-all hover:bg-muted/50"
+          {(Object.entries(PRIMARY_COLORS) as [ColorKey, ColorPreset][]).map(([key, preset]) => {
+            const isSelected = primaryColor === key
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setPrimaryColor(key)}
+                className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg py-2 transition-all hover:bg-muted/50"
+              >
+                <span
+                  className={cn(
+                    'relative flex size-9 items-center justify-center rounded-full border-2 transition-all',
+                    isSelected ? 'border-primary ring-2 ring-ring/20' : 'border-transparent',
+                  )}
+                  style={{ backgroundColor: preset.light }}
                 >
-                  <span
-                    className={cn(
-                      'relative flex size-9 items-center justify-center rounded-full border-2 transition-all',
-                      isSelected ? 'border-primary ring-2 ring-ring/20' : 'border-transparent',
-                    )}
-                    style={{ backgroundColor: preset.light }}
-                  >
-                    {isSelected && (
-                      <Check
-                        aria-hidden="true"
-                        className="size-4"
-                        style={{
-                          color:
-                            key === 'yellow'
-                              ? 'oklch(0.205 0 0)'
-                              : 'oklch(0.985 0 0)',
-                        }}
-                      />
-                    )}
-                  </span>
-                  <span
-                    className={cn(
-                      'text-xs transition-colors',
-                      isSelected ? 'font-medium text-foreground' : 'text-muted-foreground',
-                    )}
-                  >
-                    {preset.label}
-                  </span>
-                </button>
-              )
-            },
-          )}
+                  {isSelected && (
+                    <Check
+                      aria-hidden="true"
+                      className="size-4"
+                      style={{
+                        color: key === 'yellow' ? 'oklch(0.205 0 0)' : 'oklch(0.985 0 0)',
+                      }}
+                    />
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    'text-xs transition-colors',
+                    isSelected ? 'font-medium text-foreground' : 'text-muted-foreground',
+                  )}
+                >
+                  {preset.label}
+                </span>
+              </button>
+            )
+          })}
         </div>
       </section>
 
@@ -209,9 +204,7 @@ export function StyleManagement() {
             >
               预览
             </div>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {radius}rem
-            </span>
+            <span className="text-xs text-muted-foreground tabular-nums">{radius}rem</span>
           </div>
         </div>
       </section>

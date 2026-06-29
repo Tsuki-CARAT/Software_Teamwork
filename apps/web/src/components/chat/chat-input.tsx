@@ -11,12 +11,7 @@ type ChatInputProps = {
   onChange: (value: string) => void
 }
 
-export default function ChatInput({
-  onSend,
-  disabled,
-  value,
-  onChange,
-}: ChatInputProps) {
+export default function ChatInput({ onSend, disabled, value, onChange }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-resize on text change

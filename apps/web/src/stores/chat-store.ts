@@ -66,10 +66,7 @@ export const useChatStore = create<ChatState>()(
           }
           return {
             sessions: [session, ...state.sessions],
-            sessionIds: [
-              session.id,
-              ...state.sessionIds.filter((sid) => sid !== session.id),
-            ],
+            sessionIds: [session.id, ...state.sessionIds.filter((sid) => sid !== session.id)],
           }
         }),
 
@@ -82,9 +79,7 @@ export const useChatStore = create<ChatState>()(
 
       updateSessionMessages: (id, messages) =>
         set((state) => ({
-          sessions: state.sessions.map((s) =>
-            s.id === id ? { ...s, messages } : s,
-          ),
+          sessions: state.sessions.map((s) => (s.id === id ? { ...s, messages } : s)),
         })),
 
       setStreaming: (streaming) => set({ streaming }),

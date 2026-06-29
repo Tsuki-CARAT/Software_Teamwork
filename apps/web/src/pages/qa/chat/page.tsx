@@ -75,9 +75,7 @@ export function ChatPage() {
   const updateSessionMessages = useChatStore((s) => s.updateSessionMessages)
 
   // ── React Query: active session detail ──
-  const { data: sessionDetail, isError: sessionDetailError } = useSession(
-    activeId ?? '',
-  )
+  const { data: sessionDetail, isError: sessionDetailError } = useSession(activeId ?? '')
 
   // ── Local input text ──
   const [inputText, setInputText] = useState('')
@@ -121,9 +119,7 @@ export function ChatPage() {
 
   useEffect(() => {
     if (sessionDetail && activeId) {
-      const current = useChatStore
-        .getState()
-        .sessions.find((s) => s.id === activeId)
+      const current = useChatStore.getState().sessions.find((s) => s.id === activeId)
       // Only overwrite if local messages are empty (don't clobber streaming data)
       if (current && current.messages.length === 0 && sessionDetail.messages.length > 0) {
         updateSessionMessages(activeId, sessionDetail.messages)
@@ -137,9 +133,7 @@ export function ChatPage() {
 
   useEffect(() => {
     if (sessionDetailError && activeId) {
-      const local = useChatStore
-        .getState()
-        .sessions.find((s) => s.id === activeId)
+      const local = useChatStore.getState().sessions.find((s) => s.id === activeId)
       if (!local || local.messages.length === 0) {
         setError('加载会话消息失败，请检查网络连接')
       }
@@ -204,11 +198,7 @@ export function ChatPage() {
       try {
         await renameSessionMut.mutateAsync({ sessionId, title: newTitle })
         const current = useChatStore.getState().sessions
-        setSessions(
-          current.map((s) =>
-            s.id === sessionId ? { ...s, title: newTitle } : s,
-          ),
-        )
+        setSessions(current.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s)))
       } catch {
         setError('重命名会话失败')
       }
@@ -232,8 +222,7 @@ export function ChatPage() {
       // ① Auto-create session if none active
       if (!targetId) {
         try {
-          const title =
-            trimmed.slice(0, 30) + (trimmed.length > 30 ? '…' : '')
+          const title = trimmed.slice(0, 30) + (trimmed.length > 30 ? '…' : '')
           const newSession = await createSessionMut.mutateAsync(title)
           addSession(newSession)
           targetId = newSession.id
@@ -269,9 +258,7 @@ export function ChatPage() {
           const isFirst = s.messages.length === 0
           return {
             ...s,
-            title: isFirst
-              ? trimmed.slice(0, 30) + (trimmed.length > 30 ? '…' : '')
-              : s.title,
+            title: isFirst ? trimmed.slice(0, 30) + (trimmed.length > 30 ? '…' : '') : s.title,
             messages: [...s.messages, userMsg, asstMsg],
             updated_at: new Date().toISOString(),
           }
@@ -312,9 +299,7 @@ export function ChatPage() {
       let lastSeq = -1
       const verifySeq = (seq: number): boolean => {
         if (seq <= lastSeq) {
-          console.warn(
-            `[SSE] Out-of-order event: received seq=${seq}, last=${lastSeq}`,
-          )
+          console.warn(`[SSE] Out-of-order event: received seq=${seq}, last=${lastSeq}`)
           return false
         }
         lastSeq = seq
@@ -464,11 +449,7 @@ export function ChatPage() {
         sessions={sidebarItems}
         activeId={activeId ?? ''}
         isLoading={sessionsLoading}
-        fetchError={
-          sessionsError
-            ? '加载会话列表失败，请检查网络连接'
-            : null
-        }
+        fetchError={sessionsError ? '加载会话列表失败，请检查网络连接' : null}
         onRetryFetch={() => refetchSessions()}
         onSelect={setActiveId}
         onCreate={handleCreate}

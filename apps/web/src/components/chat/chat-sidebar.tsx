@@ -102,7 +102,10 @@ export default function ChatSidebar({
       {/* ── Header ── */}
       <div className="flex flex-col gap-2 border-b border-border p-4">
         <h2 className="text-lg font-semibold text-foreground">对话历史</h2>
-        <Button onClick={onCreate} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button
+          onClick={onCreate}
+          className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+        >
           <Plus className="size-4" />
           新建对话
         </Button>
@@ -115,14 +118,8 @@ export default function ChatSidebar({
           {fetchError && !isLoading && (
             <div className="flex flex-col items-center gap-2 py-8 px-4">
               <AlertTriangle className="size-5 text-red-500" aria-hidden="true" />
-              <p className="text-center text-xs text-red-600 dark:text-red-400">
-                {fetchError}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onRetryFetch}
-              >
+              <p className="text-center text-xs text-red-600 dark:text-red-400">{fetchError}</p>
+              <Button variant="outline" size="sm" onClick={onRetryFetch}>
                 <RefreshCw className="size-3" />
                 重新加载
               </Button>
@@ -132,19 +129,14 @@ export default function ChatSidebar({
           {/* Loading state */}
           {!fetchError && isLoading && sessions.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-8">
-              <Loader2
-                className="size-5 animate-spin text-muted-foreground"
-                aria-label="加载中"
-              />
+              <Loader2 className="size-5 animate-spin text-muted-foreground" aria-label="加载中" />
               <span className="text-xs text-muted-foreground">加载会话列表…</span>
             </div>
           )}
 
           {/* Empty state (after loading) */}
           {!fetchError && !isLoading && sessions.length === 0 && (
-            <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-              暂无对话记录
-            </p>
+            <p className="px-4 py-8 text-center text-sm text-muted-foreground">暂无对话记录</p>
           )}
 
           {/* Session items */}
@@ -211,9 +203,7 @@ export default function ChatSidebar({
                 ) : (
                   /* ── Normal display ── */
                   <>
-                    <span className="w-full truncate pr-14 text-sm font-medium">
-                      {sess.title}
-                    </span>
+                    <span className="w-full truncate pr-14 text-sm font-medium">{sess.title}</span>
                     <span className="text-xs text-muted-foreground">
                       <MessageSquare className="mr-1 inline-block size-3" />
                       {sess.message_count} 条消息

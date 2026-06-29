@@ -177,13 +177,7 @@ export interface TopQuery {
 
 // ============ SSE 事件类型 ============
 export type SSEEventType =
-  | 'intent_status'
-  | 'thinking_step'
-  | 'token'
-  | 'citation'
-  | 'done'
-  | 'error'
-  | 'heartbeat'
+  'intent_status' | 'thinking_step' | 'token' | 'citation' | 'done' | 'error' | 'heartbeat'
 
 export interface SSEIntentStatusData {
   status: 'started' | 'done'

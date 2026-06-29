@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -42,10 +43,6 @@ func (s *Service) ProcessIngestionTask(ctx context.Context, reqCtx RequestContex
 	if job.Status != JobStatusQueued && job.Status != JobStatusFailed {
 		return ProcessingJob{}, ConflictError("job is not ready to run", nil)
 	}
-	if s.source == nil || s.parser == nil || s.chunker == nil {
-		failed := s.failProcessing(ctx, job, normalized.DocumentID, string(CodeDependency), "processing pipeline is not configured")
-		return failed, DependencyError("processing pipeline is not configured", nil)
-	}
 
 	doc, err := s.repo.GetDocument(ctx, normalized.DocumentID, scope)
 	if err != nil {
@@ -54,28 +51,33 @@ func (s *Service) ProcessIngestionTask(ctx context.Context, reqCtx RequestContex
 	if doc.KnowledgeBaseID != normalized.KnowledgeBaseID {
 		return ProcessingJob{}, ConflictError("worker payload does not match document", nil)
 	}
-	if doc.FileRef == nil || strings.TrimSpace(*doc.FileRef) == "" {
-		failed := s.failProcessing(ctx, job, doc.ID, string(CodeDependency), "document source is not configured")
-		return failed, DependencyError("document source is not configured", nil)
-	}
 	kb, err := s.repo.GetKnowledgeBase(ctx, doc.KnowledgeBaseID, AccessScope{CanReadAll: true})
 	if err != nil {
 		return ProcessingJob{}, repositoryError(err)
 	}
 
 	startedAt := s.now()
-	attempts := job.Attempts + 1
 	parsingStage := "parsing"
-	job, err = s.repo.UpdateJobState(ctx, job.ID, JobStateUpdate{
+	job, err = s.repo.ClaimProcessingJob(ctx, job.ID, JobStateUpdate{
 		Status:          JobStatusRunning,
 		CurrentStage:    &parsingStage,
 		ProgressPercent: 20,
-		Attempts:        &attempts,
 		StartedAt:       &startedAt,
 		UpdatedAt:       startedAt,
 	})
 	if err != nil {
+		if errors.Is(err, ErrConflict) {
+			return job, ConflictError("job is not ready to run", err)
+		}
 		return ProcessingJob{}, DependencyError("job state update failed", err)
+	}
+	if s.source == nil || s.parser == nil || s.chunker == nil {
+		failed := s.failProcessing(ctx, job, normalized.DocumentID, string(CodeDependency), "processing pipeline is not configured")
+		return failed, DependencyError("processing pipeline is not configured", nil)
+	}
+	if doc.FileRef == nil || strings.TrimSpace(*doc.FileRef) == "" {
+		failed := s.failProcessing(ctx, job, doc.ID, string(CodeDependency), "document source is not configured")
+		return failed, DependencyError("document source is not configured", nil)
 	}
 	if _, err := s.repo.UpdateDocumentProcessingState(ctx, doc.ID, DocumentStateUpdate{
 		Status:    DocumentStatusParsing,

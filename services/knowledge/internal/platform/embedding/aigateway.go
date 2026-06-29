@@ -44,18 +44,30 @@ func NewAIGatewayClient(cfg AIGatewayConfig) (*AIGatewayClient, error) {
 	if cfg.Dimensions < 0 {
 		return nil, fmt.Errorf("ai gateway embedding dimensions must be non-negative")
 	}
-	client := cfg.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
-	}
 	return &AIGatewayClient{
 		baseURL:      baseURL,
 		model:        model,
 		profileID:    strings.TrimSpace(cfg.ProfileID),
 		dimensions:   cfg.Dimensions,
 		serviceToken: strings.TrimSpace(cfg.ServiceToken),
-		client:       client,
+		client:       noRedirectHTTPClient(cfg.HTTPClient),
 	}, nil
+}
+
+func noRedirectHTTPClient(client *http.Client) *http.Client {
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	} else {
+		copied := *client
+		client = &copied
+	}
+	// Embedding requests include service credentials and document chunks. Treat
+	// redirects as dependency responses so neither headers nor body are replayed
+	// to an unexpected host.
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return client
 }
 
 func (c *AIGatewayClient) Embed(ctx context.Context, request service.EmbeddingRequest) (service.EmbeddingResult, error) {

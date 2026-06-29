@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -149,6 +151,59 @@ func TestIngestionHandlerDoesNotReprocessSucceededJob(t *testing.T) {
 	}
 	if source.readCount != 1 {
 		t.Fatalf("source reads = %d, want 1", source.readCount)
+	}
+}
+
+func TestIngestionHandlerAtomicallyClaimsDuplicateDeliveries(t *testing.T) {
+	source := newBlockingSourceStore("content for exactly one concurrent processing run", "text/plain")
+	handler, svc, repo, vectors := newWorkerHarness(t, source)
+	handoff := seedIngestionJob(t, repo, "file_123")
+	payload := mustJSON(t, worker.IngestionPayload{
+		RequestID:       "req_worker",
+		JobID:           handoff.jobID,
+		DocumentID:      handoff.documentID,
+		KnowledgeBaseID: handoff.knowledgeBaseID,
+		UserID:          "usr_123",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	errCh := make(chan error, 2)
+	go func() {
+		errCh <- handler.HandleIngestionPayload(ctx, payload)
+	}()
+	select {
+	case <-source.entered:
+	case <-time.After(time.Second):
+		t.Fatal("first worker did not reach source read")
+	}
+
+	go func() {
+		errCh <- handler.HandleIngestionPayload(ctx, payload)
+	}()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("duplicate HandleIngestionPayload() error = %v, want ack", err)
+		}
+	case <-time.After(300 * time.Millisecond):
+		close(source.release)
+		t.Fatal("duplicate delivery was not acked before attempting source read")
+	}
+
+	close(source.release)
+	if err := <-errCh; err != nil {
+		t.Fatalf("claimed HandleIngestionPayload() error = %v", err)
+	}
+	if reads := source.reads.Load(); reads != 1 {
+		t.Fatalf("source reads = %d, want 1", reads)
+	}
+	chunks, err := svc.ListChunks(context.Background(), actorContext(), service.ListChunksInput{DocumentID: handoff.documentID})
+	if err != nil {
+		t.Fatalf("ListChunks() error = %v", err)
+	}
+	if chunks.Page.Total != 1 || len(vectors.points) != 1 {
+		t.Fatalf("chunks = %+v, vectors = %+v", chunks, vectors.points)
 	}
 }
 
@@ -300,8 +355,26 @@ type sourceDoc struct {
 	contentType string
 }
 
+type blockingSourceStore struct {
+	body        string
+	contentType string
+	entered     chan struct{}
+	release     chan struct{}
+	enterOnce   sync.Once
+	reads       atomic.Int32
+}
+
 func newSourceStore() *sourceStore {
 	return &sourceStore{docs: map[string]sourceDoc{}}
+}
+
+func newBlockingSourceStore(body string, contentType string) *blockingSourceStore {
+	return &blockingSourceStore{
+		body:        body,
+		contentType: contentType,
+		entered:     make(chan struct{}),
+		release:     make(chan struct{}),
+	}
 }
 
 func (s *sourceStore) Put(fileID string, body string, contentType string) {
@@ -328,7 +401,28 @@ func (s *sourceStore) ReadSource(ctx context.Context, reqCtx service.RequestCont
 	}, nil
 }
 
+func (s *blockingSourceStore) ReadSource(ctx context.Context, reqCtx service.RequestContext, fileID string) (service.SourceDocument, error) {
+	if err := ctx.Err(); err != nil {
+		return service.SourceDocument{}, err
+	}
+	s.reads.Add(1)
+	s.enterOnce.Do(func() {
+		close(s.entered)
+	})
+	select {
+	case <-s.release:
+	case <-ctx.Done():
+		return service.SourceDocument{}, ctx.Err()
+	}
+	return service.SourceDocument{
+		Body:        io.NopCloser(strings.NewReader(s.body)),
+		ContentType: s.contentType,
+		SizeBytes:   int64(len(s.body)),
+	}, nil
+}
+
 type recordingVectorIndex struct {
+	mu     sync.Mutex
 	points []service.VectorPoint
 }
 
@@ -336,6 +430,8 @@ func (i *recordingVectorIndex) Upsert(ctx context.Context, points []service.Vect
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	i.points = append(i.points, points...)
 	return nil
 }
@@ -344,6 +440,8 @@ func (i *recordingVectorIndex) DeleteByDocument(ctx context.Context, documentID 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	filtered := i.points[:0]
 	for _, point := range i.points {
 		if point.Payload["document_id"] != documentID {
@@ -406,8 +504,11 @@ func actorContext() service.RequestContext {
 }
 
 func sequenceIDs() func(prefix string) string {
+	var mu sync.Mutex
 	counter := 0
 	return func(prefix string) string {
+		mu.Lock()
+		defer mu.Unlock()
 		counter++
 		return prefix + "_" + strconv.Itoa(counter)
 	}

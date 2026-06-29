@@ -480,6 +480,39 @@ func (r *MemoryRepository) UpdateJobState(ctx context.Context, id string, update
 	return cloneJob(job), nil
 }
 
+func (r *MemoryRepository) ClaimProcessingJob(ctx context.Context, id string, update service.JobStateUpdate) (service.ProcessingJob, error) {
+	if err := ctx.Err(); err != nil {
+		return service.ProcessingJob{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	job, exists := r.jobs[id]
+	if !exists {
+		return service.ProcessingJob{}, service.ErrNotFound
+	}
+	if job.Status != service.JobStatusQueued && job.Status != service.JobStatusFailed {
+		return service.ProcessingJob{}, service.ErrConflict
+	}
+	if job.MaxAttempts > 0 && job.Attempts >= job.MaxAttempts {
+		return service.ProcessingJob{}, service.ErrConflict
+	}
+	job.Status = update.Status
+	job.ProgressPercent = update.ProgressPercent
+	job.CurrentStage = cloneStringPtr(update.CurrentStage)
+	job.Message = cloneStringPtr(update.Message)
+	job.ErrorCode = nil
+	job.ErrorMessage = nil
+	job.Attempts++
+	if update.StartedAt != nil && job.StartedAt == nil {
+		job.StartedAt = cloneTimePtr(update.StartedAt)
+	}
+	job.FinishedAt = nil
+	job.UpdatedAt = update.UpdatedAt
+	r.jobs[id] = job
+	return cloneJob(job), nil
+}
+
 func (r *MemoryRepository) UpdateDocumentProcessingState(ctx context.Context, id string, update service.DocumentStateUpdate) (service.KnowledgeDocument, error) {
 	if err := ctx.Err(); err != nil {
 		return service.KnowledgeDocument{}, err

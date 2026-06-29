@@ -372,6 +372,7 @@ type Repository interface {
 	SoftDeleteParserConfig(ctx context.Context, id string, deletedAt time.Time, audit ParserConfigAudit) error
 	GetEffectiveParserConfig(ctx context.Context, contentType string) (ParserConfig, error)
 	GetProcessingJob(ctx context.Context, id string) (ProcessingJob, error)
+	ClaimProcessingJob(ctx context.Context, id string, update JobStateUpdate) (ProcessingJob, error)
 	UpdateJobState(ctx context.Context, id string, update JobStateUpdate) (ProcessingJob, error)
 	UpdateDocumentProcessingState(ctx context.Context, id string, update DocumentStateUpdate) (KnowledgeDocument, error)
 	CompleteIngestion(ctx context.Context, input CompleteIngestionRecord) (ProcessingJob, error)

@@ -112,6 +112,44 @@ func TestAIGatewayClientDoesNotExposeSensitiveErrorBody(t *testing.T) {
 	}
 }
 
+func TestAIGatewayClientDoesNotFollowRedirects(t *testing.T) {
+	redirected := false
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Host == "redirect-target.test" {
+			redirected = true
+			return jsonResponse(http.StatusOK, `{"object":"list","data":[]}`), nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusTemporaryRedirect,
+			Header: http.Header{
+				"Location": []string{"http://redirect-target.test/internal/v1/embeddings"},
+			},
+			Body: io.NopCloser(strings.NewReader("redirect")),
+		}, nil
+	})
+
+	client, err := embedding.NewAIGatewayClient(embedding.AIGatewayConfig{
+		BaseURL:      "http://ai-gateway.test",
+		Model:        "bge-small",
+		ServiceToken: "svc_secret",
+		HTTPClient:   &http.Client{Transport: transport},
+	})
+	if err != nil {
+		t.Fatalf("NewAIGatewayClient() error = %v", err)
+	}
+	_, err = client.Embed(context.Background(), service.EmbeddingRequest{
+		Texts:     []string{"private document chunk"},
+		RequestID: "req_embed",
+		UserID:    "usr_123",
+	})
+	if err == nil {
+		t.Fatal("Embed() error = nil, want redirect response error")
+	}
+	if redirected {
+		t.Fatal("embedding client followed redirect and risked forwarding token or document text")
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {

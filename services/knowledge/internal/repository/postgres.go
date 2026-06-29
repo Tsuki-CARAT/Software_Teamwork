@@ -542,6 +542,41 @@ RETURNING id, knowledge_base_id, document_id, job_type, status, current_stage, p
 	return processingJobFromRow(row), nil
 }
 
+func (r *PostgresRepository) ClaimProcessingJob(ctx context.Context, id string, update service.JobStateUpdate) (service.ProcessingJob, error) {
+	row, err := r.scanProcessingJob(ctx, r.pool.QueryRow(ctx, `
+UPDATE processing_jobs
+SET status = $2,
+    current_stage = $3,
+    progress_percent = $4,
+    message = $5,
+    error_code = NULL,
+    error_message = NULL,
+    attempts = attempts + 1,
+    started_at = COALESCE(started_at, $6),
+    finished_at = NULL,
+    updated_at = $7
+WHERE id = $1
+  AND status IN ('queued', 'failed')
+  AND (max_attempts <= 0 OR attempts < max_attempts)
+RETURNING id, knowledge_base_id, document_id, job_type, status, current_stage, progress_percent,
+          message, error_code, error_message, attempts, max_attempts, started_at, finished_at, created_at, updated_at`,
+		id,
+		update.Status,
+		pgTextPtr(update.CurrentStage),
+		update.ProgressPercent,
+		pgTextPtr(update.Message),
+		pgTimePtr(update.StartedAt),
+		pgTime(update.UpdatedAt),
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return service.ProcessingJob{}, service.ErrConflict
+	}
+	if err != nil {
+		return service.ProcessingJob{}, wrapPostgresError("claim processing job", err)
+	}
+	return processingJobFromRow(row), nil
+}
+
 func (r *PostgresRepository) UpdateDocumentProcessingState(ctx context.Context, id string, update service.DocumentStateUpdate) (service.KnowledgeDocument, error) {
 	rows, err := r.pool.Exec(ctx, `
 UPDATE knowledge_documents

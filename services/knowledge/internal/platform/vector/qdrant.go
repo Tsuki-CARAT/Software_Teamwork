@@ -41,16 +41,27 @@ func NewQdrantClient(cfg QdrantConfig) (*QdrantClient, error) {
 	if collection == "" {
 		return nil, fmt.Errorf("qdrant collection is required")
 	}
-	client := cfg.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
-	}
 	return &QdrantClient{
 		baseURL:    strings.TrimRight(parsed.String(), "/"),
 		apiKey:     strings.TrimSpace(cfg.APIKey),
 		collection: collection,
-		client:     client,
+		client:     noRedirectHTTPClient(cfg.HTTPClient),
 	}, nil
+}
+
+func noRedirectHTTPClient(client *http.Client) *http.Client {
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	} else {
+		copied := *client
+		client = &copied
+	}
+	// Qdrant requests may include api-key headers, vectors, and metadata. Do
+	// not replay them to a redirect target; surface the 3xx as dependency error.
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return client
 }
 
 func (c *QdrantClient) Upsert(ctx context.Context, points []service.VectorPoint) error {

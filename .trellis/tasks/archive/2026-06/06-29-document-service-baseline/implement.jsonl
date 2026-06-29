@@ -1,0 +1,13 @@
+{"file":"docs/services/document/README.md","reason":"Document service boundary, workflow, configuration and implementation constraints for issue #97."}
+{"file":"docs/services/document/docs/data-models.md","reason":"Authoritative report-generation logical data model and persistence constraints."}
+{"file":"docs/architecture/technology-decisions.md","reason":"Project technology baseline: pgx, sqlc, goose, ServeMux, slog, asynq, and DOCX tooling."}
+{"file":"docs/architecture/service-boundaries.md","reason":"Document service ownership and cross-service boundaries."}
+{"file":"docs/architecture/frontend-backend-contract.md","reason":"Envelope, request id, gateway-only access, and RESTful route constraints."}
+{"file":".trellis/spec/backend/index.md","reason":"Backend pre-development checklist and service standards."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Expected Go service-local layout."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"PostgreSQL, migration, repository, transaction, Redis/asynq, and sensitive data rules."}
+{"file":".trellis/spec/backend/api-contracts.md","reason":"Internal service API, response envelope, and route rules."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Service-local error classification and HTTP error response shape."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"slog and sensitive-data logging rules."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Required Go service checks and review checklist."}
+{"file":".trellis/spec/guides/index.md","reason":"Shared thinking guide index."}

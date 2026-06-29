@@ -252,3 +252,71 @@ HTTP handler receives upload -> writes object directly to MinIO -> returns objec
 ```text
 HTTP handler parses multipart -> service validates checksum and creates FileObject -> repository stores metadata -> ObjectStore stores bytes -> response returns safe FileObject fields only
 ```
+
+## Scenario: Document Service Report Baseline
+
+### 1. Scope / Trigger
+
+- Trigger: adding or changing Document Service report-generation tables, job persistence, sqlc queries, migrations, queue identifiers, or dependency configuration.
+- Applies to `services/document/internal/service`, `services/document/internal/repository`, `services/document/migrations`, `services/document/sqlc.yaml`, and `services/document/internal/config`.
+
+### 2. Signatures
+
+- Database migration files:
+  - `services/document/migrations/0001_create_report_generation_tables.sql` or later ordered migrations.
+- SQL files:
+  - `services/document/sqlc.yaml`.
+  - `services/document/internal/repository/queries/*.sql`.
+  - Generated code under `services/document/internal/repository/sqlc/`.
+- Required runtime environment keys:
+  - `DOCUMENT_DATABASE_URL`.
+  - `DOCUMENT_REDIS_ADDR`.
+  - `DOCUMENT_FILE_SERVICE_URL`.
+  - `DOCUMENT_AI_GATEWAY_URL`.
+  - `DOCUMENT_AI_GATEWAY_PROFILE_ID`.
+
+### 3. Contracts
+
+- PostgreSQL owns durable report state for report types, templates, materials, reports, outlines, sections, section versions, jobs, attempts, events, files, and operation logs.
+- `report_jobs`, `report_job_attempts`, and `report_events` are the durable authority for job status, retry history, failure summaries, and public progress events.
+- Redis/asynq may store queue payloads, delivery metadata, and task identifiers only. It must not be the only source of report job or event truth.
+- File bytes for templates, materials, and generated report files belong to the File Service. Document tables may persist only service-internal file references and display metadata, never MinIO object keys or bucket names.
+- Repository methods return service-layer domain structs, not generated sqlc rows or raw driver types.
+
+### 4. Validation & Error Matrix
+
+| Condition | Response/error |
+| --- | --- |
+| Missing required config value | startup validation error |
+| Invalid file or AI Gateway base URL | startup validation error |
+| Invalid report/job UUID at repository boundary | `validation_error` |
+| Missing report job | `not_found` |
+| Duplicate report/job/attempt/event ID | `conflict` |
+| PostgreSQL connect/query failure | wrapped dependency error |
+
+### 5. Good/Base/Bad Cases
+
+- Good: service creates a report job row in PostgreSQL, records attempts/events in PostgreSQL, and stores only the asynq task ID for queue correlation.
+- Base: the first implementation slice provides schema, repository, transactions, health checks, and readiness checks without implementing AI generation or DOCX export.
+- Bad: worker stores final job status only in Redis, repository returns sqlc rows to HTTP handlers, or public responses/logs expose `file_ref`, object keys, prompts, provider raw errors, or database details.
+
+### 6. Tests Required
+
+- Config tests for required Document Service dependency keys and invalid URL rejection.
+- Handler tests for `/healthz` and `/readyz` response envelopes, request ID propagation, and dependency failure status.
+- Repository integration tests, gated by `DOCUMENT_TEST_DATABASE_URL`, that apply migrations and verify report type, report, job, attempt, event, and transaction behavior.
+- Build and package checks from `services/document`: `go test ./...`, `go build ./cmd/server`, `sqlc generate`, and migration apply against an empty PostgreSQL database when migration tooling is available.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```text
+asynq task executes -> Redis stores final job status -> API reads Redis as truth
+```
+
+#### Correct
+
+```text
+API creates report_job -> asynq task id is stored for correlation -> worker updates report_jobs/report_job_attempts/report_events in PostgreSQL
+```

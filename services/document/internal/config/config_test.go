@@ -1,0 +1,72 @@
+package config
+
+import (
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestLoadRejectsMissingDatabaseURL(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("DOCUMENT_REDIS_ADDR", "localhost:6379")
+	t.Setenv("DOCUMENT_FILE_SERVICE_URL", "http://localhost:8082")
+	t.Setenv("DOCUMENT_AI_GATEWAY_URL", "http://localhost:8086")
+	t.Setenv("DOCUMENT_AI_GATEWAY_PROFILE_ID", "default-chat")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected missing database URL error")
+	}
+	if !strings.Contains(err.Error(), "DOCUMENT_DATABASE_URL") {
+		t.Fatalf("expected DOCUMENT_DATABASE_URL in error, got %v", err)
+	}
+}
+
+func TestLoadValidatesDocumentDependencies(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("DOCUMENT_DATABASE_URL", "postgres://document:document@localhost:5432/document?sslmode=disable")
+	t.Setenv("DOCUMENT_REDIS_ADDR", "localhost:6379")
+	t.Setenv("DOCUMENT_FILE_SERVICE_URL", "http://localhost:8082")
+	t.Setenv("DOCUMENT_AI_GATEWAY_URL", "http://localhost:8086")
+	t.Setenv("DOCUMENT_AI_GATEWAY_PROFILE_ID", "default-chat")
+	t.Setenv("DOCUMENT_PANDOC_PATH", "pandoc")
+	t.Setenv("DOCUMENT_LIBREOFFICE_PATH", "soffice")
+	t.Setenv("DOCUMENT_SHUTDOWN_TIMEOUT", "7s")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.HTTPAddr != ":8085" {
+		t.Fatalf("HTTPAddr = %q, want :8085", cfg.HTTPAddr)
+	}
+	if cfg.DatabaseURL == "" || cfg.RedisAddr == "" || cfg.FileServiceURL == "" || cfg.AIGatewayURL == "" {
+		t.Fatalf("expected required dependency config to be populated: %+v", cfg)
+	}
+	if cfg.AIGatewayProfileID != "default-chat" {
+		t.Fatalf("AIGatewayProfileID = %q", cfg.AIGatewayProfileID)
+	}
+	if cfg.PandocPath != "pandoc" || cfg.LibreOfficePath != "soffice" {
+		t.Fatalf("unexpected DOCX tool paths: %+v", cfg)
+	}
+	if cfg.ShutdownTimeout != 7*time.Second {
+		t.Fatalf("ShutdownTimeout = %s, want 7s", cfg.ShutdownTimeout)
+	}
+}
+
+func clearEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"DOCUMENT_HTTP_ADDR",
+		"DOCUMENT_DATABASE_URL",
+		"DOCUMENT_REDIS_ADDR",
+		"DOCUMENT_FILE_SERVICE_URL",
+		"DOCUMENT_AI_GATEWAY_URL",
+		"DOCUMENT_AI_GATEWAY_PROFILE_ID",
+		"DOCUMENT_PANDOC_PATH",
+		"DOCUMENT_LIBREOFFICE_PATH",
+		"DOCUMENT_SHUTDOWN_TIMEOUT",
+	} {
+		t.Setenv(key, "")
+	}
+}

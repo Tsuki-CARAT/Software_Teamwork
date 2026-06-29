@@ -1,0 +1,11 @@
+{"file":"docs/services/document/README.md","reason":"Verify implemented baseline matches document service constraints."}
+{"file":"docs/services/document/docs/data-models.md","reason":"Verify migration and repository model coverage against documented entities."}
+{"file":"docs/architecture/technology-decisions.md","reason":"Verify selected libraries and runtime layout match project baseline."}
+{"file":".trellis/spec/backend/index.md","reason":"Backend quality checklist entry point."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Verify service-local layout."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verify persistence, migration, query, and Redis/asynq truth-source rules."}
+{"file":".trellis/spec/backend/api-contracts.md","reason":"Verify health/ready routes and response envelopes."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify error classification and HTTP error response shape."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Verify structured logging and sensitive-data constraints."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify tests/build and code quality requirements."}
+{"file":".trellis/spec/guides/index.md","reason":"Shared quality thinking guide index."}

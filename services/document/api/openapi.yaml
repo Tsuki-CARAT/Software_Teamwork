@@ -1,0 +1,96 @@
+openapi: 3.1.0
+info:
+  title: Document Service API
+  version: 0.1.0
+  description: Internal operational contract for the document service baseline.
+servers:
+  - url: http://localhost:8085
+paths:
+  /healthz:
+    get:
+      tags:
+        - operations
+      operationId: getDocumentHealth
+      summary: Check document service liveness
+      responses:
+        "200":
+          description: Service is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthEnvelope"
+  /readyz:
+    get:
+      tags:
+        - operations
+      operationId: getDocumentReadiness
+      summary: Check document service readiness
+      responses:
+        "200":
+          description: Service dependencies are ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthEnvelope"
+        "502":
+          description: A required dependency is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+components:
+  schemas:
+    HealthEnvelope:
+      type: object
+      required:
+        - data
+        - requestId
+      properties:
+        data:
+          type: object
+          required:
+            - service
+            - status
+          properties:
+            service:
+              type: string
+              enum:
+                - document
+            status:
+              type: string
+              enum:
+                - ok
+                - ready
+        requestId:
+          type: string
+    ErrorEnvelope:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - requestId
+          properties:
+            code:
+              type: string
+              enum:
+                - validation_error
+                - unauthorized
+                - forbidden
+                - not_found
+                - conflict
+                - rate_limited
+                - dependency_error
+                - internal_error
+            message:
+              type: string
+            requestId:
+              type: string
+            fields:
+              type: object
+              additionalProperties:
+                type: string

@@ -13,6 +13,9 @@ type JobRepository interface {
 	CreateReportJob(ctx context.Context, value ReportJob) (ReportJob, error)
 	UpdateReportJobStatus(ctx context.Context, id string, status JobStatus, errorCode, errorMessage string, startedAt, finishedAt *time.Time) (ReportJob, error)
 	UpdateJobAsynqTaskID(ctx context.Context, id, taskID string) error
+	CreateReportJobAttempt(ctx context.Context, value ReportJobAttempt) (ReportJobAttempt, error)
+	UpdateAttemptAsynqTaskID(ctx context.Context, attemptID, taskID string) error
+	SetAttemptFailed(ctx context.Context, attemptID, errCode, errMsg string) error
 	// ClaimRetry atomically validates status/retry_count, increments retry_count,
 	// and inserts the attempt — preventing double-retry races.
 	ClaimRetry(ctx context.Context, jobID, attemptID, triggerSource, reason string) (ReportJobAttempt, error)
@@ -22,7 +25,7 @@ type JobRepository interface {
 
 // TaskEnqueuer submits async tasks to the queue.
 type TaskEnqueuer interface {
-	EnqueueOutlineGeneration(ctx context.Context, jobID, requestID, userID string) (string, error)
+	EnqueueOutlineGeneration(ctx context.Context, jobID, attemptID, requestID, userID string) (string, error)
 }
 
 type JobService struct {
@@ -97,14 +100,30 @@ func (s *JobService) CreateJob(ctx context.Context, rctx RequestContext, input C
 	if err != nil {
 		return ReportJob{}, fmt.Errorf("create report job: %w", err)
 	}
-	taskID, err := s.enqueuer.EnqueueOutlineGeneration(ctx, created.ID, input.RequestID, input.UserID)
+	// Create attempt #1 so the attempts list reflects every execution, including the first.
+	attempt := ReportJobAttempt{
+		ID:            newID(),
+		JobID:         created.ID,
+		AttemptNumber: 1,
+		TriggerSource: "api",
+		Status:        JobStatusPending,
+		CreatedAt:     now,
+	}
+	attempt, err = s.repo.CreateReportJobAttempt(ctx, attempt)
 	if err != nil {
-		_, _ = s.repo.UpdateReportJobStatus(ctx, created.ID, JobStatusFailed, "enqueue_failed", "failed to enqueue task", nil, nil)
+		return ReportJob{}, fmt.Errorf("create initial attempt: %w", err)
+	}
+	taskID, err := s.enqueuer.EnqueueOutlineGeneration(ctx, created.ID, attempt.ID, input.RequestID, input.UserID)
+	if err != nil {
+		finishedAt := time.Now().UTC()
+		_, _ = s.repo.UpdateReportJobStatus(ctx, created.ID, JobStatusFailed, "enqueue_failed", "failed to enqueue task", nil, &finishedAt)
+		_ = s.repo.SetAttemptFailed(ctx, attempt.ID, "enqueue_failed", "failed to enqueue task")
 		return ReportJob{}, fmt.Errorf("enqueue job task: %w", err)
 	}
 	if err := s.repo.UpdateJobAsynqTaskID(ctx, created.ID, taskID); err != nil {
 		return ReportJob{}, fmt.Errorf("job created (id=%s) but asynq_task_id not persisted: %w", created.ID, err)
 	}
+	_ = s.repo.UpdateAttemptAsynqTaskID(ctx, attempt.ID, taskID)
 	created.AsynqTaskID = taskID
 	return created, nil
 }
@@ -122,11 +141,16 @@ func (s *JobService) RetryJob(ctx context.Context, rctx RequestContext, id, reas
 	if err != nil {
 		return ReportJobAttempt{}, err
 	}
-	taskID, err := s.enqueuer.EnqueueOutlineGeneration(ctx, job.ID, job.RequestID, rctx.UserID)
+	taskID, err := s.enqueuer.EnqueueOutlineGeneration(ctx, job.ID, attempt.ID, job.RequestID, rctx.UserID)
 	if err != nil {
+		// Compensate: ClaimRetry already committed (job=pending, attempt=pending).
+		// Mark both as failed so the job is retryable again.
+		finishedAt := time.Now().UTC()
+		_, _ = s.repo.UpdateReportJobStatus(ctx, job.ID, JobStatusFailed, "enqueue_failed", "failed to enqueue retry task", nil, &finishedAt)
+		_ = s.repo.SetAttemptFailed(ctx, attempt.ID, "enqueue_failed", "failed to enqueue retry task")
 		return ReportJobAttempt{}, fmt.Errorf("enqueue retry task: %w", err)
 	}
-	_ = taskID
+	_ = s.repo.UpdateAttemptAsynqTaskID(ctx, attempt.ID, taskID)
 	return attempt, nil
 }
 

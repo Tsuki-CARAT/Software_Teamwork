@@ -23,10 +23,11 @@ func (c *Client) Close() error {
 }
 
 // EnqueueOutlineGeneration implements service.TaskEnqueuer.
-func (c *Client) EnqueueOutlineGeneration(ctx context.Context, jobID, requestID, userID string) (string, error) {
+func (c *Client) EnqueueOutlineGeneration(ctx context.Context, jobID, attemptID, requestID, userID string) (string, error) {
 	data, err := json.Marshal(OutlinePayload{
 		RequestID: requestID,
 		JobID:     jobID,
+		AttemptID: attemptID,
 		UserID:    userID,
 	})
 	if err != nil {

@@ -891,6 +891,63 @@ func (r *PostgresRepository) ClaimRetry(ctx context.Context, jobID, attemptID, t
 	return attempt, nil
 }
 
+func (r *PostgresRepository) UpdateAttemptAsynqTaskID(ctx context.Context, attemptID, taskID string) error {
+	id, err := parseUUID(attemptID)
+	if err != nil {
+		return service.NewError(service.CodeValidation, "invalid attempt id", err)
+	}
+	_, err = r.db.Exec(ctx, `UPDATE report_job_attempts SET asynq_task_id = $2 WHERE id = $1`, id, taskID)
+	if err != nil {
+		return fmt.Errorf("update attempt asynq task id: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresRepository) SetAttemptRunning(ctx context.Context, attemptID string) error {
+	id, err := parseUUID(attemptID)
+	if err != nil {
+		return service.NewError(service.CodeValidation, "invalid attempt id", err)
+	}
+	_, err = r.db.Exec(ctx,
+		`UPDATE report_job_attempts SET status = 'running', started_at = $2 WHERE id = $1`,
+		id, time.Now().UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("set attempt running: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresRepository) SetAttemptSucceeded(ctx context.Context, attemptID string) error {
+	id, err := parseUUID(attemptID)
+	if err != nil {
+		return service.NewError(service.CodeValidation, "invalid attempt id", err)
+	}
+	_, err = r.db.Exec(ctx,
+		`UPDATE report_job_attempts SET status = 'succeeded', finished_at = $2 WHERE id = $1`,
+		id, time.Now().UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("set attempt succeeded: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresRepository) SetAttemptFailed(ctx context.Context, attemptID, errCode, errMsg string) error {
+	id, err := parseUUID(attemptID)
+	if err != nil {
+		return service.NewError(service.CodeValidation, "invalid attempt id", err)
+	}
+	_, err = r.db.Exec(ctx,
+		`UPDATE report_job_attempts SET status = 'failed', error_code = NULLIF($2,''), error_message = NULLIF($3,''), finished_at = $4 WHERE id = $1`,
+		id, errCode, errMsg, time.Now().UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("set attempt failed: %w", err)
+	}
+	return nil
+}
+
 func (r *PostgresRepository) ListReportJobAttemptsByJobID(ctx context.Context, jobID string) ([]service.ReportJobAttempt, error) {
 	id, err := parseUUID(jobID)
 	if err != nil {

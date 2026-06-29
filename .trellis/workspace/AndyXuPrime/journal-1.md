@@ -133,3 +133,36 @@ Fixed the remaining PR #212 permission-navigation dead ends by routing login, fo
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: Fix PR 212 knowledge admin permissions
+
+**Date**: 2026-06-29
+**Task**: Fix PR 212 knowledge admin permissions
+**Branch**: `fix/frontend-post-206-polish`
+
+### Summary
+
+Resolved the latest Codex PR Review finding by requiring knowledge:write for the knowledge management route/menu and redirecting read-only knowledge users to the read-only knowledge configuration page; frontend checks passed.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5efd3d1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

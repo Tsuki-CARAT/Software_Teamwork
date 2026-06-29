@@ -1,0 +1,11 @@
+FROM postgres:16-alpine
+
+USER root
+RUN mkdir -p /workspace && chown postgres:postgres /workspace
+COPY bin/qa-server /usr/local/bin/qa-server
+
+USER postgres
+WORKDIR /workspace
+EXPOSE 8084
+ENTRYPOINT ["qa-server"]
+

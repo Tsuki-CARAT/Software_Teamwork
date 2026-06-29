@@ -1,0 +1,81 @@
+openapi: 3.1.0
+info:
+  title: QA Internal Service API
+  version: 1.0.0
+  description: >-
+    Gateway-to-QA internal contract. Resource PathItems reference the
+    authoritative public Gateway contract; QA changes only the internal prefix
+    and trusted service/user authentication boundary.
+servers:
+  - url: http://localhost:8084
+security:
+  - serviceToken: []
+    gatewayUser: []
+paths:
+  /healthz:
+    get:
+      operationId: getQAHealth
+      tags: [Operations]
+      summary: Check QA process health
+      security: []
+      responses:
+        '200': { description: Process is healthy }
+  /readyz:
+    get:
+      operationId: getQAReadiness
+      tags: [Operations]
+      summary: Check QA PostgreSQL readiness
+      security: []
+      responses:
+        '200': { description: Service is ready }
+        '502': { description: PostgreSQL is unavailable }
+  /internal/v1/qa-sessions:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1qa-sessions'
+  /internal/v1/qa-sessions/{sessionId}:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1qa-sessions~1{sessionId}'
+  /internal/v1/qa-sessions/{sessionId}/messages:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1qa-sessions~1{sessionId}~1messages'
+  /internal/v1/qa-sessions/{sessionId}/events:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1qa-sessions~1{sessionId}~1events'
+  /internal/v1/response-runs/{responseRunId}:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1response-runs~1{responseRunId}'
+  /internal/v1/response-runs/{responseRunId}/tool-calls:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1response-runs~1{responseRunId}~1tool-calls'
+  /internal/v1/messages/{messageId}/citations:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1messages~1{messageId}~1citations'
+  /internal/v1/citations/{citationId}:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1citations~1{citationId}'
+  /internal/v1/citation-lookups:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1citation-lookups'
+  /internal/v1/qa-config-versions/current:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1qa-config-versions~1current'
+  /internal/v1/qa-config-versions:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1qa-config-versions'
+  /internal/v1/llm-config-versions/current:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1llm-config-versions~1current'
+  /internal/v1/llm-config-versions:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1llm-config-versions'
+  /internal/v1/llm-connection-tests:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1llm-connection-tests'
+  /internal/v1/retrieval-test-runs:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1retrieval-test-runs'
+  /internal/v1/retrieval-test-runs/{testRunId}:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1retrieval-test-runs~1{testRunId}'
+  /internal/v1/qa-metrics/overview:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1qa-metrics~1overview'
+  /internal/v1/qa-metrics/trend:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1qa-metrics~1trend'
+  /internal/v1/qa-metrics/top-queries:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1qa-metrics~1top-queries'
+  /internal/v1/qa-metrics/intent-distribution:
+    $ref: '../../../docs/services/gateway/api/openapi.yaml#/paths/~1api~1v1~1qa-metrics~1intent-distribution'
+components:
+  securitySchemes:
+    serviceToken:
+      type: apiKey
+      in: header
+      name: X-Service-Token
+    gatewayUser:
+      type: apiKey
+      in: header
+      name: X-User-Id

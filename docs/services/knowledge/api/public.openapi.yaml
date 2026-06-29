@@ -836,7 +836,6 @@ components:
       type: object
       properties:
         score: { type: number }
-        pointId: { type: string, nullable: true }
         chunkId: { type: string }
         documentId: { type: string }
         knowledgeBaseId: { type: string }

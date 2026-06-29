@@ -166,6 +166,10 @@ func (s *KnowledgeService) CreateKnowledgeQuery(ctx context.Context, reqCtx Requ
 	if err != nil {
 		return KnowledgeQuerySummary{}, DependencyError("knowledge query id generation failed", err)
 	}
+	qdrantCollection := runtimeConfig.QdrantCollection
+	if configuredCollection := strings.TrimSpace(s.vectorCollection); configuredCollection != "" {
+		qdrantCollection = configuredCollection
+	}
 	return KnowledgeQuerySummary{
 		ID:      queryID,
 		Query:   query,
@@ -174,7 +178,7 @@ func (s *KnowledgeService) CreateKnowledgeQuery(ctx context.Context, reqCtx Requ
 			EmbeddingProvider:  embedding.Provider,
 			EmbeddingModel:     embedding.Model,
 			EmbeddingDimension: embedding.Dimension,
-			QdrantCollection:   s.vectorCollection,
+			QdrantCollection:   qdrantCollection,
 			SearchTopK:         topK,
 			ScoreThreshold:     scoreThreshold,
 			HitCount:           len(results),
@@ -226,8 +230,15 @@ func (s *KnowledgeService) rerankRetrievalResults(ctx context.Context, query str
 			break
 		}
 	}
-	if len(ordered) == 0 {
-		return nil, DependencyError("knowledge query reranking failed", nil)
+	for _, result := range results {
+		if len(ordered) == limit {
+			break
+		}
+		if _, alreadyRanked := seen[result.ChunkID]; alreadyRanked {
+			continue
+		}
+		ordered = append(ordered, result)
+		seen[result.ChunkID] = struct{}{}
 	}
 	return ordered, nil
 }
@@ -347,8 +358,8 @@ func containsAllTags(documentTags []string, required []string) bool {
 
 func matchesChunkMetadata(metadata map[string]any, filter map[string]string) bool {
 	for key, expected := range filter {
-		actual, ok := metadata[key].(string)
-		if !ok || strings.TrimSpace(actual) != expected {
+		actual, ok := metadata[key]
+		if !ok || strings.TrimSpace(fmt.Sprint(actual)) != expected {
 			return false
 		}
 	}

@@ -105,6 +105,45 @@ func TestKnowledgeQueryReranksWithFullContentAndTopN(t *testing.T) {
 	if reranker.request.TopN != 1 || len(reranker.request.Documents) != 2 || len(reranker.request.Documents[0].Text) != len(longContent) {
 		t.Fatalf("rerank request = %+v", reranker.request)
 	}
+	if result.Trace.QdrantCollection != "knowledge_chunks" {
+		t.Fatalf("qdrant collection = %q", result.Trace.QdrantCollection)
+	}
+}
+
+func TestKnowledgeQueryRerankPartialResultsPreserveVectorCandidates(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	seedRetrievalBase(t, repo, "kb_owned", "usr_owner")
+	seedRetrievalDocumentWithContent(t, repo, "doc_one", "kb_owned", "usr_owner", "one")
+	seedRetrievalDocumentWithContent(t, repo, "doc_two", "kb_owned", "usr_owner", "two")
+	index := &retrievalIndex{hits: []service.VectorSearchHit{
+		{ID: "point_one", Score: .9, Payload: map[string]any{"chunk_id": "chunk_doc_one"}},
+		{ID: "point_two", Score: .8, Payload: map[string]any{"chunk_id": "chunk_doc_two"}},
+	}}
+	reranker := &retrievalReranker{results: []service.RerankResult{{DocumentID: "chunk_doc_two", Score: .99}}}
+	svc := service.NewKnowledgeService(repo, service.WithVectorIndex(retrievalEmbedder{}, index), service.WithReranker(reranker))
+	topN := 2
+	result, err := svc.CreateKnowledgeQuery(context.Background(), service.RequestContext{UserID: "usr_owner"}, service.KnowledgeQueryInput{Query: "query", KnowledgeBaseIDs: []string{"kb_owned"}, TopK: 2, Rerank: true, RerankTopN: &topN})
+	if err != nil {
+		t.Fatalf("CreateKnowledgeQuery() error = %v", err)
+	}
+	if len(result.Results) != 2 || result.Results[0].ChunkID != "chunk_doc_two" || result.Results[1].ChunkID != "chunk_doc_one" {
+		t.Fatalf("reranked results = %+v", result.Results)
+	}
+	if result.Results[1].Score != .9 {
+		t.Fatalf("vector fallback score = %v", result.Results[1].Score)
+	}
+}
+
+func TestKnowledgeQueryMetadataFilterMatchesNumericValue(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	seedRetrievalBase(t, repo, "kb_owned", "usr_owner")
+	seedRetrievalDocument(t, repo, "doc_numeric", "kb_owned", "usr_owner", service.DocumentStatusReady, nil, nil, map[string]any{"revision": 2})
+	index := &retrievalIndex{hits: []service.VectorSearchHit{{Score: .9, Payload: map[string]any{"chunk_id": "chunk_doc_numeric"}}}}
+	svc := service.NewKnowledgeService(repo, service.WithVectorIndex(retrievalEmbedder{}, index))
+	result, err := svc.CreateKnowledgeQuery(context.Background(), service.RequestContext{UserID: "usr_owner"}, service.KnowledgeQueryInput{Query: "query", KnowledgeBaseIDs: []string{"kb_owned"}, TopK: 1, MetadataFilter: map[string]string{"revision": "2"}})
+	if err != nil || len(result.Results) != 1 {
+		t.Fatalf("result = %+v, error = %v", result, err)
+	}
 }
 
 func TestKnowledgeQueryCapsResultsAtTopK(t *testing.T) {

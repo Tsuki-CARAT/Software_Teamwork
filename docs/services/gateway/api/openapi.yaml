@@ -2906,8 +2906,6 @@ components:
       properties:
         score:
           type: number
-        pointId:
-          type: string
         knowledgeBaseId:
           type: string
         documentId:

@@ -1,0 +1,172 @@
+package httpapi
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/document/internal/service"
+)
+
+type jobResponse struct {
+	ID           string  `json:"id"`
+	JobType      string  `json:"jobType"`
+	Status       string  `json:"status"`
+	ReportID     string  `json:"reportId"`
+	RetryCount   int     `json:"retryCount"`
+	MaxAttempts  int     `json:"maxAttempts"`
+	ErrorCode    string  `json:"errorCode,omitempty"`
+	ErrorMessage string  `json:"errorMessage,omitempty"`
+	StartedAt    *string `json:"startedAt,omitempty"`
+	FinishedAt   *string `json:"finishedAt,omitempty"`
+	CreatedAt    string  `json:"createdAt"`
+}
+
+type attemptResponse struct {
+	ID            string  `json:"id"`
+	JobID         string  `json:"jobId"`
+	AttemptNumber int     `json:"attemptNumber"`
+	TriggerSource string  `json:"triggerSource"`
+	Status        string  `json:"status"`
+	ErrorCode     string  `json:"errorCode,omitempty"`
+	ErrorMessage  string  `json:"errorMessage,omitempty"`
+	StartedAt     *string `json:"startedAt,omitempty"`
+	FinishedAt    *string `json:"finishedAt,omitempty"`
+	CreatedAt     string  `json:"createdAt"`
+}
+
+type eventResponse struct {
+	ID        string `json:"id"`
+	ReportID  string `json:"reportId"`
+	JobID     string `json:"jobId,omitempty"`
+	EventType string `json:"eventType"`
+	Message   string `json:"message,omitempty"`
+	CreatedAt string `json:"createdAt"`
+}
+
+func toJobResponse(j service.ReportJob) jobResponse {
+	r := jobResponse{
+		ID:           j.ID,
+		JobType:      string(j.JobType),
+		Status:       string(j.Status),
+		ReportID:     j.ReportID,
+		RetryCount:   j.RetryCount,
+		MaxAttempts:  j.MaxAttempts,
+		ErrorCode:    j.ErrorCode,
+		ErrorMessage: j.ErrorMessage,
+		CreatedAt:    j.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	if j.StartedAt != nil {
+		s := j.StartedAt.UTC().Format(time.RFC3339)
+		r.StartedAt = &s
+	}
+	if j.FinishedAt != nil {
+		f := j.FinishedAt.UTC().Format(time.RFC3339)
+		r.FinishedAt = &f
+	}
+	return r
+}
+
+func toAttemptResponse(a service.ReportJobAttempt) attemptResponse {
+	r := attemptResponse{
+		ID:            a.ID,
+		JobID:         a.JobID,
+		AttemptNumber: a.AttemptNumber,
+		TriggerSource: a.TriggerSource,
+		Status:        string(a.Status),
+		ErrorCode:     a.ErrorCode,
+		ErrorMessage:  a.ErrorMessage,
+		CreatedAt:     a.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	if a.StartedAt != nil {
+		s := a.StartedAt.UTC().Format(time.RFC3339)
+		r.StartedAt = &s
+	}
+	if a.FinishedAt != nil {
+		f := a.FinishedAt.UTC().Format(time.RFC3339)
+		r.FinishedAt = &f
+	}
+	return r
+}
+
+func toEventResponse(e service.ReportEvent) eventResponse {
+	return eventResponse{
+		ID:        e.ID,
+		ReportID:  e.ReportID,
+		JobID:     e.JobID,
+		EventType: e.EventType,
+		Message:   e.Message,
+		CreatedAt: e.CreatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
+	reportID := r.PathValue("reportId")
+	jobs, err := s.jobSvc.ListJobs(r.Context(), reportID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	resp := make([]jobResponse, len(jobs))
+	for i, j := range jobs {
+		resp[i] = toJobResponse(j)
+	}
+	writeData(w, r, http.StatusOK, resp)
+}
+
+func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
+	jobID := r.PathValue("jobId")
+	job, err := s.jobSvc.GetJob(r.Context(), jobID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeData(w, r, http.StatusOK, toJobResponse(job))
+}
+
+func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
+	jobID := r.PathValue("jobId")
+	job, err := s.jobSvc.CancelJob(r.Context(), jobID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeData(w, r, http.StatusOK, toJobResponse(job))
+}
+
+func (s *Server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
+	jobID := r.PathValue("jobId")
+	attempt, err := s.jobSvc.RetryJob(r.Context(), jobID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeData(w, r, http.StatusOK, toAttemptResponse(attempt))
+}
+
+func (s *Server) handleListAttempts(w http.ResponseWriter, r *http.Request) {
+	jobID := r.PathValue("jobId")
+	attempts, err := s.jobSvc.ListAttempts(r.Context(), jobID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	resp := make([]attemptResponse, len(attempts))
+	for i, a := range attempts {
+		resp[i] = toAttemptResponse(a)
+	}
+	writeData(w, r, http.StatusOK, resp)
+}
+
+func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
+	reportID := r.PathValue("reportId")
+	events, err := s.jobSvc.ListEvents(r.Context(), reportID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	resp := make([]eventResponse, len(events))
+	for i, e := range events {
+		resp[i] = toEventResponse(e)
+	}
+	writeData(w, r, http.StatusOK, resp)
+}

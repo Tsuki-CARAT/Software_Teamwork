@@ -18,14 +18,25 @@ type ReadyChecker interface {
 	CheckReady(context.Context) error
 }
 
+type JobSvc interface {
+	GetJob(ctx context.Context, id string) (service.ReportJob, error)
+	ListJobs(ctx context.Context, reportID string) ([]service.ReportJob, error)
+	CancelJob(ctx context.Context, id string) (service.ReportJob, error)
+	RetryJob(ctx context.Context, id string) (service.ReportJobAttempt, error)
+	ListAttempts(ctx context.Context, jobID string) ([]service.ReportJobAttempt, error)
+	ListEvents(ctx context.Context, reportID string) ([]service.ReportEvent, error)
+}
+
 type Config struct {
 	Logger       *slog.Logger
 	ReadyChecker ReadyChecker
+	JobSvc       JobSvc
 }
 
 type Server struct {
 	logger       *slog.Logger
 	readyChecker ReadyChecker
+	jobSvc       JobSvc
 	mux          *http.ServeMux
 }
 
@@ -36,6 +47,7 @@ func NewServer(cfg Config) *Server {
 	server := &Server{
 		logger:       cfg.Logger,
 		readyChecker: cfg.ReadyChecker,
+		jobSvc:       cfg.JobSvc,
 		mux:          http.NewServeMux(),
 	}
 	server.routes()
@@ -45,6 +57,12 @@ func NewServer(cfg Config) *Server {
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealth)
 	s.mux.HandleFunc("GET /readyz", s.handleReady)
+	s.mux.HandleFunc("GET /reports/{reportId}/jobs", s.handleListJobs)
+	s.mux.HandleFunc("GET /reports/{reportId}/jobs/{jobId}", s.handleGetJob)
+	s.mux.HandleFunc("POST /reports/{reportId}/jobs/{jobId}/cancel", s.handleCancelJob)
+	s.mux.HandleFunc("POST /reports/{reportId}/jobs/{jobId}/retry", s.handleRetryJob)
+	s.mux.HandleFunc("GET /reports/{reportId}/jobs/{jobId}/attempts", s.handleListAttempts)
+	s.mux.HandleFunc("GET /reports/{reportId}/events", s.handleListEvents)
 	s.mux.HandleFunc("/", s.handleNotFound)
 }
 

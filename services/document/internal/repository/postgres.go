@@ -295,6 +295,117 @@ func (r *PostgresRepository) CreateReportEvent(ctx context.Context, value servic
 	return event, nil
 }
 
+func (r *PostgresRepository) ListReportJobsByReportID(ctx context.Context, reportID string) ([]service.ReportJob, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			id::text, COALESCE(request_id, ''), source, job_type, target_type,
+			target_id, COALESCE(asynq_task_id, ''), queue_name, report_id::text,
+			COALESCE(template_id::text, ''), status, COALESCE(error_code, ''),
+			COALESCE(error_message, ''), retry_count, max_attempts, started_at,
+			finished_at, created_at
+		FROM report_jobs
+		WHERE report_id = $1::uuid
+		ORDER BY created_at DESC`, reportID)
+	if err != nil {
+		return nil, fmt.Errorf("list report jobs: %w", err)
+	}
+	defer rows.Close()
+	var jobs []service.ReportJob
+	for rows.Next() {
+		job, err := scanReportJob(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan report job: %w", err)
+		}
+		jobs = append(jobs, job)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list report jobs rows: %w", err)
+	}
+	return jobs, nil
+}
+
+func (r *PostgresRepository) UpdateReportJobStatus(ctx context.Context, id string, status service.JobStatus, errorCode, errorMessage string, startedAt, finishedAt *time.Time) (service.ReportJob, error) {
+	row := r.db.QueryRow(ctx, `
+		UPDATE report_jobs SET
+			status = $2,
+			error_code = NULLIF($3, ''),
+			error_message = NULLIF($4, ''),
+			started_at = CASE WHEN $5::timestamptz IS NOT NULL THEN $5::timestamptz ELSE started_at END,
+			finished_at = $6
+		WHERE id = $1::uuid
+		RETURNING
+			id::text, COALESCE(request_id, ''), source, job_type, target_type,
+			target_id, COALESCE(asynq_task_id, ''), queue_name, report_id::text,
+			COALESCE(template_id::text, ''), status, COALESCE(error_code, ''),
+			COALESCE(error_message, ''), retry_count, max_attempts, started_at,
+			finished_at, created_at`,
+		id,
+		string(status),
+		errorCode,
+		errorMessage,
+		startedAt,
+		finishedAt,
+	)
+	job, err := scanReportJob(row)
+	if err != nil {
+		return service.ReportJob{}, fmt.Errorf("update report job status: %w", err)
+	}
+	return job, nil
+}
+
+func (r *PostgresRepository) ListReportJobAttemptsByJobID(ctx context.Context, jobID string) ([]service.ReportJobAttempt, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			id::text, job_id::text, attempt_number, COALESCE(asynq_task_id, ''),
+			trigger_source, COALESCE(reason, ''), status, COALESCE(error_code, ''),
+			COALESCE(error_message, ''), started_at, finished_at, created_at
+		FROM report_job_attempts
+		WHERE job_id = $1::uuid
+		ORDER BY attempt_number ASC`, jobID)
+	if err != nil {
+		return nil, fmt.Errorf("list report job attempts: %w", err)
+	}
+	defer rows.Close()
+	var attempts []service.ReportJobAttempt
+	for rows.Next() {
+		attempt, err := scanReportJobAttempt(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan report job attempt: %w", err)
+		}
+		attempts = append(attempts, attempt)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list report job attempts rows: %w", err)
+	}
+	return attempts, nil
+}
+
+func (r *PostgresRepository) ListReportEventsByReportID(ctx context.Context, reportID string) ([]service.ReportEvent, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			id::text, report_id::text, COALESCE(job_id::text, ''), event_type,
+			COALESCE(message, ''), created_at
+		FROM report_events
+		WHERE report_id = $1::uuid
+		ORDER BY created_at DESC`, reportID)
+	if err != nil {
+		return nil, fmt.Errorf("list report events: %w", err)
+	}
+	defer rows.Close()
+	var events []service.ReportEvent
+	for rows.Next() {
+		event, err := scanReportEvent(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan report event: %w", err)
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list report events rows: %w", err)
+	}
+	return events, nil
+}
+
 type scanner interface {
 	Scan(dest ...any) error
 }

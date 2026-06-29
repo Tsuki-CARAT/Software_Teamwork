@@ -11,13 +11,23 @@ const (
 type JobType string
 
 const (
-	JobTypeOutlineGeneration JobType = "outline_generation"
+	JobTypeOutlineGeneration    JobType = "outline_generation"
+	JobTypeOutlineRegeneration  JobType = "outline_regeneration"
+	JobTypeContentGeneration    JobType = "content_generation"
+	JobTypeContentRegeneration  JobType = "content_regeneration"
+	JobTypeSectionRegeneration  JobType = "section_regeneration"
+	JobTypeReportFileCreation   JobType = "report_file_creation"
 )
 
 type JobStatus string
 
 const (
-	JobStatusPending JobStatus = "pending"
+	JobStatusPending          JobStatus = "pending"
+	JobStatusRunning          JobStatus = "running"
+	JobStatusSucceeded        JobStatus = "succeeded"
+	JobStatusPartialSucceeded JobStatus = "partial_succeeded"
+	JobStatusFailed           JobStatus = "failed"
+	JobStatusCanceled         JobStatus = "canceled"
 )
 
 type ReportType struct {

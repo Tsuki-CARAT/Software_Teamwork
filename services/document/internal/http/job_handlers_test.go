@@ -13,12 +13,16 @@ import (
 
 // mockJobSvc implements JobSvc for testing.
 type mockJobSvc struct {
-	listJobsFn    func(ctx context.Context, reportID string) ([]service.ReportJob, error)
-	getJobFn      func(ctx context.Context, id string) (service.ReportJob, error)
-	cancelJobFn   func(ctx context.Context, id string) (service.ReportJob, error)
-	retryJobFn    func(ctx context.Context, id string) (service.ReportJobAttempt, error)
+	createJobFn    func(ctx context.Context, input service.CreateJobInput) (service.ReportJob, error)
+	listJobsFn     func(ctx context.Context, reportID string) ([]service.ReportJob, error)
+	getJobFn       func(ctx context.Context, id string) (service.ReportJob, error)
+	retryJobFn     func(ctx context.Context, id string) (service.ReportJobAttempt, error)
 	listAttemptsFn func(ctx context.Context, jobID string) ([]service.ReportJobAttempt, error)
-	listEventsFn  func(ctx context.Context, reportID string) ([]service.ReportEvent, error)
+	listEventsFn   func(ctx context.Context, reportID string) ([]service.ReportEvent, error)
+}
+
+func (m *mockJobSvc) CreateJob(ctx context.Context, input service.CreateJobInput) (service.ReportJob, error) {
+	return m.createJobFn(ctx, input)
 }
 
 func (m *mockJobSvc) ListJobs(ctx context.Context, reportID string) ([]service.ReportJob, error) {
@@ -27,10 +31,6 @@ func (m *mockJobSvc) ListJobs(ctx context.Context, reportID string) ([]service.R
 
 func (m *mockJobSvc) GetJob(ctx context.Context, id string) (service.ReportJob, error) {
 	return m.getJobFn(ctx, id)
-}
-
-func (m *mockJobSvc) CancelJob(ctx context.Context, id string) (service.ReportJob, error) {
-	return m.cancelJobFn(ctx, id)
 }
 
 func (m *mockJobSvc) RetryJob(ctx context.Context, id string) (service.ReportJobAttempt, error) {
@@ -89,23 +89,6 @@ func TestGetJobNotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
-	}
-}
-
-func TestCancelJobAlreadyCanceled(t *testing.T) {
-	mock := &mockJobSvc{
-		cancelJobFn: func(ctx context.Context, id string) (service.ReportJob, error) {
-			return service.ReportJob{}, service.NewError(service.CodeValidation, "job cannot be canceled in current status", nil)
-		},
-	}
-	server := newTestServerWithJobSvc(mock)
-
-	req := httptest.NewRequest(http.MethodPost, "/report-jobs/550e8400-e29b-41d4-a716-446655440001/cancel", nil)
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
 

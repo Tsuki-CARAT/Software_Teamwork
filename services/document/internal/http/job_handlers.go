@@ -99,6 +99,38 @@ func toEventResponse(e service.ReportEvent) eventResponse {
 	}
 }
 
+type createJobRequest struct {
+	JobType string `json:"jobType"`
+}
+
+func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
+	if s.jobSvc == nil {
+		writeError(w, r, service.NewError(service.CodeDependency, "job service not configured", nil))
+		return
+	}
+	reportID := r.PathValue("reportId")
+	var req createJobRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.JobType == "" {
+		writeError(w, r, service.ValidationError(map[string]string{"jobType": "required"}))
+		return
+	}
+	input := service.CreateJobInput{
+		RequestID: requestIDFromContext(r.Context()),
+		UserID:    r.Header.Get("X-User-Id"),
+		ReportID:  reportID,
+		JobType:   service.JobType(req.JobType),
+	}
+	job, err := s.jobSvc.CreateJob(r.Context(), input)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeData(w, r, http.StatusAccepted, toJobResponse(job))
+}
+
 func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	if s.jobSvc == nil {
 		writeError(w, r, service.NewError(service.CodeDependency, "job service not configured", nil))
@@ -124,20 +156,6 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 	}
 	jobID := r.PathValue("jobId")
 	job, err := s.jobSvc.GetJob(r.Context(), jobID)
-	if err != nil {
-		writeError(w, r, err)
-		return
-	}
-	writeData(w, r, http.StatusOK, toJobResponse(job))
-}
-
-func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
-	if s.jobSvc == nil {
-		writeError(w, r, service.NewError(service.CodeDependency, "job service not configured", nil))
-		return
-	}
-	jobID := r.PathValue("jobId")
-	job, err := s.jobSvc.CancelJob(r.Context(), jobID)
 	if err != nil {
 		writeError(w, r, err)
 		return

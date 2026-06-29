@@ -49,7 +49,7 @@ func TestActiveReportRoutesHaveStableScaffoldCoverage(t *testing.T) {
 		{http.MethodGet, "/reports/rpt_123/sections/sec_123/versions", "dependency_error"},
 		{http.MethodPost, "/reports/rpt_123/sections/sec_123/versions", "dependency_error"},
 		{http.MethodGet, "/reports/rpt_123/jobs", "dependency_error"},
-		{http.MethodPost, "/reports/rpt_123/jobs", "not_implemented"},
+		{http.MethodPost, "/reports/rpt_123/jobs", "dependency_error"},
 		{http.MethodGet, "/report-jobs/job_123", "dependency_error"},
 		{http.MethodGet, "/report-jobs/job_123/attempts", "dependency_error"},
 		{http.MethodPost, "/report-jobs/job_123/attempts", "dependency_error"},

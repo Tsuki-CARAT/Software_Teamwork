@@ -245,3 +245,37 @@ Created a QA service API draft by adapting the provided WeChat frontend interfac
 ### Next Steps
 
 - Decide in a follow-up task whether to promote QA paths from `x-missing-contracts` into `docs/api/gateway.openapi.yaml`.
+
+
+## Session 8: Address technology versions PR review comments
+
+**Date**: 2026-06-29
+**Task**: Address technology versions PR review comments
+**Branch**: `EmptyDust/docs/trellis-spec-sync`
+
+### Summary
+
+Archived the PR review follow-up task for PR #132 after updating the remote PR branch with Go 1.25 and goose v3.27.1 selections and replying to review comments.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cc69b78` | (see git log) |
+| `f8d8d2c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

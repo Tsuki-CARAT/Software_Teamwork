@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
-- **Last Active**: 2026-06-28
+- **Total Sessions**: 8
+- **Last Active**: 2026-06-29
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~208 | Active |
+| `journal-1.md` | ~281 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 8 | 2026-06-29 | Address technology versions PR review comments | `cc69b78`, `f8d8d2c` | `EmptyDust/docs/trellis-spec-sync` |
 | 7 | 2026-06-28 | QA service API documentation | - | `develop` |
 | 6 | 2026-06-28 | Enforce RESTful API contracts | `d378715` | `docs/gateway-contract-first` |
 | 5 | 2026-06-28 | Mark missing downstream API contracts | `54f3d85` | `docs/gateway-contract-first` |

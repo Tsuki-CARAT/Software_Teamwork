@@ -73,8 +73,10 @@ export function ReportTemplatesPage() {
   const updateStructureMutation = useUpdateTemplateStructure(structureTarget ?? '')
   const deleteMutation = useDeleteTemplate()
 
-  const templates = templateQuery.data?.items.length ? templateQuery.data.items : fallbackTemplates
-  const materials = materialQuery.data?.items.length ? materialQuery.data.items : fallbackMaterials
+  const isFallbackTemplates = templateQuery.isError
+  const isFallbackMaterials = materialQuery.isError
+  const templates = isFallbackTemplates ? fallbackTemplates : (templateQuery.data?.items ?? [])
+  const materials = isFallbackMaterials ? fallbackMaterials : (materialQuery.data?.items ?? [])
   const overview = overviewQuery.data
   const daily = dailyQuery.data ?? []
 
@@ -213,14 +215,16 @@ export function ReportTemplatesPage() {
                   <span className="rounded-full bg-muted px-2 py-1 text-xs">
                     {template.enabled ? '启用' : '停用'}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="删除模板"
-                    onClick={() => setDeleteTarget(template)}
-                  >
-                    <Trash2 className="size-3 text-destructive" />
-                  </Button>
+                  {!isFallbackTemplates && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="删除模板"
+                      onClick={() => setDeleteTarget(template)}
+                    >
+                      <Trash2 className="size-3 text-destructive" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

@@ -35,6 +35,13 @@ export const knowledgeBaseKeys = {
  * Keyword and docType filtering is client-side per-page since the backend
  * list endpoint does not currently expose search/filter query parameters.
  * Server total is used for accurate page count.
+ *
+ * **Limitation**: Filtering is applied only to the current page of results
+ * fetched from the server. When a keyword or docType filter is active,
+ * filtered results may be incomplete -- items matching the filter on other
+ * pages are not included. This is indicated by the `filteredLocally` flag
+ * in the return value, which is `true` whenever a filter is active and the
+ * current page may not represent the full filtered dataset.
  */
 export function useKnowledgeBases(
   page = 1,
@@ -42,6 +49,8 @@ export function useKnowledgeBases(
   keyword?: string,
   docType?: string,
 ) {
+  const hasFilter = Boolean(keyword || docType)
+
   return useQuery({
     queryKey: knowledgeBaseKeys.list(page, pageSize, keyword, docType),
     queryFn: async () => {
@@ -64,6 +73,7 @@ export function useKnowledgeBases(
       return {
         items,
         page: { page: result.page.page, pageSize: result.page.pageSize, total: result.page.total },
+        filteredLocally: hasFilter,
       }
     },
     placeholderData: (prev) => prev,

@@ -58,9 +58,10 @@ export function ReportRecordsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Report | null>(null)
   const reportsQuery = useReportsQuery(keyword)
   const deleteMutation = useDeleteReport()
-  const reports = reportsQuery.data?.items.length
-    ? reportsQuery.data.items
-    : fallbackReports.filter((report) => report.name.includes(keyword))
+  const isFallback = reportsQuery.isError
+  const reports = isFallback
+    ? fallbackReports.filter((report) => report.name.includes(keyword))
+    : (reportsQuery.data?.items ?? [])
 
   const handleDelete = () => {
     if (!deleteTarget) return
@@ -125,14 +126,16 @@ export function ReportRecordsPage() {
                   {formatDate(report.updatedAt ?? report.createdAt)}
                 </td>
                 <td className="px-4 py-3">
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="删除报告"
-                    onClick={() => setDeleteTarget(report)}
-                  >
-                    <Trash2 className="size-3 text-destructive" />
-                  </Button>
+                  {!isFallback && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="删除报告"
+                      onClick={() => setDeleteTarget(report)}
+                    >
+                      <Trash2 className="size-3 text-destructive" />
+                    </Button>
+                  )}
                 </td>
               </tr>
             ))}

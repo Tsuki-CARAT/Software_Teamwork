@@ -57,7 +57,7 @@ export function listReportMaterials(params: ReportMaterialListParams = {}) {
 export function createReport(payload: CreateReportPayload): Promise<Report> {
   return gatewayRequest<Report>('/reports', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
   })
 }
 
@@ -78,7 +78,7 @@ export function updateReportOutline(
     `/reports/${encodeURIComponent(reportId)}/outlines/${encodeURIComponent(outlineId)}`,
     {
       method: 'PATCH',
-      body: JSON.stringify({ sections, manualEdited: true }),
+      body: { sections, manualEdited: true },
     },
   )
 }
@@ -96,7 +96,7 @@ export function updateReportSection(
     `/reports/${encodeURIComponent(reportId)}/sections/${encodeURIComponent(sectionId)}`,
     {
       method: 'PATCH',
-      body: JSON.stringify({ ...payload, manualEdited: true }),
+      body: { ...payload, manualEdited: true },
     },
   )
 }
@@ -107,7 +107,7 @@ export function createReportJob(
 ): Promise<ReportJob> {
   return gatewayRequest<ReportJob>(`/reports/${encodeURIComponent(reportId)}/jobs`, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
   })
 }
 
@@ -118,7 +118,7 @@ export function getReportJob(jobId: string): Promise<ReportJob> {
 export function createReportJobAttempt(jobId: string): Promise<ReportJob> {
   return gatewayRequest<ReportJob>(`/report-jobs/${encodeURIComponent(jobId)}/attempts`, {
     method: 'POST',
-    body: JSON.stringify({ reason: 'frontend_retry' }),
+    body: { reason: 'frontend_retry' },
   })
 }
 
@@ -130,7 +130,7 @@ export function createReportFile(payload: {
 }): Promise<ReportFile> {
   return gatewayRequest<ReportFile>('/report-files', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
   })
 }
 
@@ -172,7 +172,7 @@ export function updateReportTemplateStructure(
     `/report-templates/${encodeURIComponent(templateId)}/structure`,
     {
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      body: payload,
     },
   )
 }

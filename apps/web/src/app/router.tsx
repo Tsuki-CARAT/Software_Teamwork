@@ -108,8 +108,12 @@ async function redirectToAdminHome() {
     throw redirect({ to: '/admin/reports/records' })
   }
 
-  if (canAccess(store.user, knowledgeAccess)) {
+  if (canAccess(store.user, knowledgeWriteAccess)) {
     throw redirect({ to: '/admin/knowledge' })
+  }
+
+  if (canAccess(store.user, knowledgeAccess)) {
+    throw redirect({ to: '/admin/knowledge-config' })
   }
 
   if (canAccess(store.user, qaAdminAccess)) {
@@ -130,6 +134,7 @@ const reportWriteAccess: PermissionRequirement = { any: ['report:write', 'report
 const knowledgeAccess: PermissionRequirement = {
   any: ['knowledge:read', 'knowledge:write', 'document:upload'],
 }
+const knowledgeWriteAccess: PermissionRequirement = { any: ['knowledge:write'] }
 const systemAdminAccess: PermissionRequirement = { any: ['system:admin'] }
 const adminAccess: PermissionRequirement = {
   any: [
@@ -296,7 +301,7 @@ const adminPromptsRoute = createRoute({
 const adminKnowledgeRoute = createRoute({
   getParentRoute: () => adminRoute,
   path: 'knowledge',
-  beforeLoad: requireAuth(knowledgeAccess),
+  beforeLoad: requireAuth(knowledgeWriteAccess),
   component: KnowledgeManagement,
 })
 

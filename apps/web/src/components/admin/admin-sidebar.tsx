@@ -98,7 +98,7 @@ const menuItems: AdminNavigationItem[] = [
         key: 'knowledge',
         label: '知识管理',
         path: '/admin/knowledge',
-        requirement: { any: ['knowledge:read', 'knowledge:write', 'document:upload'] },
+        requirement: { any: ['knowledge:write'] },
       },
       {
         key: 'knowledge-config',

@@ -830,6 +830,27 @@ func (r *PostgresRepository) SetJobFailed(ctx context.Context, id, errCode, errM
 	return err
 }
 
+func (r *PostgresRepository) SetJobPartialSucceeded(ctx context.Context, id string) error {
+	now := time.Now().UTC()
+	_, err := r.UpdateReportJobStatus(ctx, id, service.JobStatusPartialSucceeded, "", "", nil, &now)
+	if err == nil {
+		_ = r.recordJobEvent(ctx, id, "job.partial_succeeded", "report job partially succeeded")
+	}
+	return err
+}
+
+func (r *PostgresRepository) UpdateJobProgress(ctx context.Context, jobID string, completed, total int) error {
+	id, err := parseUUID(jobID)
+	if err != nil {
+		return service.NewError(service.CodeValidation, "invalid job id", err)
+	}
+	_, err = r.db.Exec(ctx,
+		`UPDATE report_jobs SET progress_json = jsonb_build_object('completed', $2::int, 'total', $3::int) WHERE id = $1`,
+		id, completed, total,
+	)
+	return err
+}
+
 func (r *PostgresRepository) recordJobEvent(ctx context.Context, jobID, eventType, message string) error {
 	id, err := parseUUID(jobID)
 	if err != nil {

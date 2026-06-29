@@ -743,6 +743,24 @@ func scanReportSectionVersion(row scanner) (service.ReportSectionVersion, error)
 	return value, nil
 }
 
+func (r *PostgresRepository) UpdateReportStatus(ctx context.Context, id string, status service.ReportStatus) error {
+	reportID, err := parseUUID(id)
+	if err != nil {
+		return service.NewError(service.CodeValidation, "invalid report id", err)
+	}
+	tag, err := r.db.Exec(ctx,
+		`UPDATE reports SET status = $2, updated_at = $3 WHERE id = $1 AND deleted_at IS NULL`,
+		reportID, string(status), time.Now().UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("update report status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return service.NewError(service.CodeNotFound, "report not found", nil)
+	}
+	return nil
+}
+
 func marshalTables(tables []map[string]any) ([]byte, error) {
 	if tables == nil {
 		return []byte("[]"), nil

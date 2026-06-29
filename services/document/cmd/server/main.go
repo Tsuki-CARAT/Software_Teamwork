@@ -12,6 +12,7 @@ import (
 
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/document/internal/config"
 	httpapi "github.com/Sakayori-Iroha-168/Software_Teamwork/services/document/internal/http"
+	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/document/internal/platform/aigatewayclient"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/document/internal/platform/fileclient"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/document/internal/repository"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/document/internal/service"
@@ -41,8 +42,13 @@ func main() {
 		logger.Error("file client initialization failed", "service", "document", "dependency", "file", "error", err)
 		os.Exit(1)
 	}
+	aiClient, err := aigatewayclient.New(cfg.AIGatewayURL, cfg.AIGatewayServiceToken, cfg.AIGatewayProfileID, cfg.AIGatewayModel, nil)
+	if err != nil {
+		logger.Error("ai gateway client initialization failed", "service", "document", "dependency", "ai-gateway", "error", err)
+		os.Exit(1)
+	}
 	taskClient := worker.NewClient(cfg.RedisAddr)
-	w := worker.New(cfg.RedisAddr, logger, repo)
+	w := worker.New(cfg.RedisAddr, logger, repo, aiClient)
 	documents := service.New(repo, files)
 	reportService := service.NewReportService(repo)
 	jobService := service.NewJobService(repo, taskClient)

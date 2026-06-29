@@ -17,15 +17,17 @@ const (
 )
 
 type Config struct {
-	HTTPAddr           string
-	DatabaseURL        string
-	RedisAddr          string
-	FileServiceURL     string
-	AIGatewayURL       string
-	AIGatewayProfileID string
-	PandocPath         string
-	LibreOfficePath    string
-	ShutdownTimeout    time.Duration
+	HTTPAddr             string
+	DatabaseURL          string
+	RedisAddr            string
+	FileServiceURL       string
+	AIGatewayURL         string
+	AIGatewayServiceToken string
+	AIGatewayProfileID   string
+	AIGatewayModel       string
+	PandocPath           string
+	LibreOfficePath      string
+	ShutdownTimeout      time.Duration
 }
 
 func Load() (Config, error) {
@@ -34,8 +36,10 @@ func Load() (Config, error) {
 		DatabaseURL:        strings.TrimSpace(os.Getenv("DOCUMENT_DATABASE_URL")),
 		RedisAddr:          strings.TrimSpace(os.Getenv("DOCUMENT_REDIS_ADDR")),
 		FileServiceURL:     strings.TrimSpace(os.Getenv("DOCUMENT_FILE_SERVICE_URL")),
-		AIGatewayURL:       strings.TrimSpace(os.Getenv("DOCUMENT_AI_GATEWAY_URL")),
-		AIGatewayProfileID: strings.TrimSpace(os.Getenv("DOCUMENT_AI_GATEWAY_PROFILE_ID")),
+		AIGatewayURL:          strings.TrimSpace(os.Getenv("DOCUMENT_AI_GATEWAY_URL")),
+		AIGatewayServiceToken: strings.TrimSpace(os.Getenv("DOCUMENT_AI_GATEWAY_SERVICE_TOKEN")),
+		AIGatewayProfileID:    strings.TrimSpace(os.Getenv("DOCUMENT_AI_GATEWAY_PROFILE_ID")),
+		AIGatewayModel:        strings.TrimSpace(os.Getenv("DOCUMENT_AI_GATEWAY_MODEL")),
 		PandocPath:         envOr("DOCUMENT_PANDOC_PATH", DefaultPandocPath),
 		LibreOfficePath:    envOr("DOCUMENT_LIBREOFFICE_PATH", DefaultLibreOfficePath),
 		ShutdownTimeout:    DefaultShutdownTimeout,

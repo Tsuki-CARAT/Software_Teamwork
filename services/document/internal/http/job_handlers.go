@@ -8,30 +8,38 @@ import (
 )
 
 type jobResponse struct {
-	ID           string  `json:"id"`
-	JobType      string  `json:"jobType"`
-	Status       string  `json:"status"`
-	ReportID     string  `json:"reportId"`
-	AttemptCount int     `json:"attemptCount"`
-	MaxAttempts  int     `json:"maxAttempts"`
-	ErrorCode    string  `json:"errorCode,omitempty"`
-	ErrorMessage string  `json:"errorMessage,omitempty"`
-	StartedAt    *string `json:"startedAt,omitempty"`
-	FinishedAt   *string `json:"finishedAt,omitempty"`
-	CreatedAt    string  `json:"createdAt"`
+	ID           string            `json:"id"`
+	JobType      string            `json:"jobType"`
+	Status       string            `json:"status"`
+	ReportID     string            `json:"reportId"`
+	AttemptCount int               `json:"attemptCount"`
+	MaxAttempts  int               `json:"maxAttempts"`
+	Progress     map[string]any    `json:"progress"`
+	Error        *jobErrorResponse `json:"error,omitempty"`
+	ErrorCode    string            `json:"errorCode,omitempty"`
+	ErrorMessage string            `json:"errorMessage,omitempty"`
+	StartedAt    *string           `json:"startedAt,omitempty"`
+	FinishedAt   *string           `json:"finishedAt,omitempty"`
+	CreatedAt    string            `json:"createdAt"`
+}
+
+type jobErrorResponse struct {
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 type attemptResponse struct {
-	ID            string  `json:"id"`
-	JobID         string  `json:"jobId"`
-	AttemptNumber int     `json:"attemptNumber"`
-	TriggerSource string  `json:"triggerSource"`
-	Status        string  `json:"status"`
-	ErrorCode     string  `json:"errorCode,omitempty"`
-	ErrorMessage  string  `json:"errorMessage,omitempty"`
-	StartedAt     *string `json:"startedAt,omitempty"`
-	FinishedAt    *string `json:"finishedAt,omitempty"`
-	CreatedAt     string  `json:"createdAt"`
+	ID            string            `json:"id"`
+	JobID         string            `json:"jobId"`
+	AttemptNumber int               `json:"attemptNumber"`
+	TriggerSource string            `json:"triggerSource"`
+	Status        string            `json:"status"`
+	Error         *jobErrorResponse `json:"error,omitempty"`
+	ErrorCode     string            `json:"errorCode,omitempty"`
+	ErrorMessage  string            `json:"errorMessage,omitempty"`
+	StartedAt     *string           `json:"startedAt,omitempty"`
+	FinishedAt    *string           `json:"finishedAt,omitempty"`
+	CreatedAt     string            `json:"createdAt"`
 }
 
 type eventResponse struct {
@@ -49,11 +57,18 @@ func toJobResponse(j service.ReportJob) jobResponse {
 		JobType:      string(j.JobType),
 		Status:       string(j.Status),
 		ReportID:     j.ReportID,
-		AttemptCount: j.RetryCount,
+		AttemptCount: j.RetryCount + 1,
 		MaxAttempts:  j.MaxAttempts,
+		Progress:     j.Progress,
 		ErrorCode:    j.ErrorCode,
 		ErrorMessage: j.ErrorMessage,
 		CreatedAt:    j.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	if r.Progress == nil {
+		r.Progress = map[string]any{}
+	}
+	if j.ErrorCode != "" || j.ErrorMessage != "" {
+		r.Error = &jobErrorResponse{Code: j.ErrorCode, Message: j.ErrorMessage}
 	}
 	if j.StartedAt != nil {
 		s := j.StartedAt.UTC().Format(time.RFC3339)
@@ -76,6 +91,9 @@ func toAttemptResponse(a service.ReportJobAttempt) attemptResponse {
 		ErrorCode:     a.ErrorCode,
 		ErrorMessage:  a.ErrorMessage,
 		CreatedAt:     a.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	if a.ErrorCode != "" || a.ErrorMessage != "" {
+		r.Error = &jobErrorResponse{Code: a.ErrorCode, Message: a.ErrorMessage}
 	}
 	if a.StartedAt != nil {
 		s := a.StartedAt.UTC().Format(time.RFC3339)

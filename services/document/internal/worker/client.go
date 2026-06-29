@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/document/internal/service"
 	"github.com/hibiken/asynq"
 )
 
@@ -22,21 +23,26 @@ func (c *Client) Close() error {
 	return c.client.Close()
 }
 
-// EnqueueOutlineGeneration implements service.TaskEnqueuer.
-func (c *Client) EnqueueOutlineGeneration(ctx context.Context, jobID, attemptID, requestID, userID string) (string, error) {
-	data, err := json.Marshal(OutlinePayload{
+// EnqueueReportJob implements service.TaskEnqueuer.
+func (c *Client) EnqueueReportJob(ctx context.Context, jobType service.JobType, jobID, attemptID, requestID, userID string) (string, error) {
+	taskType, err := TaskTypeForJobType(jobType)
+	if err != nil {
+		return "", err
+	}
+	data, err := json.Marshal(ReportJobPayload{
 		RequestID: requestID,
+		JobType:   string(jobType),
 		JobID:     jobID,
 		AttemptID: attemptID,
 		UserID:    userID,
 	})
 	if err != nil {
-		return "", fmt.Errorf("marshal outline payload: %w", err)
+		return "", fmt.Errorf("marshal report job payload: %w", err)
 	}
-	task := asynq.NewTask(TaskOutlineGeneration, data, asynq.Queue("document"))
+	task := asynq.NewTask(taskType, data, asynq.Queue("document"))
 	info, err := c.client.EnqueueContext(ctx, task)
 	if err != nil {
-		return "", fmt.Errorf("enqueue outline generation: %w", err)
+		return "", fmt.Errorf("enqueue report job: %w", err)
 	}
 	return info.ID, nil
 }

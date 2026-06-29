@@ -25,7 +25,7 @@ type JobRepository interface {
 
 // TaskEnqueuer submits async tasks to the queue.
 type TaskEnqueuer interface {
-	EnqueueOutlineGeneration(ctx context.Context, jobID, attemptID, requestID, userID string) (string, error)
+	EnqueueReportJob(ctx context.Context, jobType JobType, jobID, attemptID, requestID, userID string) (string, error)
 }
 
 type JobService struct {
@@ -74,9 +74,9 @@ type CreateJobInput struct {
 }
 
 func (s *JobService) CreateJob(ctx context.Context, rctx RequestContext, input CreateJobInput) (ReportJob, error) {
-	if input.JobType != JobTypeOutlineGeneration {
+	if !isSupportedReportJobType(input.JobType) {
 		return ReportJob{}, ValidationError(map[string]string{
-			"jobType": "only outline_generation is supported in this version",
+			"jobType": "unsupported report job type",
 		})
 	}
 	if _, err := s.requireReportAccess(ctx, rctx, input.ReportID); err != nil {
@@ -113,7 +113,7 @@ func (s *JobService) CreateJob(ctx context.Context, rctx RequestContext, input C
 	if err != nil {
 		return ReportJob{}, fmt.Errorf("create initial attempt: %w", err)
 	}
-	taskID, err := s.enqueuer.EnqueueOutlineGeneration(ctx, created.ID, attempt.ID, input.RequestID, input.UserID)
+	taskID, err := s.enqueuer.EnqueueReportJob(ctx, input.JobType, created.ID, attempt.ID, input.RequestID, input.UserID)
 	if err != nil {
 		finishedAt := time.Now().UTC()
 		_, _ = s.repo.UpdateReportJobStatus(ctx, created.ID, JobStatusFailed, "enqueue_failed", "failed to enqueue task", nil, &finishedAt)
@@ -141,7 +141,7 @@ func (s *JobService) RetryJob(ctx context.Context, rctx RequestContext, id, reas
 	if err != nil {
 		return ReportJobAttempt{}, err
 	}
-	taskID, err := s.enqueuer.EnqueueOutlineGeneration(ctx, job.ID, attempt.ID, job.RequestID, rctx.UserID)
+	taskID, err := s.enqueuer.EnqueueReportJob(ctx, job.JobType, job.ID, attempt.ID, job.RequestID, rctx.UserID)
 	if err != nil {
 		// Compensate: ClaimRetry already committed (job=pending, attempt=pending).
 		// Mark both as failed so the job is retryable again.
@@ -170,4 +170,18 @@ func (s *JobService) ListEvents(ctx context.Context, rctx RequestContext, report
 		return nil, err
 	}
 	return s.repo.ListReportEventsByReportID(ctx, reportID)
+}
+
+func isSupportedReportJobType(jobType JobType) bool {
+	switch jobType {
+	case JobTypeOutlineGeneration,
+		JobTypeOutlineRegeneration,
+		JobTypeContentGeneration,
+		JobTypeContentRegeneration,
+		JobTypeSectionRegeneration,
+		JobTypeReportFileCreation:
+		return true
+	default:
+		return false
+	}
 }

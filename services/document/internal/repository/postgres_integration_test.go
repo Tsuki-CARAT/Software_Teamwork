@@ -115,6 +115,125 @@ func TestPostgresRepositoryPersistsReportJobAttemptAndEvent(t *testing.T) {
 	if foundJob.Status != service.JobStatusPending {
 		t.Fatalf("foundJob.Status = %q", foundJob.Status)
 	}
+	if err := repo.SetJobRunning(ctx, job.ID); err != nil {
+		t.Fatalf("SetJobRunning() error = %v", err)
+	}
+	if err := repo.SetJobSucceeded(ctx, job.ID); err != nil {
+		t.Fatalf("SetJobSucceeded() error = %v", err)
+	}
+	completedJob, err := repo.FindReportJobByID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("FindReportJobByID() after completion error = %v", err)
+	}
+	if completedJob.Progress["completed"] != float64(1) || completedJob.Progress["total"] != float64(1) {
+		t.Fatalf("completedJob.Progress = %#v, want completed/total 1/1", completedJob.Progress)
+	}
+	events, err := repo.ListReportEventsByReportID(ctx, report.ID)
+	if err != nil {
+		t.Fatalf("ListReportEventsByReportID() error = %v", err)
+	}
+	if len(events) < 3 {
+		t.Fatalf("event count = %d, want at least 3", len(events))
+	}
+	foundSucceeded := false
+	for _, event := range events {
+		if event.EventType == "job.succeeded" {
+			foundSucceeded = true
+			break
+		}
+	}
+	if !foundSucceeded {
+		t.Fatalf("events = %+v, want job.succeeded event", events)
+	}
+}
+
+func TestPostgresRepositoryClaimRetryUsesNextAttemptNumber(t *testing.T) {
+	databaseURL := os.Getenv("DOCUMENT_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DOCUMENT_TEST_DATABASE_URL is not set")
+	}
+
+	ctx := context.Background()
+	pool := newTestPool(t, ctx, databaseURL)
+	defer pool.Close()
+	applyMigration(t, ctx, pool)
+
+	repo := NewPostgresRepository(pool)
+	now := time.Date(2026, 6, 29, 10, 30, 0, 0, time.UTC)
+
+	reportType, err := repo.UpsertReportType(ctx, service.ReportType{
+		Code:      "retry_attempt_report",
+		Name:      "Retry Attempt Report",
+		Enabled:   true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("UpsertReportType() error = %v", err)
+	}
+	report, err := repo.CreateReport(ctx, service.Report{
+		ID:         "00000000-0000-0000-0000-000000000701",
+		Name:       "retry attempt report",
+		ReportType: reportType.Code,
+		Topic:      "retry",
+		Status:     service.ReportStatusDraft,
+		Source:     "backend",
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	})
+	if err != nil {
+		t.Fatalf("CreateReport() error = %v", err)
+	}
+	job, err := repo.CreateReportJob(ctx, service.ReportJob{
+		ID:           "00000000-0000-0000-0000-000000000702",
+		RequestID:    "req_retry_attempt",
+		Source:       "api",
+		JobType:      service.JobTypeOutlineGeneration,
+		TargetType:   "report",
+		TargetID:     report.ID,
+		QueueName:    "document",
+		ReportID:     report.ID,
+		Status:       service.JobStatusFailed,
+		ErrorCode:    "worker_failed",
+		ErrorMessage: "initial attempt failed",
+		RetryCount:   0,
+		MaxAttempts:  3,
+		CreatedAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("CreateReportJob() error = %v", err)
+	}
+	if _, err := repo.CreateReportJobAttempt(ctx, service.ReportJobAttempt{
+		ID:            "00000000-0000-0000-0000-000000000703",
+		JobID:         job.ID,
+		AttemptNumber: 1,
+		TriggerSource: "api",
+		Status:        service.JobStatusFailed,
+		ErrorCode:     "worker_failed",
+		ErrorMessage:  "initial attempt failed",
+		CreatedAt:     now,
+	}); err != nil {
+		t.Fatalf("CreateReportJobAttempt() error = %v", err)
+	}
+
+	attempt, err := repo.ClaimRetry(ctx, job.ID, "00000000-0000-0000-0000-000000000704", "user", "try again")
+	if err != nil {
+		t.Fatalf("ClaimRetry() error = %v", err)
+	}
+	if attempt.AttemptNumber != 2 {
+		t.Fatalf("AttemptNumber = %d, want 2", attempt.AttemptNumber)
+	}
+	if attempt.TriggerSource != "user" || attempt.Reason != "try again" {
+		t.Fatalf("unexpected retry attempt metadata: %+v", attempt)
+	}
+
+	updatedJob, err := repo.FindReportJobByID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("FindReportJobByID() error = %v", err)
+	}
+	if updatedJob.RetryCount != 1 || updatedJob.Status != service.JobStatusPending {
+		t.Fatalf("updated job retry/status = %d/%q, want 1/%q", updatedJob.RetryCount, updatedJob.Status, service.JobStatusPending)
+	}
 }
 
 func TestPostgresRepositoryWithinTxRollsBack(t *testing.T) {

@@ -239,6 +239,7 @@ type ReportJob struct {
 	ReportID     string
 	TemplateID   string
 	Status       JobStatus
+	Progress     map[string]any
 	ErrorCode    string
 	ErrorMessage string
 	RetryCount   int

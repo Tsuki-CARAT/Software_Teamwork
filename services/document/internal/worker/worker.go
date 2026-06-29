@@ -3,20 +3,47 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 
+	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/document/internal/service"
 	"github.com/hibiken/asynq"
 )
 
 const (
-	TaskOutlineGeneration = "document:report:outline_generation"
+	TaskOutlineGeneration   = "document:report:outline_generation"
+	TaskOutlineRegeneration = "document:report:outline_regeneration"
+	TaskContentGeneration   = "document:report:content_generation"
+	TaskContentRegeneration = "document:report:content_regeneration"
+	TaskSectionRegeneration = "document:report:section_regeneration"
+	TaskReportFileCreation  = "document:report:report_file_creation"
 )
 
-type OutlinePayload struct {
+type ReportJobPayload struct {
 	RequestID string `json:"requestId"`
+	JobType   string `json:"jobType"`
 	JobID     string `json:"jobId"`
 	AttemptID string `json:"attemptId"`
 	UserID    string `json:"userId"`
+}
+
+func TaskTypeForJobType(jobType service.JobType) (string, error) {
+	switch jobType {
+	case service.JobTypeOutlineGeneration:
+		return TaskOutlineGeneration, nil
+	case service.JobTypeOutlineRegeneration:
+		return TaskOutlineRegeneration, nil
+	case service.JobTypeContentGeneration:
+		return TaskContentGeneration, nil
+	case service.JobTypeContentRegeneration:
+		return TaskContentRegeneration, nil
+	case service.JobTypeSectionRegeneration:
+		return TaskSectionRegeneration, nil
+	case service.JobTypeReportFileCreation:
+		return TaskReportFileCreation, nil
+	default:
+		return "", fmt.Errorf("unsupported report job type: %s", jobType)
+	}
 }
 
 // JobStateManager updates job and attempt status in the database as the worker processes tasks.
@@ -46,7 +73,12 @@ func New(redisAddr string, logger *slog.Logger, mgr JobStateManager) *Worker {
 	)
 	mux := asynq.NewServeMux()
 	w := &Worker{server: srv, mux: mux, logger: logger, jobsMgr: mgr}
-	mux.HandleFunc(TaskOutlineGeneration, w.handleOutlineGeneration)
+	mux.HandleFunc(TaskOutlineGeneration, w.handleReportJob)
+	mux.HandleFunc(TaskOutlineRegeneration, w.handleReportJob)
+	mux.HandleFunc(TaskContentGeneration, w.handleReportJob)
+	mux.HandleFunc(TaskContentRegeneration, w.handleReportJob)
+	mux.HandleFunc(TaskSectionRegeneration, w.handleReportJob)
+	mux.HandleFunc(TaskReportFileCreation, w.handleReportJob)
 	return w
 }
 
@@ -58,35 +90,35 @@ func (w *Worker) Stop() {
 	w.server.Shutdown()
 }
 
-func (w *Worker) handleOutlineGeneration(ctx context.Context, t *asynq.Task) error {
-	var p OutlinePayload
-	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+func (w *Worker) handleReportJob(ctx context.Context, t *asynq.Task) error {
+	var payload ReportJobPayload
+	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return err
 	}
-	w.logger.InfoContext(ctx, "outline generation started", "job_id", p.JobID, "attempt_id", p.AttemptID)
+	w.logger.InfoContext(ctx, "report job started", "job_id", payload.JobID, "attempt_id", payload.AttemptID, "job_type", payload.JobType)
 
-	if err := w.jobsMgr.SetJobRunning(ctx, p.JobID); err != nil {
-		w.logger.ErrorContext(ctx, "mark job running failed", "job_id", p.JobID, "error", err)
+	if err := w.jobsMgr.SetJobRunning(ctx, payload.JobID); err != nil {
+		w.logger.ErrorContext(ctx, "mark job running failed", "job_id", payload.JobID, "error", err)
 	}
-	if p.AttemptID != "" {
-		if err := w.jobsMgr.SetAttemptRunning(ctx, p.AttemptID); err != nil {
-			w.logger.ErrorContext(ctx, "mark attempt running failed", "attempt_id", p.AttemptID, "error", err)
+	if payload.AttemptID != "" {
+		if err := w.jobsMgr.SetAttemptRunning(ctx, payload.AttemptID); err != nil {
+			w.logger.ErrorContext(ctx, "mark attempt running failed", "attempt_id", payload.AttemptID, "error", err)
 		}
 	}
 
-	// Mock: AI call placeholder — always succeeds in this version.
-	w.logger.InfoContext(ctx, "outline generation completed", "job_id", p.JobID)
+	// Domain execution is a placeholder until AI/file workflows land.
+	w.logger.InfoContext(ctx, "report job completed", "job_id", payload.JobID, "job_type", payload.JobType)
 
-	if err := w.jobsMgr.SetJobSucceeded(ctx, p.JobID); err != nil {
-		w.logger.ErrorContext(ctx, "mark job succeeded failed", "job_id", p.JobID, "error", err)
-		if p.AttemptID != "" {
-			_ = w.jobsMgr.SetAttemptFailed(ctx, p.AttemptID, "state_error", err.Error())
+	if err := w.jobsMgr.SetJobSucceeded(ctx, payload.JobID); err != nil {
+		w.logger.ErrorContext(ctx, "mark job succeeded failed", "job_id", payload.JobID, "error", err)
+		if payload.AttemptID != "" {
+			_ = w.jobsMgr.SetAttemptFailed(ctx, payload.AttemptID, "state_error", err.Error())
 		}
 		return err
 	}
-	if p.AttemptID != "" {
-		if err := w.jobsMgr.SetAttemptSucceeded(ctx, p.AttemptID); err != nil {
-			w.logger.ErrorContext(ctx, "mark attempt succeeded failed", "attempt_id", p.AttemptID, "error", err)
+	if payload.AttemptID != "" {
+		if err := w.jobsMgr.SetAttemptSucceeded(ctx, payload.AttemptID); err != nil {
+			w.logger.ErrorContext(ctx, "mark attempt succeeded failed", "attempt_id", payload.AttemptID, "error", err)
 		}
 	}
 	return nil

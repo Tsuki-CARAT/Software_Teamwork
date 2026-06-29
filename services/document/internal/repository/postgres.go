@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -595,9 +596,9 @@ func (r *PostgresRepository) CreateReportJob(ctx context.Context, value service.
 		RETURNING
 			id::text, COALESCE(request_id, ''), source, job_type, target_type,
 			target_id, COALESCE(asynq_task_id, ''), queue_name, report_id::text,
-			COALESCE(template_id::text, ''), status, COALESCE(error_code, ''),
-			COALESCE(error_message, ''), retry_count, max_attempts, started_at,
-			finished_at, created_at`,
+			COALESCE(template_id::text, ''), status, progress_json,
+			COALESCE(error_code, ''), COALESCE(error_message, ''), retry_count,
+			max_attempts, started_at, finished_at, created_at`,
 		value.ID,
 		value.RequestID,
 		value.Source,
@@ -632,14 +633,23 @@ func (r *PostgresRepository) FindReportJobByID(ctx context.Context, id string) (
 	if err != nil {
 		return service.ReportJob{}, service.NewError(service.CodeValidation, "invalid report job id", err)
 	}
-	row, err := r.queries.GetReportJobByID(ctx, jobID)
+	row := r.db.QueryRow(ctx, `
+		SELECT
+			id::text, COALESCE(request_id, ''), source, job_type, target_type,
+			target_id, COALESCE(asynq_task_id, ''), queue_name, report_id::text,
+			COALESCE(template_id::text, ''), status, progress_json,
+			COALESCE(error_code, ''), COALESCE(error_message, ''), retry_count,
+			max_attempts, started_at, finished_at, created_at
+		FROM report_jobs
+		WHERE id = $1`, jobID)
+	job, err := scanReportJob(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return service.ReportJob{}, service.NewError(service.CodeNotFound, "report job not found", err)
 		}
 		return service.ReportJob{}, fmt.Errorf("find report job: %w", err)
 	}
-	return reportJobFromSQLC(row), nil
+	return job, nil
 }
 
 func (r *PostgresRepository) CreateReportJobAttempt(ctx context.Context, value service.ReportJobAttempt) (service.ReportJobAttempt, error) {
@@ -722,9 +732,9 @@ func (r *PostgresRepository) ListReportJobsByReportID(ctx context.Context, repor
 		SELECT
 			id::text, COALESCE(request_id, ''), source, job_type, target_type,
 			target_id, COALESCE(asynq_task_id, ''), queue_name, report_id::text,
-			COALESCE(template_id::text, ''), status, COALESCE(error_code, ''),
-			COALESCE(error_message, ''), retry_count, max_attempts, started_at,
-			finished_at, created_at
+			COALESCE(template_id::text, ''), status, progress_json,
+			COALESCE(error_code, ''), COALESCE(error_message, ''), retry_count,
+			max_attempts, started_at, finished_at, created_at
 		FROM report_jobs
 		WHERE report_id = $1
 		ORDER BY created_at DESC`, id)
@@ -750,6 +760,12 @@ func (r *PostgresRepository) UpdateReportJobStatus(ctx context.Context, id strin
 	row := r.db.QueryRow(ctx, `
 		UPDATE report_jobs SET
 			status = $2,
+			progress_json = CASE
+				WHEN $2 = 'running' THEN jsonb_build_object('completed', 0, 'total', 1)
+				WHEN $2 IN ('succeeded', 'partial_succeeded') THEN jsonb_build_object('completed', 1, 'total', 1)
+				WHEN $2 IN ('failed', 'canceled') THEN jsonb_build_object('completed', 0, 'total', 1)
+				ELSE progress_json
+			END,
 			error_code = NULLIF($3, ''),
 			error_message = NULLIF($4, ''),
 			started_at = CASE WHEN $5::timestamptz IS NOT NULL THEN $5::timestamptz ELSE started_at END,
@@ -758,9 +774,9 @@ func (r *PostgresRepository) UpdateReportJobStatus(ctx context.Context, id strin
 		RETURNING
 			id::text, COALESCE(request_id, ''), source, job_type, target_type,
 			target_id, COALESCE(asynq_task_id, ''), queue_name, report_id::text,
-			COALESCE(template_id::text, ''), status, COALESCE(error_code, ''),
-			COALESCE(error_message, ''), retry_count, max_attempts, started_at,
-			finished_at, created_at`,
+			COALESCE(template_id::text, ''), status, progress_json,
+			COALESCE(error_code, ''), COALESCE(error_message, ''), retry_count,
+			max_attempts, started_at, finished_at, created_at`,
 		id,
 		string(status),
 		errorCode,
@@ -790,19 +806,50 @@ func (r *PostgresRepository) UpdateJobAsynqTaskID(ctx context.Context, id, taskI
 func (r *PostgresRepository) SetJobRunning(ctx context.Context, id string) error {
 	now := time.Now().UTC()
 	_, err := r.UpdateReportJobStatus(ctx, id, service.JobStatusRunning, "", "", &now, nil)
+	if err == nil {
+		_ = r.recordJobEvent(ctx, id, "job.running", "report job started")
+	}
 	return err
 }
 
 func (r *PostgresRepository) SetJobSucceeded(ctx context.Context, id string) error {
 	now := time.Now().UTC()
 	_, err := r.UpdateReportJobStatus(ctx, id, service.JobStatusSucceeded, "", "", nil, &now)
+	if err == nil {
+		_ = r.recordJobEvent(ctx, id, "job.succeeded", "report job succeeded")
+	}
 	return err
 }
 
 func (r *PostgresRepository) SetJobFailed(ctx context.Context, id, errCode, errMsg string) error {
 	now := time.Now().UTC()
 	_, err := r.UpdateReportJobStatus(ctx, id, service.JobStatusFailed, errCode, errMsg, nil, &now)
+	if err == nil {
+		_ = r.recordJobEvent(ctx, id, "job.failed", "report job failed")
+	}
 	return err
+}
+
+func (r *PostgresRepository) recordJobEvent(ctx context.Context, jobID, eventType, message string) error {
+	id, err := parseUUID(jobID)
+	if err != nil {
+		return service.NewError(service.CodeValidation, "invalid job id", err)
+	}
+	eventID := newUUIDString()
+	tag, err := r.db.Exec(ctx, `
+		INSERT INTO report_events (id, report_id, job_id, event_type, message, created_at)
+		SELECT $1, report_id, id, $2, $3, $4
+		FROM report_jobs
+		WHERE id = $5`,
+		eventID, eventType, message, time.Now().UTC(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("record report job event: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return service.NewError(service.CodeNotFound, "report job not found", nil)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) IncrementJobRetryCount(ctx context.Context, id string) (service.ReportJob, error) {
@@ -814,15 +861,16 @@ func (r *PostgresRepository) IncrementJobRetryCount(ctx context.Context, id stri
 		UPDATE report_jobs SET
 			retry_count = retry_count + 1,
 			status = 'pending',
+			progress_json = '{}'::jsonb,
 			error_code = NULL,
 			error_message = NULL
 		WHERE id = $1
 		RETURNING
 			id::text, COALESCE(request_id, ''), source, job_type, target_type,
 			target_id, COALESCE(asynq_task_id, ''), queue_name, report_id::text,
-			COALESCE(template_id::text, ''), status, COALESCE(error_code, ''),
-			COALESCE(error_message, ''), retry_count, max_attempts, started_at,
-			finished_at, created_at`, jobID)
+			COALESCE(template_id::text, ''), status, progress_json,
+			COALESCE(error_code, ''), COALESCE(error_message, ''), retry_count,
+			max_attempts, started_at, finished_at, created_at`, jobID)
 	job, err := scanReportJob(row)
 	if err != nil {
 		return service.ReportJob{}, fmt.Errorf("increment job retry count: %w", err)
@@ -858,10 +906,15 @@ func (r *PostgresRepository) ClaimRetry(ctx context.Context, jobID, attemptID, t
 	if retryCount >= maxAttempts {
 		return service.ReportJobAttempt{}, service.NewError(service.CodeValidation, "max retry attempts reached", nil)
 	}
-	attemptNumber := retryCount + 1
+	var attemptNumber int
+	if err := tx.QueryRow(ctx,
+		`SELECT COALESCE(MAX(attempt_number), 0) + 1 FROM report_job_attempts WHERE job_id = $1`, id,
+	).Scan(&attemptNumber); err != nil {
+		return service.ReportJobAttempt{}, fmt.Errorf("load next retry attempt number: %w", err)
+	}
 
 	if _, err := tx.Exec(ctx,
-		`UPDATE report_jobs SET retry_count = retry_count + 1, status = 'pending', error_code = NULL, error_message = NULL WHERE id = $1`, id,
+		`UPDATE report_jobs SET retry_count = retry_count + 1, status = 'pending', progress_json = '{}'::jsonb, error_code = NULL, error_message = NULL WHERE id = $1`, id,
 	); err != nil {
 		return service.ReportJobAttempt{}, fmt.Errorf("increment retry count: %w", err)
 	}
@@ -1116,6 +1169,7 @@ func scanReportMaterial(row scanner) (service.ReportMaterial, error) {
 func scanReportJob(row scanner) (service.ReportJob, error) {
 	var value service.ReportJob
 	var jobType, status string
+	var progressRaw []byte
 	if err := row.Scan(
 		&value.ID,
 		&value.RequestID,
@@ -1128,6 +1182,7 @@ func scanReportJob(row scanner) (service.ReportJob, error) {
 		&value.ReportID,
 		&value.TemplateID,
 		&status,
+		&progressRaw,
 		&value.ErrorCode,
 		&value.ErrorMessage,
 		&value.RetryCount,
@@ -1140,6 +1195,14 @@ func scanReportJob(row scanner) (service.ReportJob, error) {
 	}
 	value.JobType = service.JobType(jobType)
 	value.Status = service.JobStatus(status)
+	if len(progressRaw) > 0 {
+		if err := json.Unmarshal(progressRaw, &value.Progress); err != nil {
+			return service.ReportJob{}, err
+		}
+	}
+	if value.Progress == nil {
+		value.Progress = map[string]any{}
+	}
 	return value, nil
 }
 
@@ -1194,6 +1257,7 @@ func reportJobFromSQLC(row sqlc.GetReportJobByIDRow) service.ReportJob {
 		ReportID:     uuidToString(row.ReportID),
 		TemplateID:   uuidToString(row.TemplateID),
 		Status:       service.JobStatus(row.Status),
+		Progress:     map[string]any{},
 		ErrorCode:    textToString(row.ErrorCode),
 		ErrorMessage: textToString(row.ErrorMessage),
 		RetryCount:   int(row.RetryCount),
@@ -1202,6 +1266,16 @@ func reportJobFromSQLC(row sqlc.GetReportJobByIDRow) service.ReportJob {
 		FinishedAt:   timestamptzToTimePtr(row.FinishedAt),
 		CreatedAt:    timestamptzToTime(row.CreatedAt),
 	}
+}
+
+func newUUIDString() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("00000000-0000-4000-8000-%012x", time.Now().UnixNano())
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 func parseUUID(value string) (pgtype.UUID, error) {

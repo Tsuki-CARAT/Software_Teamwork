@@ -2,9 +2,12 @@ openapi: 3.1.0
 info:
   title: Document Service API
   version: 0.1.0
-  description: Internal operational contract for the document service baseline.
+  description: Internal operational and report job contract for the document service baseline.
 servers:
   - url: http://localhost:8085
+tags:
+  - name: operations
+  - name: report-jobs
 paths:
   /healthz:
     get:
@@ -33,12 +36,185 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthEnvelope"
         "502":
-          description: A required dependency is unavailable.
+          $ref: "#/components/responses/Error"
+  /reports/{reportId}/jobs:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    get:
+      tags:
+        - report-jobs
+      operationId: listDocumentReportJobs
+      summary: List report jobs
+      responses:
+        "200":
+          description: Report jobs.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
+                $ref: "#/components/schemas/ReportJobListEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    post:
+      tags:
+        - report-jobs
+      operationId: createDocumentReportJob
+      summary: Create report job
+      description: Creates long-running report work and enqueues a document asynq task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportJobRequest"
+      responses:
+        "202":
+          description: Report job accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportJobEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "502":
+          $ref: "#/components/responses/Error"
+  /report-jobs/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    get:
+      tags:
+        - report-jobs
+      operationId: getDocumentReportJob
+      summary: Get report job
+      responses:
+        "200":
+          description: Report job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportJobEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /report-jobs/{jobId}/attempts:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    get:
+      tags:
+        - report-jobs
+      operationId: listDocumentReportJobAttempts
+      summary: List report job attempts
+      responses:
+        "200":
+          description: Report job attempts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportJobAttemptListEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    post:
+      tags:
+        - report-jobs
+      operationId: createDocumentReportJobAttempt
+      summary: Create report job attempt
+      description: Creates a manual retry attempt for an existing failed or canceled report job.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportJobAttemptRequest"
+      responses:
+        "202":
+          description: Report job attempt accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportJobAttemptEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "502":
+          $ref: "#/components/responses/Error"
+  /reports/{reportId}/events:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    get:
+      tags:
+        - report-jobs
+      operationId: listDocumentReportEvents
+      summary: List report events
+      description: Returns sanitized report workflow events for polling and audit.
+      responses:
+        "200":
+          description: Report events.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportEventListEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
 components:
+  parameters:
+    ReportId:
+      name: reportId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Error:
+      description: Standard error envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
   schemas:
     HealthEnvelope:
       type: object
@@ -61,6 +237,207 @@ components:
               enum:
                 - ok
                 - ready
+        requestId:
+          type: string
+    ReportJobType:
+      type: string
+      enum:
+        - outline_generation
+        - outline_regeneration
+        - content_generation
+        - content_regeneration
+        - section_regeneration
+        - report_file_creation
+    ReportJobStatus:
+      type: string
+      enum:
+        - pending
+        - running
+        - succeeded
+        - partial_succeeded
+        - failed
+        - canceled
+    CreateReportJobRequest:
+      type: object
+      required:
+        - jobType
+      properties:
+        jobType:
+          $ref: "#/components/schemas/ReportJobType"
+    CreateReportJobAttemptRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+    ReportJobError:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+    ReportJob:
+      type: object
+      required:
+        - id
+        - jobType
+        - status
+        - reportId
+        - attemptCount
+        - maxAttempts
+        - progress
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        jobType:
+          $ref: "#/components/schemas/ReportJobType"
+        status:
+          $ref: "#/components/schemas/ReportJobStatus"
+        reportId:
+          type: string
+          format: uuid
+        attemptCount:
+          type: integer
+          minimum: 1
+        maxAttempts:
+          type: integer
+          minimum: 1
+        progress:
+          type: object
+          additionalProperties: true
+        error:
+          $ref: "#/components/schemas/ReportJobError"
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    ReportJobAttempt:
+      type: object
+      required:
+        - id
+        - jobId
+        - attemptNumber
+        - triggerSource
+        - status
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        attemptNumber:
+          type: integer
+          minimum: 1
+        triggerSource:
+          type: string
+        status:
+          $ref: "#/components/schemas/ReportJobStatus"
+        error:
+          $ref: "#/components/schemas/ReportJobError"
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    ReportEvent:
+      type: object
+      required:
+        - id
+        - reportId
+        - eventType
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        reportId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ReportJobEnvelope:
+      type: object
+      required:
+        - data
+        - requestId
+      properties:
+        data:
+          $ref: "#/components/schemas/ReportJob"
+        requestId:
+          type: string
+    ReportJobListEnvelope:
+      type: object
+      required:
+        - data
+        - requestId
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportJob"
+        requestId:
+          type: string
+    ReportJobAttemptEnvelope:
+      type: object
+      required:
+        - data
+        - requestId
+      properties:
+        data:
+          $ref: "#/components/schemas/ReportJobAttempt"
+        requestId:
+          type: string
+    ReportJobAttemptListEnvelope:
+      type: object
+      required:
+        - data
+        - requestId
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportJobAttempt"
+        requestId:
+          type: string
+    ReportEventListEnvelope:
+      type: object
+      required:
+        - data
+        - requestId
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportEvent"
         requestId:
           type: string
     ErrorEnvelope:

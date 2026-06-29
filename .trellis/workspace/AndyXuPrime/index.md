@@ -29,7 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
-| 2 | 2026-06-29 | Fix frontend RBAC route guards for PR 212 | `013463c`, `9003450`, `24f6084` | `fix/frontend-post-206-polish` |
+| 2 | 2026-06-29 | Fix frontend RBAC route guards for PR 212 | `013463c`, `9003450`, `24f6084`, `3d92b72` | `fix/frontend-post-206-polish` |
 | 1 | 2026-06-29 | Integrate report generation frontend module | `4b3d3c0` | `PrimeTeam/feat/report-generation-frontend-integration` |
 <!-- @@@/auto:session-history -->
 

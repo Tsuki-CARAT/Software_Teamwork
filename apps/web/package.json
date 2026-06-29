@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "api:generate": "openapi-typescript ../../docs/services/gateway/api/openapi.yaml -o src/api/generated/gateway.ts",
+    "generate:api": "openapi-typescript ../../docs/services/gateway/api/openapi.yaml -o src/api/generated/gateway.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

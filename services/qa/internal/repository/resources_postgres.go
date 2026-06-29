@@ -158,6 +158,7 @@ func (r *Postgres) getQAConfigVersion(ctx context.Context, id string, active boo
 		return service.QAConfigVersion{}, fmt.Errorf("get QA config version: %w", err)
 	}
 	_ = json.Unmarshal(tools, &v.Agent.EnabledToolNames)
+	applyQAConfigVersionCompatibilityFields(&v)
 	rows, err := r.pool.Query(ctx, `SELECT external_kb_id,COALESCE(kb_type,''),COALESCE(display_name_snapshot,''),sort_order FROM qa_config_knowledge_bases WHERE config_id=$1 ORDER BY sort_order,external_kb_id`, v.ID)
 	if err != nil {
 		return service.QAConfigVersion{}, fmt.Errorf("list QA config knowledge bases: %w", err)
@@ -175,6 +176,15 @@ func (r *Postgres) getQAConfigVersion(ctx context.Context, id string, active boo
 	}
 	return v, rows.Err()
 }
+
+func applyQAConfigVersionCompatibilityFields(v *service.QAConfigVersion) {
+	v.MaxIterations = v.Agent.MaxIterations
+	v.ToolTimeoutSeconds = v.Agent.ToolTimeoutSeconds
+	v.ModelTimeoutSeconds = v.Agent.ModelTimeoutSeconds
+	v.OverallTimeoutSeconds = v.Agent.OverallTimeoutSeconds
+	v.EnabledToolNames = append([]string(nil), v.Agent.EnabledToolNames...)
+}
+
 func (r *Postgres) CreateQAConfigVersionResource(ctx context.Context, userID string, input service.CreateQAConfigVersionInput) (service.QAConfigVersion, error) {
 	retrieval := input.Retrieval
 	if retrieval.TopK == 0 {

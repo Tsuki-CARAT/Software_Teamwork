@@ -42,27 +42,18 @@ the command tool is disabled by default.
 Copy `.env.example` values into your process environment. The service does not
 load `.env` files and never stores tokens in source code.
 
-Temporary direct DeepSeek variables:
+AI Gateway variables:
 
 | Variable            | Description                                                |
 | ------------------- | ---------------------------------------------------------- |
-| `DEEPSEEK_API_KEY`  | Required API key; read from the environment only.          |
-| `DEEPSEEK_BASE_URL` | Optional base URL; defaults to `https://api.deepseek.com`. |
-| `MODEL_ID`          | Model name; defaults to `deepseek-v4-pro`.                 |
+| `AI_GATEWAY_URL` | AI Gateway chat completions endpoint; defaults to `http://localhost:8086/internal/v1/chat/completions`. |
+| `AI_GATEWAY_TOKEN` | Internal service token for AI Gateway. When empty, QA reuses `INTERNAL_SERVICE_TOKEN`. |
+| `AI_GATEWAY_TOKEN_HEADER` | Credential header; defaults to `X-Service-Token`. |
+| `MODEL_ID` | Chat model name sent in the OpenAI-compatible request; defaults to `deepseek-chat`. |
 
-The client appends `/chat/completions` unless the configured URL already ends
-with that path. Production can override the direct provider configuration with
-`AI_GATEWAY_URL`, `AI_GATEWAY_TOKEN`, and `AI_GATEWAY_TOKEN_HEADER` so QA calls
-the project-owned AI Gateway instead.
-
-On Windows, user-level environment variables set after PowerShell started are
-not automatically copied into that existing process. Import them without
-printing their values before running the agent:
-
-```powershell
-$env:DEEPSEEK_API_KEY = [Environment]::GetEnvironmentVariable('DEEPSEEK_API_KEY', 'User')
-$env:DEEPSEEK_BASE_URL = [Environment]::GetEnvironmentVariable('DEEPSEEK_BASE_URL', 'User')
-```
+QA does not store provider API keys or provider base URLs. Runtime provider
+credentials belong to AI Gateway model profiles, and QA only sends `profile_id`,
+model name, timeout, and generation parameters.
 
 ### Optional MCP transports
 
@@ -135,7 +126,9 @@ Terminal B — start the agent REPL and point it at the echo server:
 cd D:\PROJECTS\Software_Teamwork\services\qa
 $env:MCP_TRANSPORT = "streamable_http"
 $env:MCP_SERVER_URL = "http://localhost:8099"
-$env:DEEPSEEK_API_KEY = [Environment]::GetEnvironmentVariable('DEEPSEEK_API_KEY', 'User')
+$env:AI_GATEWAY_URL = "http://localhost:8086/internal/v1/chat/completions"
+$env:AI_GATEWAY_TOKEN = [Environment]::GetEnvironmentVariable('INTERNAL_SERVICE_TOKEN', 'User')
+$env:AI_GATEWAY_TOKEN_HEADER = "X-Service-Token"
 go run ./cmd/agent
 ```
 
@@ -154,7 +147,8 @@ Stop the REPL with `exit` or `q`, then press `Ctrl+C` in terminal A.
 
 | Symptom | Likely cause |
 | ------- | ------------ |
-| `DEEPSEEK_API_KEY is required` | API key not imported into the current PowerShell process. |
+| `AI gateway returned HTTP 401` | `AI_GATEWAY_TOKEN` does not match AI Gateway service-token hashes. |
+| `chat profile not found` | The configured QA `profileId` has not been created in AI Gateway. |
 | `initialize MCP session` failed | Echo server not running, wrong URL, or agent started in the same terminal as the server. |
 | Tool list has no `echo` | `MCP_TRANSPORT` or `MCP_SERVER_URL` not set in the agent terminal. |
 | Agent lists `echo` but does not call it | Rephrase the request to explicitly ask for an echo tool call. |
@@ -214,13 +208,14 @@ go test ./internal/repository/... -run TestDocumentedResourceRoundTrip -count=1
 
 ## Run with Docker Compose
 
-Import the user-level DeepSeek variables into the current PowerShell process
-without printing them, then start Auth PostgreSQL, QA PostgreSQL (+ goose
-migrate), Redis, Auth, QA and Gateway:
+Start Auth PostgreSQL, QA PostgreSQL (+ goose migrate), Redis, Auth, QA and
+Gateway. If AI Gateway is not running on the same Compose network under the
+`ai-gateway` hostname, override `QA_AI_GATEWAY_URL` before starting:
 
 ```powershell
-$env:DEEPSEEK_API_KEY = [Environment]::GetEnvironmentVariable('DEEPSEEK_API_KEY', 'User')
-$env:DEEPSEEK_BASE_URL = [Environment]::GetEnvironmentVariable('DEEPSEEK_BASE_URL', 'User')
+$env:INTERNAL_SERVICE_TOKEN = [Environment]::GetEnvironmentVariable('INTERNAL_SERVICE_TOKEN', 'User')
+# Optional when AI Gateway runs outside this compose project:
+# $env:QA_AI_GATEWAY_URL = "http://host.docker.internal:8086/internal/v1/chat/completions"
 docker compose up -d --build
 ```
 

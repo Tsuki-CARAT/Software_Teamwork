@@ -9,8 +9,8 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Helper()
 	t.Setenv("AI_GATEWAY_URL", "")
 	t.Setenv("AI_GATEWAY_TOKEN", "")
-	t.Setenv("DEEPSEEK_BASE_URL", "")
-	t.Setenv("DEEPSEEK_API_KEY", "test-key")
+	t.Setenv("AI_GATEWAY_TOKEN_HEADER", "")
+	t.Setenv("INTERNAL_SERVICE_TOKEN", "test-service-token")
 	t.Setenv("MODEL_ID", "")
 	t.Setenv("MCP_TRANSPORT", "stdio")
 	t.Setenv("MCP_SERVER_COMMAND", "python")
@@ -32,8 +32,11 @@ func TestLoadStdioConfiguration(t *testing.T) {
 	if cfg.HTTPAddr != ":8084" || cfg.ShutdownTimeout != 10*time.Second || cfg.MaxRequestBytes != 1<<20 {
 		t.Fatalf("unexpected HTTP defaults: %+v", cfg)
 	}
-	if cfg.AIGatewayURL != "https://api.deepseek.com/chat/completions" || cfg.ModelID != "deepseek-v4-pro" {
-		t.Fatalf("unexpected DeepSeek defaults: %+v", cfg)
+	if cfg.AIGatewayURL != defaultAIGatewayURL ||
+		cfg.AIGatewayToken != "test-service-token" ||
+		cfg.AIGatewayTokenHeader != defaultAIGatewayTokenHeader ||
+		cfg.ModelID != "deepseek-chat" {
+		t.Fatalf("unexpected AI Gateway defaults: %+v", cfg)
 	}
 }
 
@@ -65,15 +68,19 @@ func TestLoadDefaultsToBuiltInToolsOnly(t *testing.T) {
 	}
 }
 
-func TestLoadAcceptsFullDeepSeekEndpoint(t *testing.T) {
+func TestLoadAcceptsExplicitAIGatewayEndpoint(t *testing.T) {
 	setRequiredEnvironment(t)
-	t.Setenv("DEEPSEEK_BASE_URL", "https://example.test/v1/chat/completions")
+	t.Setenv("AI_GATEWAY_URL", "https://ai-gateway.example.test/internal/v1/chat/completions")
+	t.Setenv("AI_GATEWAY_TOKEN", "explicit-token")
+	t.Setenv("AI_GATEWAY_TOKEN_HEADER", "X-Service-Token")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.AIGatewayURL != "https://example.test/v1/chat/completions" {
-		t.Fatalf("endpoint = %q", cfg.AIGatewayURL)
+	if cfg.AIGatewayURL != "https://ai-gateway.example.test/internal/v1/chat/completions" ||
+		cfg.AIGatewayToken != "explicit-token" ||
+		cfg.AIGatewayTokenHeader != "X-Service-Token" {
+		t.Fatalf("unexpected AI Gateway override: %+v", cfg)
 	}
 }
 

@@ -64,7 +64,7 @@ func TestDocumentedResourceRoundTrip(t *testing.T) {
 		t.Fatalf("run=%+v err=%v", cancelled, err)
 	}
 	qaConfig, err := repo.CreateQAConfigVersionResource(ctx, "integration-user", service.CreateQAConfigVersionInput{TopK: 7, MaxIterations: 6, KnowledgeBases: []service.ConfigKnowledgeBase{{ID: "kb-1"}}})
-	if err != nil || qaConfig.Retrieval.TopK != 7 {
+	if err != nil || qaConfig.Retrieval.TopK != 7 || qaConfig.MaxIterations != 6 || qaConfig.Agent.MaxIterations != 6 {
 		t.Fatalf("qa config=%+v err=%v", qaConfig, err)
 	}
 	llmConfig, err := repo.CreateLLMConfigVersionResource(ctx, "integration-user", service.CreateLLMConfigVersionInput{Provider: "ai-gateway", ProfileID: "profile-chat", ModelName: "model", TimeoutSeconds: 30, MaxTokens: 512})

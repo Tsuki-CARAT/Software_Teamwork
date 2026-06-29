@@ -94,6 +94,11 @@ type QAConfigVersion struct {
 	KnowledgeBases          []ConfigKnowledgeBase `json:"knowledgeBases"`
 	Retrieval               RetrievalSettings     `json:"retrieval"`
 	Agent                   AgentConfig           `json:"agent"`
+	MaxIterations           int                   `json:"maxIterations,omitempty"`
+	ToolTimeoutSeconds      int                   `json:"toolTimeoutSeconds,omitempty"`
+	ModelTimeoutSeconds     int                   `json:"modelTimeoutSeconds,omitempty"`
+	OverallTimeoutSeconds   int                   `json:"overallTimeoutSeconds,omitempty"`
+	EnabledToolNames        []string              `json:"enabledToolNames,omitempty"`
 	IsActive                bool                  `json:"isActive"`
 	CreatedAt               time.Time             `json:"createdAt"`
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -17,6 +16,9 @@ const (
 	TransportDisabled       = "disabled"
 	TransportStdio          = "stdio"
 	TransportStreamableHTTP = "streamable_http"
+
+	defaultAIGatewayURL         = "http://localhost:8086/internal/v1/chat/completions"
+	defaultAIGatewayTokenHeader = "X-Service-Token"
 )
 
 type Config struct {
@@ -55,32 +57,27 @@ type Config struct {
 }
 
 func Load() (Config, error) {
-	aiGatewayURL := strings.TrimSpace(os.Getenv("AI_GATEWAY_URL"))
-	aiGatewayToken := os.Getenv("AI_GATEWAY_TOKEN")
-	if aiGatewayURL == "" {
-		baseURL := envOr("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-		aiGatewayURL = chatCompletionsEndpoint(baseURL)
-		aiGatewayToken = os.Getenv("DEEPSEEK_API_KEY")
-		if aiGatewayToken == "" {
-			return Config{}, errors.New("DEEPSEEK_API_KEY is required when AI_GATEWAY_URL is not set")
-		}
+	serviceToken := strings.TrimSpace(os.Getenv("INTERNAL_SERVICE_TOKEN"))
+	aiGatewayToken := strings.TrimSpace(os.Getenv("AI_GATEWAY_TOKEN"))
+	if aiGatewayToken == "" {
+		aiGatewayToken = serviceToken
 	}
 	cfg := Config{
 		HTTPAddr:             envOr("QA_HTTP_ADDR", ":8084"),
 		DatabaseURL:          strings.TrimSpace(os.Getenv("QA_DATABASE_URL")),
 		EncryptionKey:        envOr("QA_CONFIG_ENCRYPTION_KEY", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
 		AdminUserIDs:         splitCSV(os.Getenv("QA_ADMIN_USER_IDS")),
-		ServiceToken:         strings.TrimSpace(os.Getenv("INTERNAL_SERVICE_TOKEN")),
+		ServiceToken:         serviceToken,
 		KnowledgeURL:         envOr("KNOWLEDGE_SERVICE_URL", "http://localhost:8083"),
-		AIGatewayURL:         aiGatewayURL,
+		AIGatewayURL:         envOr("AI_GATEWAY_URL", defaultAIGatewayURL),
 		AIGatewayToken:       aiGatewayToken,
-		AIGatewayTokenHeader: envOr("AI_GATEWAY_TOKEN_HEADER", http.CanonicalHeaderKey("Authorization")),
-		ModelID:              envOr("MODEL_ID", "deepseek-v4-pro"),
+		AIGatewayTokenHeader: envOr("AI_GATEWAY_TOKEN_HEADER", defaultAIGatewayTokenHeader),
+		ModelID:              envOr("MODEL_ID", "deepseek-chat"),
 		MCPTransport:         strings.ToLower(envOr("MCP_TRANSPORT", TransportDisabled)),
 		MCPServerCommand:     strings.TrimSpace(os.Getenv("MCP_SERVER_COMMAND")),
 		MCPServerURL:         strings.TrimSpace(os.Getenv("MCP_SERVER_URL")),
 		MCPServerToken:       os.Getenv("MCP_SERVER_TOKEN"),
-		MCPServerTokenHeader: envOr("MCP_SERVER_TOKEN_HEADER", http.CanonicalHeaderKey("Authorization")),
+		MCPServerTokenHeader: envOr("MCP_SERVER_TOKEN_HEADER", "Authorization"),
 		SystemPrompt:         envOr("AGENT_SYSTEM_PROMPT", "You are a helpful QA agent. Use available tools when they are needed, and answer from tool results without inventing sources."),
 		WorkDir:              strings.TrimSpace(os.Getenv("AGENT_WORKDIR")),
 	}
@@ -134,14 +131,6 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	return cfg, nil
-}
-
-func chatCompletionsEndpoint(baseURL string) string {
-	trimmed := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	if strings.HasSuffix(trimmed, "/chat/completions") {
-		return trimmed
-	}
-	return trimmed + "/chat/completions"
 }
 
 func (c Config) Validate() error {

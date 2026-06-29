@@ -37,7 +37,7 @@ services:
     environment:
       AUTH_HTTP_ADDR: :8081
       AUTH_DATABASE_URL: postgres://auth_app:auth_app_dev@auth-postgres:5432/auth_system?sslmode=disable
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-service-token-change-me}
+      AUTH_INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-service-token-change-me}
       AUTH_SESSION_TTL: ${AUTH_SESSION_TTL:-24h}
       AUTH_BOOTSTRAP_ADMIN_USERNAME: ${AUTH_BOOTSTRAP_ADMIN_USERNAME:-admin}
       AUTH_BOOTSTRAP_ADMIN_DISPLAY_NAME: ${AUTH_BOOTSTRAP_ADMIN_DISPLAY_NAME:-系统管理员}
@@ -60,9 +60,10 @@ services:
     environment:
       QA_HTTP_ADDR: :8084
       QA_DATABASE_URL: postgres://qa_app:qa_app_dev@postgres:5432/qa_system?sslmode=disable
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY must be set}
-      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       MODEL_ID: ${MODEL_ID:-deepseek-chat}
+      AI_GATEWAY_URL: ${QA_AI_GATEWAY_URL:-http://ai-gateway:8086/internal/v1/chat/completions}
+      AI_GATEWAY_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-service-token-change-me}
+      AI_GATEWAY_TOKEN_HEADER: X-Service-Token
       MCP_TRANSPORT: ${MCP_TRANSPORT:-disabled}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-service-token-change-me}
       QA_CONFIG_ENCRYPTION_KEY: ${QA_CONFIG_ENCRYPTION_KEY:-000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f}
@@ -89,10 +90,13 @@ services:
       dockerfile: ${GATEWAY_DOCKERFILE:-Dockerfile}
     environment:
       GATEWAY_HTTP_ADDR: :8080
-      AUTH_SERVICE_URL: http://auth:8081
-      QA_SERVICE_URL: http://qa:8084
+      GATEWAY_AUTH_BASE_URL: http://auth:8081
+      GATEWAY_KNOWLEDGE_BASE_URL: ${GATEWAY_KNOWLEDGE_BASE_URL:-http://knowledge:8083}
+      GATEWAY_QA_BASE_URL: http://qa:8084
+      GATEWAY_DOCUMENT_BASE_URL: ${GATEWAY_DOCUMENT_BASE_URL:-http://document:8085}
+      GATEWAY_AI_GATEWAY_BASE_URL: ${GATEWAY_AI_GATEWAY_BASE_URL:-http://ai-gateway:8086}
       GATEWAY_REDIS_ADDR: redis:6379
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-service-token-change-me}
+      GATEWAY_INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-service-token-change-me}
     ports:
       - "${GATEWAY_HTTP_PORT:-8080}:8080"
     depends_on:

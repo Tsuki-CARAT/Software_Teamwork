@@ -11,6 +11,7 @@ type JobRepository interface {
 	ListReportJobsByReportID(ctx context.Context, reportID string) ([]ReportJob, error)
 	CreateReportJob(ctx context.Context, value ReportJob) (ReportJob, error)
 	UpdateReportJobStatus(ctx context.Context, id string, status JobStatus, errorCode, errorMessage string, startedAt, finishedAt *time.Time) (ReportJob, error)
+	UpdateJobAsynqTaskID(ctx context.Context, id, taskID string) error
 	IncrementJobRetryCount(ctx context.Context, id string) (ReportJob, error)
 	CreateReportJobAttempt(ctx context.Context, value ReportJobAttempt) (ReportJobAttempt, error)
 	ListReportJobAttemptsByJobID(ctx context.Context, jobID string) ([]ReportJobAttempt, error)
@@ -47,6 +48,11 @@ type CreateJobInput struct {
 }
 
 func (s *JobService) CreateJob(ctx context.Context, input CreateJobInput) (ReportJob, error) {
+	if input.JobType != JobTypeOutlineGeneration {
+		return ReportJob{}, ValidationError(map[string]string{
+			"jobType": "only outline_generation is supported in this version",
+		})
+	}
 	now := time.Now().UTC()
 	job := ReportJob{
 		ID:          newID(),
@@ -69,12 +75,11 @@ func (s *JobService) CreateJob(ctx context.Context, input CreateJobInput) (Repor
 	if err != nil {
 		return ReportJob{}, fmt.Errorf("enqueue job task: %w", err)
 	}
-	updated, err := s.repo.UpdateReportJobStatus(ctx, created.ID, JobStatusPending, "", "", nil, nil)
-	if err != nil {
+	if err := s.repo.UpdateJobAsynqTaskID(ctx, created.ID, taskID); err != nil {
 		return created, nil
 	}
-	updated.AsynqTaskID = taskID
-	return updated, nil
+	created.AsynqTaskID = taskID
+	return created, nil
 }
 
 func (s *JobService) RetryJob(ctx context.Context, id string) (ReportJobAttempt, error) {

@@ -775,6 +775,36 @@ func (r *PostgresRepository) UpdateReportJobStatus(ctx context.Context, id strin
 	return job, nil
 }
 
+func (r *PostgresRepository) UpdateJobAsynqTaskID(ctx context.Context, id, taskID string) error {
+	jobID, err := parseUUID(id)
+	if err != nil {
+		return service.NewError(service.CodeValidation, "invalid job id", err)
+	}
+	_, err = r.db.Exec(ctx, `UPDATE report_jobs SET asynq_task_id = $2 WHERE id = $1`, jobID, taskID)
+	if err != nil {
+		return fmt.Errorf("update job asynq task id: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresRepository) SetJobRunning(ctx context.Context, id string) error {
+	now := time.Now().UTC()
+	_, err := r.UpdateReportJobStatus(ctx, id, service.JobStatusRunning, "", "", &now, nil)
+	return err
+}
+
+func (r *PostgresRepository) SetJobSucceeded(ctx context.Context, id string) error {
+	now := time.Now().UTC()
+	_, err := r.UpdateReportJobStatus(ctx, id, service.JobStatusSucceeded, "", "", nil, &now)
+	return err
+}
+
+func (r *PostgresRepository) SetJobFailed(ctx context.Context, id, errCode, errMsg string) error {
+	now := time.Now().UTC()
+	_, err := r.UpdateReportJobStatus(ctx, id, service.JobStatusFailed, errCode, errMsg, nil, &now)
+	return err
+}
+
 func (r *PostgresRepository) IncrementJobRetryCount(ctx context.Context, id string) (service.ReportJob, error) {
 	jobID, err := parseUUID(id)
 	if err != nil {

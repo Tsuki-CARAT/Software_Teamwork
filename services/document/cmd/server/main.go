@@ -42,9 +42,16 @@ func main() {
 		os.Exit(1)
 	}
 	taskClient := worker.NewClient(cfg.RedisAddr)
+	w := worker.New(cfg.RedisAddr, logger, repo)
 	documents := service.New(repo, files)
 	reportService := service.NewReportService(repo)
 	jobService := service.NewJobService(repo, taskClient)
+	go func() {
+		if err := w.Start(); err != nil {
+			logger.Error("worker failed to start", "service", "document", "error", err)
+		}
+	}()
+	defer w.Stop()
 
 	handler := httpapi.NewServer(httpapi.Config{
 		Logger:          logger,

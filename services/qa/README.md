@@ -92,6 +92,73 @@ Diagnostics must be written to stderr.
 Set `MCP_TRANSPORT=streamable_http` and provide `MCP_SERVER_URL`. Optional
 credentials use `MCP_SERVER_TOKEN` and `MCP_SERVER_TOKEN_HEADER`.
 
+### MCP local integration
+
+Use this section to verify MCP client wiring without PostgreSQL, Gateway, or a
+real knowledge MCP server.
+
+#### Automated tests (no LLM, no manual server)
+
+From `services/qa`:
+
+```powershell
+go test ./internal/platform/mcpclient/... -v
+go test ./internal/platform/toolclient/... -v
+go test ./internal/platform/connectiontest/... -v
+```
+
+These cover stdio and streamable HTTP transports, tool name prefixing, composite
+tool routing, and the settings connection-test path against an in-process echo
+server (`internal/platform/mcpclient/testserver`).
+
+#### Manual REPL check with the bundled echo server
+
+`cmd/mcp-echo` is a minimal streamable HTTP MCP server with one tool: `echo`.
+Use **two terminals**; the echo server blocks its terminal until you stop it.
+
+Terminal A — start the echo server:
+
+```powershell
+cd D:\PROJECTS\Software_Teamwork\services\qa
+go run ./cmd/mcp-echo
+```
+
+Expected log:
+
+```text
+MCP echo server listening on http://localhost:8099
+```
+
+Terminal B — start the agent REPL and point it at the echo server:
+
+```powershell
+cd D:\PROJECTS\Software_Teamwork\services\qa
+$env:MCP_TRANSPORT = "streamable_http"
+$env:MCP_SERVER_URL = "http://localhost:8099"
+$env:DEEPSEEK_API_KEY = [Environment]::GetEnvironmentVariable('DEEPSEEK_API_KEY', 'User')
+go run ./cmd/agent
+```
+
+At the `qa >>` prompt, ask which tools are available. A successful merge lists
+local tools (`read_file`, `write_file`, `edit_file`) plus remote tool `echo`.
+
+To verify `tools/call`, ask the model to invoke echo explicitly, for example:
+
+```text
+请调用 echo 工具，参数 text 设为 hello-mcp，并把原始返回结果告诉我
+```
+
+Stop the REPL with `exit` or `q`, then press `Ctrl+C` in terminal A.
+
+#### Common issues
+
+| Symptom | Likely cause |
+| ------- | ------------ |
+| `DEEPSEEK_API_KEY is required` | API key not imported into the current PowerShell process. |
+| `initialize MCP session` failed | Echo server not running, wrong URL, or agent started in the same terminal as the server. |
+| Tool list has no `echo` | `MCP_TRANSPORT` or `MCP_SERVER_URL` not set in the agent terminal. |
+| Agent lists `echo` but does not call it | Rephrase the request to explicitly ask for an echo tool call. |
+
 ## PostgreSQL with Docker
 
 QA PostgreSQL runs in Docker (`postgres:16-alpine`) and schema changes are
@@ -240,4 +307,11 @@ The REPL remains available for Agent Loop debugging.
 go test ./...
 go build ./cmd/server
 go build ./cmd/agent
+go build ./cmd/mcp-echo
+```
+
+For MCP-only checks without the full suite:
+
+```powershell
+go test ./internal/platform/mcpclient/... ./internal/platform/toolclient/... ./internal/platform/connectiontest/... -v
 ```

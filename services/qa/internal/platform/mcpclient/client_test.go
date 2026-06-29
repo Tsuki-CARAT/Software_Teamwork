@@ -3,38 +3,21 @@ package mcpclient
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/platform/mcpclient/testserver"
 )
-
-type echoInput struct {
-	Text string `json:"text" jsonschema:"text to echo"`
-}
-
-type echoOutput struct {
-	Text string `json:"text" jsonschema:"echoed text"`
-}
-
-func echoServer() *mcp.Server {
-	server := mcp.NewServer(&mcp.Implementation{Name: "echo-server", Version: "1.0.0"}, nil)
-	mcp.AddTool(server, &mcp.Tool{Name: "echo", Description: "echo text"},
-		func(_ context.Context, _ *mcp.CallToolRequest, input echoInput) (*mcp.CallToolResult, echoOutput, error) {
-			return nil, echoOutput{Text: input.Text}, nil
-		})
-	return server
-}
 
 func TestMCPHelperProcess(t *testing.T) {
 	if os.Getenv("QA_MCP_HELPER_PROCESS") != "1" {
 		return
 	}
-	if err := echoServer().Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+	if err := testserver.EchoServer().Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		os.Exit(2)
 	}
 	os.Exit(0)
@@ -57,13 +40,7 @@ func TestStdioClientLifecycleAndToolCall(t *testing.T) {
 }
 
 func TestStreamableHTTPClientAddsTokenAndCallsTool(t *testing.T) {
-	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return echoServer() }, nil)
-	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Bearer mcp-token" {
-			t.Errorf("Authorization = %q", got)
-		}
-		mcpHandler.ServeHTTP(w, r)
-	}))
+	httpServer := testserver.StreamableHTTP(t, "mcp-token", "Authorization")
 	defer httpServer.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

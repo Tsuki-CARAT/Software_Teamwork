@@ -18,7 +18,7 @@ import {
   useModelProfiles,
   useUpdateModelProfile,
 } from '@/features/admin-config'
-import type { ModelProfile } from '@/lib/types'
+import type { CreateModelProfileRequest, ModelProfile } from '@/lib/types'
 
 // ── Constants ──
 
@@ -79,8 +79,8 @@ const EMPTY_FORM: FormData = {
 
 // ── Helpers ──
 
-function formToCreateRequest(form: FormData) {
-  const params: Record<string, unknown> = {
+function formToCreateRequest(form: FormData): CreateModelProfileRequest {
+  return {
     name: form.name,
     purpose: form.purpose,
     provider: form.provider,
@@ -88,11 +88,9 @@ function formToCreateRequest(form: FormData) {
     model: form.model,
     apiKey: form.apiKey,
     timeoutMs: form.timeoutMs,
-  }
-  if (form.maxTokens > 0) {
-    params.defaultParameters = { max_tokens: form.maxTokens }
-  }
-  return params
+    ...(form.maxTokens > 0 ? { defaultParameters: { maxTokens: form.maxTokens } } : {}),
+    enabled: true,
+  } as CreateModelProfileRequest
 }
 
 function formToUpdateRequest(form: FormData) {
@@ -210,7 +208,11 @@ export function ModelProfilesPage() {
   }, [])
 
   const handleCreate = useCallback(() => {
-    createMutation.mutate(formToCreateRequest(form) as Parameters<typeof createMutation.mutate>[0], {
+    if (!form.name || !form.purpose || !form.baseUrl || !form.model) {
+      setNotification({ type: 'error', text: '请填写名称、类型、地址和模型名称' })
+      return
+    }
+    createMutation.mutate(formToCreateRequest(form), {
       onSuccess: () => {
         setNotification({ type: 'success', text: '模型配置创建成功' })
         setCreateOpen(false)

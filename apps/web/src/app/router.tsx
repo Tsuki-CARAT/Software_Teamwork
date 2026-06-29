@@ -299,7 +299,7 @@ const adminKnowledgeDocumentsRoute = createRoute({
 const adminKnowledgeSearchRoute = createRoute({
   getParentRoute: () => adminRoute,
   path: 'knowledge/search',
-  beforeLoad: requireAuth(knowledgeAccess),
+  beforeLoad: requireAuth({ any: ['knowledge:read'] }),
   component: KnowledgeSearchPage,
 })
 

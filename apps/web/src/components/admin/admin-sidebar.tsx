@@ -86,8 +86,18 @@ const menuItems: AdminNavigationItem[] = [
         path: '/admin/knowledge-config',
         requirement: { any: ['knowledge:read'] },
       },
-      { key: 'qa-settings', label: 'QA / LLM 配置', path: '/admin/qa-settings' },
-      { key: 'qa-retrieval-test', label: 'QA 检索测试', path: '/admin/qa-retrieval-test' },
+      {
+        key: 'qa-settings',
+        label: 'QA / LLM 配置',
+        path: '/admin/qa-settings',
+        requirement: { any: ['admin:model-profile:write', 'admin:parser-config:write', 'system:admin'] },
+      },
+      {
+        key: 'qa-retrieval-test',
+        label: 'QA 检索测试',
+        path: '/admin/qa-retrieval-test',
+        requirement: { any: ['admin:model-profile:write', 'admin:parser-config:write', 'system:admin'] },
+      },
       {
         key: 'model-profiles',
         label: '模型管理',
@@ -106,6 +116,7 @@ const menuItems: AdminNavigationItem[] = [
     key: 'stats',
     label: 'QA 统计',
     path: '/admin/stats',
+    requirement: { any: ['system:admin'] },
   },
 ]
 

@@ -41,8 +41,14 @@ func main() {
 		os.Exit(1)
 	}
 	documents := service.New(repo, files)
+	reportService := service.NewReportService(repo)
 
-	handler := httpapi.NewServer(httpapi.Config{Logger: logger, ReadyChecker: repo, DocumentService: documents})
+	handler := httpapi.NewServer(httpapi.Config{
+		Logger:          logger,
+		ReadyChecker:    repo,
+		DocumentService: documents,
+		ReportService:   reportService,
+	})
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           handler,

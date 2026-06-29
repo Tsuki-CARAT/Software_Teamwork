@@ -9,19 +9,66 @@ import (
 type ReportStatus string
 
 const (
-	ReportStatusDraft ReportStatus = "draft"
+	ReportStatusDraft             ReportStatus = "draft"
+	ReportStatusOutlineGenerating ReportStatus = "outline_generating"
+	ReportStatusOutlineGenerated  ReportStatus = "outline_generated"
+	ReportStatusContentGenerating ReportStatus = "content_generating"
+	ReportStatusGenerated         ReportStatus = "generated"
+	ReportStatusExporting         ReportStatus = "exporting"
+	ReportStatusExported          ReportStatus = "exported"
+	ReportStatusFailed            ReportStatus = "failed"
+	ReportStatusDeleted           ReportStatus = "deleted"
 )
 
 type JobType string
 
 const (
-	JobTypeOutlineGeneration JobType = "outline_generation"
+	JobTypeOutlineGeneration   JobType = "outline_generation"
+	JobTypeOutlineRegeneration JobType = "outline_regeneration"
+	JobTypeContentGeneration   JobType = "content_generation"
+	JobTypeContentRegeneration JobType = "content_regeneration"
+	JobTypeSectionRegeneration JobType = "section_regeneration"
+	JobTypeReportFileCreation  JobType = "report_file_creation"
 )
 
+// JobStatus is also used as ReportSection.GenerationStatus, mirroring the
+// gateway OpenAPI ReportJobStatus enum.
 type JobStatus string
 
 const (
-	JobStatusPending JobStatus = "pending"
+	JobStatusPending          JobStatus = "pending"
+	JobStatusRunning          JobStatus = "running"
+	JobStatusSucceeded        JobStatus = "succeeded"
+	JobStatusPartialSucceeded JobStatus = "partial_succeeded"
+	JobStatusFailed           JobStatus = "failed"
+	JobStatusCanceled         JobStatus = "canceled"
+)
+
+// SectionType mirrors the gateway OpenAPI ReportSection.sectionType enum.
+type SectionType string
+
+const (
+	SectionTypeText  SectionType = "text"
+	SectionTypeTable SectionType = "table"
+	SectionTypeImage SectionType = "image"
+	SectionTypeMixed SectionType = "mixed"
+)
+
+// ContentSource mirrors the gateway OpenAPI ReportSection.contentSource enum.
+type ContentSource string
+
+const (
+	ContentSourceAI     ContentSource = "ai"
+	ContentSourceManual ContentSource = "manual"
+	ContentSourceMixed  ContentSource = "mixed"
+)
+
+// OutlineSource mirrors the gateway OpenAPI CreateReportOutlineRequest.source enum.
+type OutlineSource string
+
+const (
+	OutlineSourceManual OutlineSource = "manual"
+	OutlineSourceAI     OutlineSource = "ai"
 )
 
 type ReportType struct {
@@ -223,4 +270,67 @@ type ReportEvent struct {
 	EventType string
 	Message   string
 	CreatedAt time.Time
+}
+
+// ReportOutlineNode is one node of the multi-level outline tree stored as
+// ReportOutline.OutlineJSON. ClientSectionID lets callers correlate a node
+// across requests before a server-assigned ID exists.
+type ReportOutlineNode struct {
+	ID              string              `json:"id"`
+	ClientSectionID string              `json:"clientSectionId,omitempty"`
+	Title           string              `json:"title"`
+	Level           int                 `json:"level"`
+	Numbering       string              `json:"numbering,omitempty"`
+	Children        []ReportOutlineNode `json:"children,omitempty"`
+}
+
+type ReportOutline struct {
+	ID           string
+	ReportID     string
+	Sections     []ReportOutlineNode
+	Version      int
+	Source       OutlineSource
+	SourceJobID  string
+	IsCurrent    bool
+	ManualEdited bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type ReportSection struct {
+	ID               string
+	ReportID         string
+	OutlineID        string
+	ParentID         string
+	OutlineNodeID    string
+	SectionPath      string
+	Title            string
+	Level            int
+	SortOrder        int
+	Numbering        string
+	SectionType      SectionType
+	Content          string
+	Tables           []map[string]any
+	GenerationStatus JobStatus
+	ContentSource    ContentSource
+	ManualEdited     bool
+	Version          int
+	LastJobID        string
+	GeneratedAt      *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type ReportSectionVersion struct {
+	ID           string
+	ReportID     string
+	SectionID    string
+	Version      int
+	Source       ContentSource
+	Content      string
+	Tables       []map[string]any
+	JobID        string
+	Requirements string
+	CreatedBy    string
+	CreatedAt    time.Time
 }

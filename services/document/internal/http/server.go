@@ -39,6 +39,7 @@ type Config struct {
 	Logger          *slog.Logger
 	ReadyChecker    ReadyChecker
 	DocumentService DocumentService
+	ReportService   ReportService
 	MaxUploadBytes  int64
 }
 
@@ -46,6 +47,7 @@ type Server struct {
 	logger         *slog.Logger
 	readyChecker   ReadyChecker
 	documents      DocumentService
+	reportService  ReportService
 	maxUploadBytes int64
 	mux            *http.ServeMux
 }
@@ -61,6 +63,7 @@ func NewServer(cfg Config) *Server {
 		logger:         cfg.Logger,
 		readyChecker:   cfg.ReadyChecker,
 		documents:      cfg.DocumentService,
+		reportService:  cfg.ReportService,
 		maxUploadBytes: cfg.MaxUploadBytes,
 		mux:            http.NewServeMux(),
 	}
@@ -83,22 +86,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /report-materials", s.handleCreateReportMaterial)
 	s.mux.HandleFunc("GET /report-materials/{materialId}", s.handleGetReportMaterial)
 	s.mux.HandleFunc("DELETE /report-materials/{materialId}", s.handleDeleteReportMaterial)
-	s.mux.HandleFunc("GET /reports", s.handleNotImplemented)
-	s.mux.HandleFunc("POST /reports", s.handleNotImplemented)
-	s.mux.HandleFunc("GET /reports/{reportId}", s.handleNotImplemented)
-	s.mux.HandleFunc("PATCH /reports/{reportId}", s.handleNotImplemented)
-	s.mux.HandleFunc("DELETE /reports/{reportId}", s.handleNotImplemented)
-	s.mux.HandleFunc("GET /reports/{reportId}/outlines", s.handleNotImplemented)
-	s.mux.HandleFunc("POST /reports/{reportId}/outlines", s.handleNotImplemented)
-	s.mux.HandleFunc("GET /reports/{reportId}/outlines/{outlineId}", s.handleNotImplemented)
-	s.mux.HandleFunc("PATCH /reports/{reportId}/outlines/{outlineId}", s.handleNotImplemented)
-	s.mux.HandleFunc("DELETE /reports/{reportId}/outlines/{outlineId}/sections/{sectionId}", s.handleNotImplemented)
-	s.mux.HandleFunc("GET /reports/{reportId}/sections", s.handleNotImplemented)
-	s.mux.HandleFunc("POST /reports/{reportId}/sections", s.handleNotImplemented)
-	s.mux.HandleFunc("GET /reports/{reportId}/sections/{sectionId}", s.handleNotImplemented)
-	s.mux.HandleFunc("PATCH /reports/{reportId}/sections/{sectionId}", s.handleNotImplemented)
-	s.mux.HandleFunc("GET /reports/{reportId}/sections/{sectionId}/versions", s.handleNotImplemented)
-	s.mux.HandleFunc("POST /reports/{reportId}/sections/{sectionId}/versions", s.handleNotImplemented)
+	// reports / outlines / sections are implemented for real (C-03); the
+	// remaining report-generation resources (jobs, files, statistics,
+	// operation logs, settings) stay on the not-implemented scaffold below
+	// until their own tasks land.
+	s.registerReportRoutes()
 	s.mux.HandleFunc("GET /reports/{reportId}/jobs", s.handleNotImplemented)
 	s.mux.HandleFunc("POST /reports/{reportId}/jobs", s.handleNotImplemented)
 	s.mux.HandleFunc("GET /report-jobs/{jobId}", s.handleNotImplemented)

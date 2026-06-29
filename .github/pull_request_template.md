@@ -1,8 +1,3 @@
-## 标题要求
-
-- PR 标题必须使用英文。
-- PR 描述必须使用中文。
-
 ## 修改内容
 
 请用中文简要说明本 PR 做了什么。
@@ -26,8 +21,6 @@
 
 - [ ] PR 目标分支是 `develop`
 - [ ] PR 来源是个人 fork 的独立分支
-- [ ] PR 标题使用英文
-- [ ] PR 描述使用中文
 - [ ] 关联 Issue 已填写自动关闭关键字，或无 issue 时已写明原因
 - [ ] 分支已经基于最新 `develop`
 - [ ] Commit message 符合 Conventional Commits

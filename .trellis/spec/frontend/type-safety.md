@@ -107,10 +107,12 @@ type UploadItemState =
 ## Scenario: Gateway Typed Transport Wrapper
 
 ### 1. Scope / Trigger
+
 - Trigger: frontend API infrastructure must use the public gateway OpenAPI contract and normalize gateway transport behavior in one place.
 - Applies to `apps/web/src/api/client.ts`, `apps/web/src/api/generated/gateway.ts`, and feature API wrappers under `apps/web/src/api/`.
 
 ### 2. Signatures
+
 - Type generation command: `bun run --cwd apps/web api:generate`.
 - Generation source: `docs/services/gateway/api/openapi.yaml`.
 - Generated output: `apps/web/src/api/generated/gateway.ts`.
@@ -122,6 +124,7 @@ type UploadItemState =
   - `streamGateway(path, options): { abort; signal }` uses `fetch` stream readers plus `AbortController`.
 
 ### 3. Contracts
+
 - Base URL defaults to `/api/v1`; Vite may override it with `VITE_API_BASE_URL`.
 - Auth uses `Authorization: Bearer <accessToken>`; tokens are opaque strings and must not be decoded as JWTs.
 - Request id uses optional `X-Request-Id`.
@@ -133,6 +136,7 @@ type UploadItemState =
 - Mock handlers may only target active `paths` entries from generated gateway types. Top-level OpenAPI `x-missing-contracts` entries must not become callable methods or mocks.
 
 ### 4. Validation & Error Matrix
+
 - Non-2xx JSON error envelope -> throw `ApiError` with gateway `code`, `message`, `requestId`, and `fields`.
 - Non-2xx non-JSON response -> throw `ApiError` with `http_<status>` and response text/status text.
 - Expected SSE response without `text/event-stream` -> throw `ApiError` code `invalid_stream_response`.
@@ -140,12 +144,14 @@ type UploadItemState =
 - Mock path not present in active OpenAPI `paths` -> throw before registering the mock route.
 
 ### 5. Good/Base/Bad Cases
+
 - Good: feature wrapper imports generated schema types, calls `requestJson` or `requestPaginated`, and maps backend DTOs to UI DTOs explicitly.
 - Base: generated `gateway.ts` is replaced wholesale by the generation command; no manual edits are made under `api/generated/`.
 - Bad: feature code calls `/rag/search`, `/admin/stats/*`, `/admin/users`, or other inactive legacy paths directly.
 - Bad: code assumes the legacy `{ code, message, data }` envelope or parses `message` text instead of `error.code`.
 
 ### 6. Tests Required
+
 - `bun run --cwd apps/web check` must pass after API wrapper changes.
 - `bun run --cwd apps/web build` must pass after generated type changes.
 - `git diff --check` must pass.
@@ -154,6 +160,7 @@ type UploadItemState =
 ### 7. Wrong vs Correct
 
 #### Wrong
+
 ```ts
 const res = await fetch('/api/v1/rag/search', { method: 'POST' })
 const json: { code: number; message: string; data: Result } = await res.json()
@@ -162,10 +169,98 @@ return json.data
 ```
 
 #### Correct
+
 ```ts
 const data = await requestJson<KnowledgeQuerySummary>('/knowledge-queries', {
   method: 'POST',
   body: { query, topK: 10, scoreThreshold: 0, rerank: false },
 })
 return data.results
+```
+
+## Scenario: QA/LLM Config Version Forms
+
+### 1. Scope / Trigger
+
+- Trigger: frontend pages that display or save QA runtime settings, LLM
+  generation settings, or LLM connection tests through gateway contracts.
+- Scope: browser code under `apps/web/src/` only. The frontend does not own
+  provider credentials, profile persistence, or backend validation semantics.
+
+### 2. Signatures
+
+- `GET /api/v1/qa-config-versions/current` -> `QAConfigVersion`.
+- `POST /api/v1/qa-config-versions` with
+  `CreateQAConfigVersionRequest` -> creates a new version.
+- `GET /api/v1/llm-config-versions/current` -> `QALLMConfigVersion`.
+- `POST /api/v1/llm-config-versions` with
+  `CreateQALLMConfigVersionRequest` -> creates a new version.
+- `POST /api/v1/llm-connection-tests` with
+  `CreateQALLMConnectionTestRequest` -> creates a connection test record.
+
+### 3. Contracts
+
+- Import DTOs from `components['schemas']` in
+  `apps/web/src/api/generated/gateway.ts`; do not hand-copy these response or
+  request shapes.
+- Normalize all requests through `gatewayRequest` so success uses
+  `{ data, requestId }` and failures use the gateway error envelope.
+- LLM request bodies must contain `provider: "ai-gateway"`, `profileId`, and
+  `modelName`; optional fields may include generation or timeout parameters.
+- Browser UI must not include provider API key fields, credential placeholders,
+  secret refs, provider base URLs, or provider raw error details for QA-owned
+  LLM config.
+
+### 4. Validation & Error Matrix
+
+- Empty `profileId` or `modelName` -> block the mutation and show a local form
+  error.
+- Non-numeric numeric field -> block the mutation and show a local form error.
+- Integer-only field with decimal input -> block the mutation and show a local
+  form error.
+- Gateway `400`, `403`, or `502` -> show the sanitized gateway message and keep
+  current form input unchanged.
+- Missing backend/current config -> show a load error or empty metadata state;
+  do not invent default server values.
+
+### 5. Good/Base/Bad Cases
+
+- Good: current config containing `0`, `false`, or `null` renders without being
+  replaced by fallback defaults; use `??` and explicit formatting helpers.
+- Base: save buttons create new config versions with `POST`; no frontend path
+  should imply in-place update semantics.
+- Bad: sending `apiKey`, masked key placeholders, provider base URLs, or raw
+  provider errors from a QA config form.
+
+### 6. Tests Required
+
+- Typecheck assertion: request payloads satisfy generated OpenAPI schema types.
+- Form assertion: `0`, `false`, and `null` values render distinctly and do not
+  collapse through `||` defaults.
+- Mutation assertion: LLM connection tests send only `provider`, `profileId`,
+  `modelName`, and optional timeout.
+- Failure assertion: failed test/save keeps user input and displays a sanitized
+  error.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const payload = {
+  provider: 'openai',
+  modelName,
+  apiKey: maskedApiKey,
+}
+```
+
+#### Correct
+
+```ts
+const payload: components['schemas']['CreateQALLMConnectionTestRequest'] = {
+  provider: 'ai-gateway',
+  profileId,
+  modelName,
+  timeoutSeconds,
+}
 ```

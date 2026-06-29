@@ -6,6 +6,7 @@
 - [`技术选型基线`](../../architecture/technology-decisions.md)：`pgx` + `sqlc`、`goose`、`net/http` / `ServeMux`、`slog`、opaque Bearer token、`fetch` stream SSE、MCP SDK/sidecar 等实现约束。
 - [`Gateway 服务规划`](../gateway/README.md)、[`前后端集成契约`](../../architecture/frontend-backend-contract.md)、[`服务边界矩阵`](../../architecture/service-boundaries.md) 和 [`Gateway OpenAPI 契约`](../gateway/api/openapi.yaml)。
 - [`QA 数据模型文档`](docs/data-models.md)：`qa_config_versions`、`llm_config_versions`、`conversations`、`messages`、`response_runs`、`agent_model_invocations`、`agent_tool_calls`、`message_content_blocks`、`response_process_steps`、`response_stream_events`、`citations`、`retrieval_test_runs`、`retrieval_test_results`、`llm_connection_tests`、`admin_audit_logs`。
+- [`QA 实现说明`](docs/implementation.md)：当前代码实现、契约对齐、缺口和最近检查记录。
 - GitHub Discussion #65《请问能否重构AI问答模块接口契约？》。
 
 > 当前状态：QA 会话、消息、非流式/流式回答、SSE 事件回放、回答运行、脱敏工具调用摘要、引用、配置、检索体验测试和统计接口已经进入 `docs/services/gateway/api/openapi.yaml` 的 active paths。MCP 原始 tool schema、完整工具参数/结果、内部审计和服务间私有接口仍不属于前端稳定公开契约。

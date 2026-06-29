@@ -1,6 +1,6 @@
 # AI Gateway 服务接口文档
 
-本文档定义 `ai-gateway` 服务在项目初期的职责边界和内部接口契约。当前文档不落地 `services/ai-gateway/` 代码。机器可读契约见 [`docs/services/ai-gateway/api/openapi.yaml`](api/openapi.yaml)，逻辑数据模型见 [`docs/data-models.md`](docs/data-models.md)。
+本文档定义 `ai-gateway` 服务在项目初期的职责边界和内部接口契约。机器可读契约见 [`docs/services/ai-gateway/api/openapi.yaml`](api/openapi.yaml)，逻辑数据模型见 [`docs/data-models.md`](docs/data-models.md)，当前实现状态和缺口见 [`docs/implementation.md`](docs/implementation.md)。
 
 `ai-gateway` 是内部服务，不直接面向前端。前端仍只调用 public `gateway` 的 `/api/v1/**` 接口；`qa`、`knowledge`、`document` 等领域服务在需要大模型、embedding 或 rerank 能力时，通过内部 HTTP API 调用 `ai-gateway`。管理员需要运行时管理模型配置时，也只能调用 public gateway 的 `/api/v1/admin/model-profiles` 资源，再由 gateway 调用本服务的 `/internal/v1/model-profiles`。
 
@@ -12,6 +12,8 @@ RESTful 路径、统一响应和错误 envelope 以 [前后端集成契约](../.
 | --- | --- |
 | [AI Gateway OpenAPI](api/openapi.yaml) | 内部服务机器可读 API 契约。 |
 | [数据模型](docs/data-models.md) | 模型 profile、provider 凭据、配置审计、脱敏调用日志和安全约束。 |
+| [Provider Adapter 说明](docs/provider-adapters.md) | Chat、embedding、rerank provider adapter 的请求映射、响应校验、脱敏和 usage aggregate 约束。 |
+| [实现说明](docs/implementation.md) | 当前代码实现、契约对齐、缺口和最近检查记录。 |
 
 ## 职责边界
 
@@ -60,9 +62,9 @@ public gateway /api/v1/**              (frontend-facing only)
 
 ## 技术选型落地约束
 
-AI Gateway 后续实现必须遵循 [技术选型基线](../../architecture/technology-decisions.md)。本服务只补充模型网关特有约束：
+AI Gateway 实现必须遵循 [技术选型基线](../../architecture/technology-decisions.md)。本服务只补充模型网关特有约束：
 
-- 代码落地时使用独立 Go module，目录建议为 `services/ai-gateway/`。
+- 服务代码使用独立 Go module，目录为 `services/ai-gateway/`。
 - 模型配置、凭据元数据、审计和调用摘要都以 PostgreSQL 为权威来源。
 - 不保存明文 provider API key。生产优先 secret manager；第一阶段可使用数据库加密列，但必须记录加密密钥版本和脱敏写入状态。
 - 本服务首期不拥有异步任务；如后续引入配额缓存、短期熔断状态或队列，缓存使用 `go-redis`，队列使用 `asynq`，PostgreSQL 仍是业务状态权威。
@@ -544,9 +546,8 @@ AI Gateway 的环境变量应按结构化配置分组，服务启动时一次性
 - Metrics label 只能使用低基数字段，例如 `operation`、`provider`、`model_purpose`、`status` 和归一化错误码；不得使用用户输入、prompt hash、object key、API key 指纹、完整 model name 或完整 base URL。
 - 对外错误消息保持稳定简短，详细 provider 失败信息只进入脱敏日志。
 
-## 待后续实现确认
+## 实现状态
 
-- `X-Service-Token` 的签发、轮换和校验方式。
-- 配置写接口的最终授权策略。
-- 多 provider fallback、重试、熔断、配额和成本统计。
-- Admin-facing 前端页面应使用 gateway OpenAPI 中的 `/api/v1/admin/model-profiles` 资源；AI Gateway 不新增 frontend-facing endpoint。
+当前代码实现、临时后端、文档与实现出入和建议任务统一维护在
+[`docs/implementation.md`](docs/implementation.md)。本文档只保留 AI Gateway
+的职责边界、内部接口语义和稳定安全规则；实现缺口不在 README 重复维护。

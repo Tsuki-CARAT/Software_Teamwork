@@ -5,10 +5,10 @@ report jobs, job attempts, events, generated file metadata, statistics, and
 operation logs.
 
 The current implementation provides the service/data baseline, implemented
-report type/template/material metadata APIs, and scaffold coverage for the
-remaining active report-generation contract. It does not implement AI generation,
-DOCX export execution, MCP tools, report workflow orchestration, or AI Gateway
-calls yet.
+report type/template/material/report/outline/section APIs, and the report
+job/attempt/event state machine. It does not implement real AI generation, DOCX
+export execution, MCP tools, report file content, settings/statistics/logs, or
+AI Gateway generation calls yet.
 
 ## Local Configuration
 
@@ -70,8 +70,10 @@ The service-local operational contract is documented in [`api/openapi.yaml`](api
 
 Gateway exposes these document-owned report routes under `/api/v1`. The service
 local paths below omit that prefix. Implemented routes call the document service
-layer. Scaffold routes are registered and return the standard error envelope with
-`error.code=not_implemented` and HTTP `501` until their business workflows land.
+layer. Job routes persist state and drive the worker state machine, but the
+worker currently does not execute real AI or DOCX generation. Scaffold routes are
+registered and return the standard error envelope with `error.code=not_implemented`
+and HTTP `501` until their business workflows land.
 
 | Method | Local path | Operation ID | Status |
 | --- | --- | --- | --- |
@@ -103,12 +105,12 @@ layer. Scaffold routes are registered and return the standard error envelope wit
 | `PATCH` | `/reports/{reportId}/sections/{sectionId}` | `updateReportSection` | Implemented |
 | `GET` | `/reports/{reportId}/sections/{sectionId}/versions` | `listReportSectionVersions` | Implemented |
 | `POST` | `/reports/{reportId}/sections/{sectionId}/versions` | `createReportSectionVersion` | Implemented |
-| `GET` | `/reports/{reportId}/jobs` | `listReportJobs` | Scaffold |
-| `POST` | `/reports/{reportId}/jobs` | `createReportJob` | Scaffold |
-| `GET` | `/report-jobs/{jobId}` | `getReportJob` | Scaffold |
-| `GET` | `/report-jobs/{jobId}/attempts` | `listReportJobAttempts` | Scaffold |
-| `POST` | `/report-jobs/{jobId}/attempts` | `createReportJobAttempt` | Scaffold |
-| `GET` | `/reports/{reportId}/events` | `listReportEvents` | Scaffold |
+| `GET` | `/reports/{reportId}/jobs` | `listReportJobs` | Implemented; state machine only |
+| `POST` | `/reports/{reportId}/jobs` | `createReportJob` | Implemented; enqueues worker task |
+| `GET` | `/report-jobs/{jobId}` | `getReportJob` | Implemented |
+| `GET` | `/report-jobs/{jobId}/attempts` | `listReportJobAttempts` | Implemented |
+| `POST` | `/report-jobs/{jobId}/attempts` | `createReportJobAttempt` | Implemented; retry claim/enqueue |
+| `GET` | `/reports/{reportId}/events` | `listReportEvents` | Implemented |
 | `GET` | `/report-files` | `listReportFiles` | Scaffold |
 | `POST` | `/report-files` | `createReportFile` | Scaffold |
 | `GET` | `/report-files/{reportFileId}` | `getReportFile` | Scaffold |

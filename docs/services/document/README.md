@@ -16,6 +16,8 @@ RESTful 路径、统一响应和错误 envelope 以 [前后端集成契约](../.
 | [`api/openapi.yaml`](api/openapi.yaml) | `document` 服务本地 OpenAPI 草案；公开稳定契约仍以 gateway OpenAPI 为准。 |
 | [`docs/data-models.md`](docs/data-models.md) | 报告生成逻辑数据模型、实体关系、关键字段和存储约束。 |
 | [`docs/frontend-api-design.md`](docs/frontend-api-design.md) | 前端 API 层、页面到接口映射和类型使用建议。 |
+| [`docs/generation-workflow.md`](docs/generation-workflow.md) | 报告 job、attempt、event、worker、AI Gateway、File Service 和 DOCX 创建的目标流程与当前缺口。 |
+| [`docs/implementation.md`](docs/implementation.md) | 当前代码实现、契约对齐、缺口和最近检查记录。 |
 | [`docs/requirements.md`](docs/requirements.md) | 原始报告生成需求沉淀和验收点。 |
 
 已被 gateway OpenAPI 和本文覆盖的重复 API 契约草稿不再作为当前阅读入口；数据模型、前端 API 设计和需求沉淀这类服务细节文档单独保留。

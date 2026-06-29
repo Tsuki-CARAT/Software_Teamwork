@@ -11,7 +11,8 @@
 | RESTful 路径、OpenAPI、统一响应、分页、错误、SSE、上传和 request id | `docs/architecture/frontend-backend-contract.md` | 只列本服务资源路径、业务语义、状态枚举和服务特有错误场景。 |
 | 分支、PR、提交、CI 和维护者设置 | `CONTRIBUTING.md`、`docs/collaboration/*.md` | 服务文档不得定义仓库级流程。需要补充时更新协作文档。 |
 | 机器可读 API 契约 | `docs/services/gateway/api/openapi.yaml` 或对应内部服务 `api/openapi.yaml` | Markdown 只解释业务语义，不替代 OpenAPI schema。 |
-| 服务内数据模型、流程、实现拆解 | `docs/services/<service>/README.md` 和 `docs/services/<service>/docs/*.md` | 保留服务特有内容，避免复制跨服务规则。 |
+| 服务内数据模型、业务流程 | `docs/services/<service>/README.md` 和 `docs/services/<service>/docs/data-models.md` 等细节文档 | 保留服务特有内容，避免复制跨服务规则。 |
+| 当前实现状态、代码与契约出入、临时后端、最近检查记录 | `docs/services/<service>/docs/implementation.md` | README 只链接 implementation 文档，不重复列实现缺口、代码状态或检查结论。 |
 
 ## 更新顺序
 
@@ -38,3 +39,4 @@
 - 统一响应、分页、错误 envelope、request id、SSE 和上传规则链接到前后端集成契约。
 - RESTful 命名规则链接到前后端集成契约或服务边界矩阵；服务文档只给出本服务资源映射。
 - Markdown 中的字段和状态没有与 OpenAPI 冲突；如冲突，以 OpenAPI 为准并修正文档。
+- 当前代码实现、未实现能力、mock/memory 后端和文档与实现出入只写在对应服务的 `docs/implementation.md`，不要在 README、架构文档或数据模型文档重复维护。

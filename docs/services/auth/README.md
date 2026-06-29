@@ -1,6 +1,6 @@
 # Auth 服务 API 文档
 
-本文档定义 `auth` 服务的职责边界、公开 API 契约和内部服务 API 草案。当前仓库尚未落地 `services/auth/` 代码，稳定前端公开契约以 [`docs/services/gateway/api/openapi.yaml`](../gateway/api/openapi.yaml) 为准；auth 服务级 OpenAPI 草案见 [`api/openapi.yaml`](api/openapi.yaml)，数据模型见 [`docs/data-models.md`](docs/data-models.md)。本文用于指导后续 auth 服务实现、gateway 转发和联调。
+本文档定义 `auth` 服务的职责边界、公开 API 契约和内部服务 API。稳定前端公开契约以 [`docs/services/gateway/api/openapi.yaml`](../gateway/api/openapi.yaml) 为准；auth 服务级 OpenAPI 见 [`api/openapi.yaml`](api/openapi.yaml)，数据模型见 [`docs/data-models.md`](docs/data-models.md)，当前实现状态和缺口见 [`docs/implementation.md`](docs/implementation.md)。本文用于指导 auth 服务实现、gateway 转发和联调。
 
 RESTful 路径、统一响应和错误 envelope 以 [前后端集成契约](../../architecture/frontend-backend-contract.md) 为准。认证相关动作在本服务中建模为资源操作：
 
@@ -22,6 +22,7 @@ RESTful 路径、统一响应和错误 envelope 以 [前后端集成契约](../.
 | [Gateway OpenAPI](../gateway/api/openapi.yaml) | 前端稳定公开契约，auth 公开路径以此为准。 |
 | [Auth OpenAPI](api/openapi.yaml) | Auth 内部服务 API 草案。 |
 | [Auth 数据模型](docs/data-models.md) | 用户、凭证、角色权限、会话、撤销和审计逻辑模型。 |
+| [Auth 实现说明](docs/implementation.md) | 当前代码实现、契约对齐、缺口和最近检查记录。 |
 
 ## 与 Gateway 契约一致性
 
@@ -81,9 +82,9 @@ Gateway 调用下游服务时应传递：
 
 ## 技术选型落地约束
 
-Auth 后续实现必须遵循 [技术选型基线](../../architecture/technology-decisions.md)。本服务只补充身份域特有约束：
+Auth 实现必须遵循 [技术选型基线](../../architecture/technology-decisions.md)。本服务只补充身份域特有约束：
 
-- 代码落地时使用独立 Go module，目录建议为 `services/auth/`。
+- 服务代码使用独立 Go module，目录为 `services/auth/`。
 - 用户、凭证、角色权限、会话和安全事件均以 PostgreSQL 为权威来源；首期 migration 需覆盖这些表。
 - Gateway 使用 Redis 维护会话缓存；auth 不把 Redis 作为用户或会话权威来源。auth 如使用 Redis，只能用于短期限流或临时风控状态。
 - Access token 固定为 opaque Bearer token，不使用 JWT，不承载可解析 claims。auth 只保存 token hash，gateway Redis key 也只使用 token hash。
@@ -502,41 +503,8 @@ Auth 相关接口使用项目统一错误码：
 - Token 或 session 撤销必须可审计，至少能关联 `sessionId`、`userId`、撤销原因、操作来源和 request id。
 - 所有跨服务 HTTP client 后续实现必须设置超时，并传递 `context.Context`。
 
-## 后续实现建议
+## 实现状态
 
-后续落地 `services/auth/` 时，建议服务本地维护：
-
-```text
-services/auth/
-├── api/
-│   └── openapi.yaml
-├── cmd/server/
-├── internal/
-│   ├── config/
-│   ├── http/
-│   ├── middleware/
-│   ├── service/
-│   ├── repository/
-│   │   ├── queries/
-│   │   └── sqlc/
-│   └── platform/
-├── migrations/
-├── sqlc.yaml
-└── README.md
-```
-
-实现前需要补齐或确认：
-
-- 用户名、密码长度和复杂度规则。
-- session 过期时间、批量撤销策略和后续是否引入 refresh token。首期 access token 不采用 JWT，不引入 refresh token，服务端只保存 token hash。
-- 角色与权限模型，以及 `X-User-Permissions` 的权限字符串命名规则。
-- 注册是否开放、是否需要管理员创建用户、是否需要验证码或邀请机制。
-- 用户状态模型，例如 `active`、`disabled`、`locked`。
-- 登录失败限流、账号锁定和审计事件保留策略。
-
-如果上述决策影响公开路径、字段、错误码或状态码，必须同步更新：
-
-- [`docs/services/gateway/api/openapi.yaml`](../gateway/api/openapi.yaml)
-- [`docs/architecture/frontend-backend-contract.md`](../../architecture/frontend-backend-contract.md)
-- [`docs/architecture/service-boundaries.md`](../../architecture/service-boundaries.md)
-- 本文档
+当前代码实现、临时后端、文档与实现出入和建议任务统一维护在
+[`docs/implementation.md`](docs/implementation.md)。本文档只保留 Auth Service
+的职责边界、公开资源语义和稳定安全规则；实现缺口不在 README 重复维护。

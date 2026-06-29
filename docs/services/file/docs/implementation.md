@@ -1,187 +1,111 @@
 # File 服务实现说明
 
-版本：v0.1
+版本：v0.2
 日期：2026-06-29
-范围：`services/file/` 的 Go service 结构、配置、HTTP、repository、对象存储、迁移、日志和测试落地约定
+范围：`services/file/` 当前实现、契约对齐、缺口和后续实现约束
 
 ## 1. 文档定位
 
-本文补充 [`File 服务接口文档`](../README.md) 和 [`File 服务数据模型文档`](data-models.md) 中的实现约束，确保 `services/file/` 后续代码按 [`docs/architecture/technology-decisions.md`](../../../architecture/technology-decisions.md) 的最新技术基线推进。
+本文档描述 `file` 当前实现状态和后续实现约束。它只补充服务 README、OpenAPI、架构和技术选型文档，不覆盖这些上游契约。
 
-机器可读内部 API 契约见 [`services/file/api/openapi.yaml`](../../../../services/file/api/openapi.yaml)。前端公开契约仍以 [`docs/services/gateway/api/openapi.yaml`](../../gateway/api/openapi.yaml) 为准。
+权威来源：
 
-## 2. 当前实现状态
-
-当前 `services/file/` 是可运行 Go module，已具备：
-
-- `GET /healthz`
-- `GET /readyz`
-- knowledge-document 形态的 MVP 兼容路由
-- memory repository
-- memory object store
-- `internal/config`、`internal/http`、`internal/service`、`internal/repository` 和 `internal/platform/storage` 分层雏形
-
-这些兼容路由只服务当前联调，不继续承载新增业务字段。目标内部资源是：
-
-```text
-POST   /internal/v1/files
-GET    /internal/v1/files/{fileId}
-DELETE /internal/v1/files/{fileId}
-GET    /internal/v1/files/{fileId}/content
-```
-
-## 3. 目标目录约定
-
-后续扩展继续保持服务本地边界：
-
-```text
-services/file/
-  api/
-    openapi.yaml
-  cmd/server/
-  internal/
-    config/
-    http/
-    service/
-    repository/
-      queries/
-      sqlc/
-    platform/
-      storage/
-        minio/
-  migrations/
-  sqlc.yaml
-```
-
-`internal/http` 不直接 import MinIO SDK、`sqlc` 生成包或其他服务的 `internal/` 包。handler 调用 service/use-case，service 调用 repository 和 object store port。
-
-## 4. 配置约定
-
-配置在 `internal/config` 使用 `envconfig` 风格结构化加载。可以先手写解析，但必须有类型化 struct、默认值、必填校验和脱敏输出。
-
-| 变量 | 默认值 | 说明 |
+| 类型 | 权威来源 | 本文档关系 |
 | --- | --- | --- |
-| `FILE_HTTP_ADDR` | `:8082` | HTTP listen address。 |
-| `FILE_SHUTDOWN_TIMEOUT` | `10s` | 优雅退出超时。 |
-| `FILE_MAX_UPLOAD_BYTES` | `33554432` | multipart 上传大小上限。 |
-| `FILE_STORAGE_BACKEND` | `memory` | 当前支持 `memory` 和符合 `ObjectStore` 接口的 `local` adapter；生产应使用 `minio` 或等价持久对象存储。 |
-| `FILE_LOCAL_STORAGE_DIR` | `.file-storage` | `FILE_STORAGE_BACKEND=local` 时的本地对象存储根目录。 |
-| `FILE_DATABASE_URL` | 无 | PostgreSQL DSN；启用 PostgreSQL repository 时必填。 |
-| `FILE_MINIO_ENDPOINT` | 无 | MinIO endpoint。 |
-| `FILE_MINIO_ACCESS_KEY` | 无 | MinIO access key，禁止日志输出。 |
-| `FILE_MINIO_SECRET_KEY` | 无 | MinIO secret key，禁止日志输出。 |
-| `FILE_MINIO_BUCKET` | 无 | File Service 拥有的 bucket。 |
-| `FILE_MINIO_USE_SSL` | `false` | 是否使用 HTTPS 连接 MinIO。 |
-| `FILE_LOG_LEVEL` | `info` | `slog` 日志级别。 |
-| `FILE_REDIS_ADDR` | 无 | 仅当对象清理 worker 使用 `asynq` 时需要。 |
+| 服务公开说明 | `docs/services/file/README.md` | 只能补充，不能覆盖 |
+| 服务 OpenAPI | `services/file/api/openapi.yaml` | 只能跟随，不能另起契约 |
+| Gateway 公开契约 | `docs/services/gateway/api/openapi.yaml` | 前端稳定契约以 gateway 为准 |
+| 服务边界 | `docs/architecture/service-boundaries.md` | 必须遵守 |
+| 技术基线 | `docs/architecture/technology-decisions.md` | 必须跟随 |
+| 代码实现 | `services/file/` | 本文档记录当前状态和差距 |
 
-配置校验失败时服务启动失败，不在运行时静默降级到不持久的存储后端。脱敏配置输出只能显示字段是否配置，不能显示 secret、DSN 密码或对象存储凭据。
+凡是本文档与上表文件冲突，以上游文件为准；发现冲突时，在“文档与实现出入”中记录并生成回写或实现任务。
 
-## 5. HTTP 与中间件
+## 2. 当前结论
 
-HTTP 路由、统一 envelope、错误响应和 request id 规则以 [`docs/architecture/frontend-backend-contract.md`](../../../architecture/frontend-backend-contract.md) 和 [`docs/architecture/technology-decisions.md`](../../../architecture/technology-decisions.md) 为准。本文只记录 File Service 的服务内补充要求。
+| 项目 | 状态 | 说明 |
+| --- | --- | --- |
+| 文档状态 | active | README、数据模型和内部 OpenAPI 已存在。 |
+| 代码状态 | partial | Go service、`/internal/v1/files/**`、兼容 document 路由、memory/local object store、file_objects migration 已存在。 |
+| 契约对齐 | drifted | 内部 OpenAPI 只声明 `/internal/v1/files/**`；代码还暴露 knowledge-document 兼容路由。README 提到 PostgreSQL/MinIO 目标，但 runtime 仍固定 memory repository。 |
+| 数据持久化 | memory / local mixed | metadata runtime 使用 memory repository；object bytes 可用 memory 或 local adapter。PostgreSQL repository 文件存在但未接入 `cmd/server`。 |
+| 测试状态 | partial | `go test ./...` 可覆盖 service、handler、local storage 和 config；缺少 PostgreSQL/MinIO 集成测试。 |
+| 建议动作 | 补实现 / 回写文档 | 接入 PostgreSQL repository、补 MinIO adapter、明确兼容路由退出计划，并回写运行配置说明。 |
 
-中间件顺序建议：
+## 3. 已实现
 
-```text
-request id -> recover -> timeout -> body limit -> internal auth -> access log -> handler
-```
+| 能力 | 代码位置 | 契约来源 | 验证方式 | 备注 |
+| --- | --- | --- | --- | --- |
+| 健康检查 | `services/file/internal/http/server.go` | `services/file/api/openapi.yaml` | `cd services/file && go test ./...` | `GET /healthz`、`GET /readyz`。 |
+| 基础文件创建 | `services/file/internal/http/server.go`、`services/file/internal/service/service.go` | `services/file/api/openapi.yaml` | `TestFileCreateGetContentDeleteFlow` | `POST /internal/v1/files` 接收 multipart，计算或校验 SHA-256。 |
+| 基础文件元数据读取 | `services/file/internal/service/service.go` | `services/file/api/openapi.yaml` | `TestFileCreateGetContentDeleteFlow` | 返回 file ID、文件名、content type、大小、checksum，不返回 object key。 |
+| 基础文件内容读取 | `services/file/internal/http/server.go` | `services/file/api/openapi.yaml` | `TestFileCreateGetContentDeleteFlow` | 成功时返回二进制流，不包 JSON envelope。 |
+| 基础文件删除 | `services/file/internal/service/service.go` | `docs/services/file/README.md` | `TestDeleteFileHidesMetadataAndContent` | 删除后 metadata/content 读取返回 not found。 |
+| 上传校验 | `services/file/internal/service/service.go`、`services/file/internal/http/server_test.go` | `docs/services/file/README.md` | handler/service tests | 覆盖缺少文件、空文件、超限、checksum 格式和 mismatch。 |
+| local object store | `services/file/internal/platform/storage/local.go` | `docs/services/file/README.md` | `TestLocalStorePutGetDelete` | 可用于本地持久化 smoke；metadata 仍非持久。 |
+| knowledge-document 兼容路由 | `services/file/internal/http/server.go`、`services/file/internal/service/document.go` | 历史联调兼容，不是目标内部 OpenAPI | `TestUploadGetPatchAndContent` | 仍暴露 `/internal/v1/knowledge-bases/{knowledgeBaseId}/documents` 等。 |
+| file_objects migration | `services/file/migrations/0001_create_file_objects.sql` | `docs/services/file/docs/data-models.md` | 需手工 goose apply | migration 存在；runtime 尚未接入。 |
 
-要求：
+## 4. 未实现
 
-- 文件流成功响应不包 JSON envelope，失败仍返回统一错误响应。
-- `X-Request-Id` 应进入响应头、响应体、日志和内部下游调用。
-- 上传文件名写入 `Content-Disposition` 前必须安全转义。
+| 缺口 | 文档来源 | 影响范围 | 建议任务 |
+| --- | --- | --- | --- |
+| `cmd/server` 未根据 `FILE_DATABASE_URL` 接入 PostgreSQL repository | `docs/services/file/README.md`、`docs/services/file/docs/data-models.md` | DB / API / deploy | 待确认：接入持久 metadata runtime。 |
+| PostgreSQL repository 的 legacy document 方法仍返回 `ErrConflict` / `ErrNotFound` | `services/file/internal/repository/postgres.go` | API / DB | 待确认：删除兼容业务方法或显式迁移到 owner service。 |
+| MinIO adapter 未实现 | `docs/architecture/service-boundaries.md`、`docs/services/file/README.md` | Object storage / deploy | 待确认：实现 `internal/platform/storage/minio`。 |
+| 对象清理 worker / asynq 未实现 | `docs/services/file/README.md`、`docs/services/file/docs/data-models.md` | worker / Redis | 待确认：按 `file:object:purge` 增加清理任务。 |
+| 内部服务 token 鉴权未落地 | `docs/services/file/README.md` | API / security | 待确认：明确 `X-Service-Token` 或等价服务认证。 |
+| `sqlc` query 目录和生成代码未落地 | `docs/architecture/technology-decisions.md` | DB / CI | 待确认：补 queries 和生成产物，或回写当前手写 SQL 过渡状态。 |
 
-## 6. Repository 与迁移
+## 5. 文档与实现出入
 
-PostgreSQL 访问使用 `pgx` + `sqlc`。不使用 ORM。
+| 出入点 | 文档要求 | 当前实现 | 风险 | 建议处理 |
+| --- | --- | --- | --- | --- |
+| runtime metadata 后端 | README 和数据模型把 PostgreSQL 作为目标权威来源 | `cmd/server` 固定 `repository.NewMemoryRepository()` | 重启丢失 metadata，无法支撑真实联调 | 修改代码接入 PostgreSQL；在 README 标明当前 runtime 状态直到完成。 |
+| 生产对象存储 | 文档要求 File Service 封装 MinIO | 仅 memory/local adapter | 无法验证 bucket、object key、etag、version id、MinIO 错误映射 | 修改代码实现 MinIO adapter。 |
+| 服务 OpenAPI 与代码路由 | `services/file/api/openapi.yaml` 只声明 `/internal/v1/files/**` | 代码还暴露 knowledge-document 兼容路由 | 调用方可能继续依赖错误 owner 边界 | 保留短期兼容但在 implementation 中登记退出条件；不要扩展兼容路由。 |
+| 配置说明 | 早期实现说明列出 `FILE_DATABASE_URL`、MinIO、Redis 等 | `internal/config` 只解析 HTTP、大小、memory/local storage 和 shutdown | 部署按文档配置仍不会启用 PostgreSQL/MinIO | 回写运行配置，未落地项放在缺口。 |
+| file reference 边界 | File 不保存业务字段 | 兼容 document 路由仍保存 `knowledgeBaseId` 和 tags | 与 owner service 边界冲突 | 迁移 knowledge 上传链路到 `/internal/v1/files`，逐步删除兼容业务字段。 |
 
-约定：
+## 6. MVP / mock / memory backend / 占位
 
-- `services/file/sqlc.yaml` 由 File Service 自己维护。
-- SQL 文件放在 `services/file/internal/repository/queries/`。
-- 生成代码放在 `services/file/internal/repository/sqlc/`。
-- `sqlc` 生成代码只被 repository 适配层使用，不进入 handler。
-- 事务由 service/use-case 层发起；repository 接收 `pgx.Tx` 或抽象 querier。
-- SQL 必须显式列名，不使用 `SELECT *`。
-- 用户输入只能通过参数绑定进入 SQL。
+| 项目 | 当前用途 | 退出条件 | 关联任务 |
+| --- | --- | --- | --- |
+| memory repository | handler tests 和早期本地联调 | PostgreSQL repository 接入 runtime 且测试覆盖 | 待确认 |
+| memory object store | 单元测试和无文件系统本地运行 | local/MinIO smoke 成为默认验证路径 | 待确认 |
+| local object store | 本地持久化 smoke | MinIO adapter 可在 Compose/部署中使用 | 待确认 |
+| knowledge-document 兼容路由 | 兼容早期 knowledge/file 联调 | Knowledge 只调用 `/internal/v1/files/**` 且无调用方依赖旧路由 | 待确认 |
 
-迁移使用 `goose`，文件放在 `services/file/migrations/`。首批迁移建议从 `file_objects` 开始，再按需要增加 `file_deletion_tasks` 和 `file_object_events`。第一阶段允许 forward-only migration；如果提供 down migration，必须在本地和 CI 可验证。
+## 7. 运行与配置
 
-## 7. 对象存储
+| 项目 | 当前状态 | 缺口 |
+| --- | --- | --- |
+| 启动命令 | `cd services/file && go run ./cmd/server` | 无 Dockerfile / Compose。 |
+| 环境变量 | `FILE_HTTP_ADDR`、`FILE_MAX_UPLOAD_BYTES`、`FILE_STORAGE_BACKEND`、`FILE_LOCAL_STORAGE_DIR`、`FILE_SHUTDOWN_TIMEOUT` | `FILE_DATABASE_URL`、MinIO、Redis、service token 尚未被 runtime 使用。 |
+| PostgreSQL / migration | `migrations/0001_create_file_objects.sql` 和 `sqlc.yaml` 存在；repository 有部分 file object SQL | 未接入 runtime；无 query 目录 / sqlc 生成代码；缺集成测试。 |
+| Redis / queue | 未使用 | 清理 worker 未实现。 |
+| Object storage / vector store / AI provider | memory/local object store | MinIO adapter 未实现；File 不涉及 vector/AI provider。 |
 
-对象存储使用官方 MinIO Go SDK，封装在 `internal/platform/storage/minio` 的 object store adapter 内。
+## 8. 测试与验证
 
-实现要求：
+| 验证项 | 命令或步骤 | 当前结果 | 缺口 |
+| --- | --- | --- | --- |
+| 单元测试 | `cd services/file && go test ./...` | pass（本次执行） | 不覆盖 MinIO。 |
+| 集成测试 | goose apply + PostgreSQL repository tests | missing | 需要真实 DB 或测试容器。 |
+| 契约测试 | handler tests against `/internal/v1/files/**` | partial | 未从 OpenAPI 自动校验。 |
+| 手工 smoke | `FILE_STORAGE_BACKEND=local go run ./cmd/server` 后上传/读取 | not run | 需要补脚本或 README smoke。 |
 
-- object key 由 File Service 服务端生成，不能直接使用用户上传文件名。
-- bucket、object key、etag、version id、内部 URL 和 MinIO 错误详情不得返回给前端公开 API。
-- owner service 只保存 `file_ref` 和必要的展示快照，例如文件名、大小和 content type。
-- checksum 可由调用方传入，也可由 File Service 计算；如果两者都存在，必须校验一致。
-- memory object store 只用于单元测试和早期本地联调，不代表持久化能力。
-- local object store 可用于本地持久化 smoke test，仍不得把本地路径或 object key 返回给 handler 或 owner service client。
+## 9. 建议任务
 
-## 8. 删除与清理
+| 任务 | 类型 | 优先级 | 依据 | 说明 |
+| --- | --- | --- | --- | --- |
+| 接入 PostgreSQL file repository | 新任务 | P0 | `cmd/server` 与数据模型不一致 | 让 file metadata 成为持久事实来源。 |
+| 实现 MinIO object store adapter | 新任务 | P0 | 服务边界要求 File 封装对象存储 | 使用官方 SDK，禁止向外泄露 object key。 |
+| 清理 knowledge-document 兼容路由 | 修改既有任务 | P1 | owner service 边界 | 等 knowledge 已完全使用 `/internal/v1/files/**` 后删除或隐藏旧路由。 |
+| 增加 File 契约/集成测试 | 新任务 | P1 | 当前测试仅覆盖 memory/local | 覆盖 OpenAPI、PostgreSQL migration、MinIO 错误映射。 |
 
-删除流程以 PostgreSQL 状态为准：
+## 10. 最近检查记录
 
-```text
-available -> delete_requested -> purging -> purged
-                         \-> failed
-```
-
-`DELETE /internal/v1/files/{fileId}` 至少应保证普通读取不再返回该文件。物理对象删除可以同步执行，也可以创建 `file_deletion_tasks` 并由 `asynq` worker 执行。若使用队列，任务类型使用：
-
-```text
-file:object:purge
-```
-
-asynq payload 只包含 `requestId`、`jobId`、`fileId`、`callerService` 等可追踪字段，不包含 bucket、object key、内部 URL、secret 或文件内容。
-
-## 9. 日志、指标和安全
-
-日志使用 `log/slog`，生产默认 JSON 输出。
-
-建议日志字段：
-
-| 字段 | 说明 |
-| --- | --- |
-| `service` | 固定 `file`。 |
-| `request_id` | 请求追踪 ID。 |
-| `operation` | `create_file`、`get_file`、`delete_file`、`get_file_content` 等。 |
-| `status` | `succeeded` 或 `failed`。 |
-| `file_id` | 内部 file ID，可记录。 |
-| `caller_service` | 调用方服务。 |
-| `content_type` | 文件 MIME type。 |
-| `size_bytes` | 文件大小。 |
-
-禁止记录：
-
-- object key、bucket 内部路径、预签名 URL、MinIO access key 或 secret key
-- bearer token、服务间 token、数据库连接串
-- 原始文件内容、文档全文、prompt 或 provider 原始响应体
-- 未脱敏的存储错误详情
-
-指标第一阶段采用 Prometheus 风格 endpoint。指标 label 不得包含用户输入正文、文件名、object key、token、API key 指纹或原始错误信息。
-
-## 10. 测试要求
-
-使用 Go 标准 `testing` 和 `httptest`。
-
-最低覆盖建议：
-
-- health/readiness handler。
-- multipart 创建文件：缺少文件、空文件、超出大小、checksum 非法、成功创建。
-- metadata 读取：存在、删除后不可读、不存在。
-- content 读取：成功返回二进制流和响应头；失败返回统一错误 envelope。
-- 删除流程：状态流转、幂等行为和物理清理失败摘要。
-- repository：迁移后 query 的约束、索引相关查询和状态更新。
-- storage adapter：MinIO 错误映射、checksum 校验和 context timeout。
-
-接口契约变化必须同步更新：
-
-- [`services/file/api/openapi.yaml`](../../../../services/file/api/openapi.yaml)
-- [`docs/services/file/README.md`](../README.md)
-- [`docs/services/file/docs/data-models.md`](data-models.md)
-- [`docs/services/gateway/api/openapi.yaml`](../../gateway/api/openapi.yaml)，仅当公开契约受影响时
+| 日期 | 检查人/工具 | 代码基准 | 结论 |
+| --- | --- | --- | --- |
+| 2026-06-29 | Codex goal | `eddf917` + working tree | File 已有可用基础文件 API 和本地存储雏形，但生产持久化、MinIO、service token 和兼容路由退出仍未完成。 |

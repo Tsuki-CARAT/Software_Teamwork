@@ -10,7 +10,7 @@ RESTful 路径、统一响应和错误 envelope 以 [前后端集成契约](../.
 | --- | --- |
 | [API 契约](docs/api-contract.md) | 知识管理公开接口、权限、错误码和跨服务边界。 |
 | [数据模型](docs/data-models.md) | Knowledge Service 拥有的 PostgreSQL、Qdrant 和运行时逻辑模型。 |
-| [实现说明](docs/implementation.md) | 当前 Go service baseline、内部接口和本地运行说明。 |
+| [实现说明](docs/implementation.md) | 当前代码实现、契约对齐、缺口、临时后端和最近检查记录。 |
 
 ## 技术基线
 
@@ -160,12 +160,9 @@ Knowledge 相关接口使用项目统一错误码：
 
 错误响应不得包含 SQL、object key、MinIO 内部路径、原始向量、prompt、API key、token 或堆栈。
 
-## 后续实现建议
+## 实现状态
 
-后续落地 gateway 代理和 Knowledge Service 内部接口时，需要确认：
-
-- Gateway 到 Knowledge Service 的内部 base URL、超时、重试和错误映射。
-- `POST /api/v1/knowledge-bases/{knowledgeBaseId}/documents` 上传成功后，Knowledge 如何保存 file reference、创建 ingestion job 和处理 file 写入失败补偿。
-- 知识库策略变更后是否自动创建 reprocessing job，以及 job 资源是否进入 gateway OpenAPI。
-- OCR、PPT/PPTX、视觉多模态 chunk、rerank、运行时模型配置等能力进入公开 API 的版本策略。
-- 契约测试覆盖 active knowledge operations 的 response envelope、字段命名、错误码和 request id。
+当前代码实现、临时后端、文档与实现出入和建议任务统一维护在
+[`docs/implementation.md`](docs/implementation.md)。本文档只保留 Knowledge
+Service 的职责边界、公开资源语义和稳定业务规则；实现缺口不在 README
+重复维护。

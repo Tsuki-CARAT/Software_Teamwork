@@ -9,7 +9,7 @@ RESTful 路径、统一响应和错误 envelope 以 [前后端集成契约](../.
 | 文档 | 说明 |
 | --- | --- |
 | [数据模型](docs/data-models.md) | File Service 拥有的基础文件对象元数据、对象存储引用和清理模型。 |
-| [实现说明](docs/implementation.md) | File Service 按技术选型基线落地 `pgx/sqlc`、`goose`、`ServeMux`、`slog`、MinIO SDK 和测试的约定。 |
+| [实现说明](docs/implementation.md) | 当前代码实现、契约对齐、缺口、临时后端和最近检查记录。 |
 | [服务 OpenAPI](../../../services/file/api/openapi.yaml) | File Service 内部 `/internal/v1/files/**` API 契约；不是前端公开契约。 |
 
 ## 技术基线
@@ -209,49 +209,8 @@ File 相关接口使用项目统一错误码：
 - 上传大小、内容类型白名单、危险文件扫描和租户配额属于实现前必须明确的安全策略；业务配额归属仍由 owner service 持有。
 - `file` 服务可以记录文件域内结构化日志和 request id，但不拥有全局审计日志查询能力；后续如审计日志独立成服务，file/domain 服务应只对接审计事件生产或查询授权契约。
 
-## 后续实现建议
+## 实现状态
 
-当前 `services/file/` 已有分层雏形，后续扩展应继续保持服务本地边界并收敛到以下目标结构：
-
-```text
-services/file/
-├── api/
-│   └── openapi.yaml
-├── cmd/server/
-├── internal/
-│   ├── config/
-│   ├── http/
-│   ├── service/
-│   ├── repository/
-│   │   ├── queries/
-│   │   └── sqlc/
-│   ├── platform/
-│   │   └── storage/
-│   │       └── minio/
-├── migrations/
-├── sqlc.yaml
-└── README.md
-```
-
-实现前需要补齐或确认：
-
-- 将当前 knowledge-document MVP 兼容路由迁移为基础 `/internal/v1/files/**` 资源路由。
-- 按 `pgx` + `sqlc` 补齐 `services/file/sqlc.yaml`、query 文件、生成代码目录和 repository 适配层。
-- 按 `goose` 补齐 `services/file/migrations/` 下的真实建表迁移，并在 CI 中验证迁移可应用。
-- 使用官方 MinIO Go SDK 增加生产对象存储适配器；当前 memory adapter 只能用于测试和早期本地联调，local adapter 仅用于本地持久化 smoke test。
-- 按 `envconfig` 风格补齐 PostgreSQL、MinIO、HTTP、上传限制、日志和 shutdown 配置校验。
-- 接入 `slog` JSON 日志、request id 贯穿和基础 Prometheus 风格指标。
-- 最大上传大小、允许文件类型、空文件和重复文件策略。
-- 文件元数据表结构、索引、软删除和物理清理策略。
-- MinIO bucket 命名、object key 生成规则和本地开发配置。
-- 物理删除是否同步执行，或通过 `asynq` `file:object:purge` 任务异步清理；无论执行方式如何，PostgreSQL 状态必须可追溯。
-- `knowledge` 上传文档时的内部 file reference 保存、ingestion job 创建和失败补偿由 `knowledge` 自己实现。
-- `document` 复用 file 服务时的 report template、material、report file 到 file reference 映射由 `document` 自己实现。
-- 是否支持秒传、checksum 去重、断点续传、预签名内容 URL 或 Range 内容读取。
-
-如果上述决策影响公开字段、错误码或状态码，必须同步更新：
-
-- [`docs/services/gateway/api/openapi.yaml`](../gateway/api/openapi.yaml)
-- [`docs/architecture/frontend-backend-contract.md`](../../architecture/frontend-backend-contract.md)
-- [`docs/architecture/service-boundaries.md`](../../architecture/service-boundaries.md)
-- 本文档
+当前代码实现、临时后端、文档与实现出入和建议任务统一维护在
+[`docs/implementation.md`](docs/implementation.md)。本文档只保留 File Service
+的职责边界、内部契约和稳定业务规则；实现缺口不在 README 重复维护。

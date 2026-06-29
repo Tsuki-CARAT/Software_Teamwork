@@ -1,13 +1,14 @@
 # AI Gateway Service
 
 AI Gateway is an internal backend service for runtime model profiles, provider
-credential metadata, and future OpenAI-compatible model calls. Frontend clients
+credential metadata, and OpenAI-compatible model calls. Frontend clients
 must call the public gateway, not this service directly.
 
 Authoritative contract docs:
 
 - `docs/services/ai-gateway/README.md`
 - `docs/services/ai-gateway/docs/data-models.md`
+- `docs/services/ai-gateway/docs/provider-adapters.md`
 - `docs/services/ai-gateway/api/openapi.yaml`
 
 ## Environment
@@ -34,5 +35,5 @@ secret with a managed secret reference in a later slice.
 ```bash
 go test ./...
 go build ./cmd/server
-go run github.com/pressly/goose/v3/cmd/goose@v3.27.1 -dir migrations postgres "$DATABASE_URL" up
+go run github.com/pressly/goose/v3/cmd/goose@v3.27.1 -dir migrations postgres "$AI_GATEWAY_DATABASE_URL" up
 ```

@@ -7,6 +7,7 @@
 - [Gateway 数据模型文档](docs/data-models.md)
 - [Gateway OpenAPI 契约](api/openapi.yaml)
 - [Gateway Active API Owner Map](docs/active-api-owner-map.md)
+- [Gateway 实现说明](docs/implementation.md)
 - [技术选型基线](../../architecture/technology-decisions.md)
 
 ## 设计原则

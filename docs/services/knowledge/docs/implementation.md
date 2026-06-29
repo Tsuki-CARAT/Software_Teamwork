@@ -1,330 +1,109 @@
 # Knowledge Service 实现说明
 
-版本：v0.3
-日期：2026-06-28
-范围：`services/knowledge/` Go 微服务基线、工程技术选型、旧 Python 原型移除状态、与上游契约的对齐说明
+版本：v0.4
+日期：2026-06-29
+范围：`services/knowledge/` 当前实现、契约对齐、缺口和后续实现约束
 
 ## 1. 文档定位
 
-本文档描述 `services/knowledge/` 当前本地实现和迁移状态，不单独定义 gateway 公开契约，也不替代需求说明或团队级技术选型基线。
+本文档描述 `knowledge` 当前实现状态和后续实现约束。它只补充服务 README、OpenAPI、架构和技术选型文档，不覆盖这些上游契约。
 
-权威来源如下：
+权威来源：
 
 | 类型 | 权威来源 | 本文档关系 |
 | --- | --- | --- |
-| 前端到 gateway 的稳定公开 API | [`docs/services/gateway/api/openapi.yaml`](../../gateway/api/openapi.yaml) | 只能跟随，不能覆盖 |
-| gateway 职责、RESTful 资源路径、response envelope | [`docs/services/gateway/README.md`](../../gateway/README.md)、[`docs/architecture/frontend-backend-contract.md`](../../../architecture/frontend-backend-contract.md) | 只能引用，不能另起规范 |
-| 服务边界 | [`docs/architecture/service-boundaries.md`](../../../architecture/service-boundaries.md) | Knowledge Service 必须遵守 |
-| File Service 上传和原文件边界 | [`docs/services/file/README.md`](../../file/README.md) | Knowledge Service 不抢原文件 owner |
-| 技术选型基线 | [`docs/architecture/technology-decisions.md`](../../../architecture/technology-decisions.md) | Knowledge Service 的 Go、数据库、迁移、日志、配置、队列和 Qdrant 选型必须跟随 |
-| 服务本地实现契约 | [`services/knowledge/api/openapi.yaml`](../../../../services/knowledge/api/openapi.yaml)、[`services/knowledge/README.md`](../../../../services/knowledge/README.md) | 描述 `/internal/v1/**` 的 service-local contract |
+| 服务公开说明 | `docs/services/knowledge/README.md` | 只能补充，不能覆盖 |
+| 服务 OpenAPI | `services/knowledge/api/openapi.yaml` | 只能跟随，不能另起契约 |
+| Gateway 公开契约 | `docs/services/gateway/api/openapi.yaml` | 前端稳定契约以 gateway 为准 |
+| 服务边界 | `docs/architecture/service-boundaries.md` | 必须遵守 |
+| 技术基线 | `docs/architecture/technology-decisions.md` | 必须跟随 |
+| 代码实现 | `services/knowledge/` | 本文档记录当前状态和差距 |
 
-凡是本文档与上表文件冲突，以上游文件为准；需要进入前端稳定契约的内容，必须先由 gateway 相关文档和 `docs/services/gateway/api/openapi.yaml` 接收。
+凡是本文档与上表文件冲突，以上游文件为准；发现冲突时，在“文档与实现出入”中记录并生成回写或实现任务。
 
 ## 2. 当前结论
 
-Knowledge Service 已从 Python/FastAPI 原型迁回 README 规划的 Go 微服务方向，旧 Python 原型文件已从 `services/knowledge/` 移除。当前 Go 基线位于：
-
-```text
-services/knowledge/
-├── go.mod
-├── cmd/server/main.go
-├── internal/config/
-├── internal/http/
-├── internal/service/
-├── internal/repository/
-├── internal/platform/
-├── api/openapi.yaml
-├── migrations/
-├── Dockerfile
-└── README.md
-```
-
-当前 Go 实现已超过最初运行骨架，服务本地已经具备以下内部能力：
-
-```http
-GET /healthz
-GET /readyz
-GET /internal/v1/knowledge-bases
-POST /internal/v1/knowledge-bases
-GET /internal/v1/knowledge-bases/{knowledgeBaseId}
-PATCH /internal/v1/knowledge-bases/{knowledgeBaseId}
-DELETE /internal/v1/knowledge-bases/{knowledgeBaseId}
-GET /internal/v1/knowledge-bases/{knowledgeBaseId}/documents
-POST /internal/v1/knowledge-bases/{knowledgeBaseId}/documents
-GET /internal/v1/documents/{documentId}
-```
-
-`services/knowledge/app/`、`requirements.txt` 和 `scripts/ingest_folder.sh` 已移除。旧 Python/FastAPI 原型不再作为 runtime 或接口契约来源；后续能力继续在 Go 的 `internal/` 分层内迭代。
-
-## 3. 服务边界
-
-### 3.1 Knowledge Service 负责
-
-- 知识库元数据。
-- 文档处理状态。
-- 文档解析、切片、embedding。
-- Qdrant collection 和 point 写入。
-- chunk 查询。
-- retrieval policy 和 retrieval query。
-- 返回可溯源的检索结果。
-
-### 3.2 Knowledge Service 不负责
-
-- 用户登录、认证、RBAC。该部分归 `auth` 和 `gateway`。
-- 底层对象存储实现。该部分归 `file`；知识库文档上传公开资源、原文件内容入口和处理状态归 `knowledge`。
-- QA 会话、LLM 回答生成、SSE 问答事件。该部分归 `qa`。
-- 报告生成、DOCX 导出。该部分归 `document`。
-- gateway response envelope 的最终公开归一化。该部分归 `gateway`。
-
-### 3.3 File 与 Knowledge 的边界
-
-上游当前已稳定的公开上传入口是：
-
-```http
-POST /api/v1/knowledge-bases/{knowledgeBaseId}/documents
-```
-
-在 gateway OpenAPI 中，该 `POST` 由 `knowledge` 拥有：Knowledge Service 负责创建知识库文档资源、保存内部 file reference、维护入库状态、切片、向量索引和检索；File Service 只提供内部基础文件对象保存和读取能力。
-
-后续正式联调建议采用以下任一内部 file 调用方式，具体以 gateway/file/knowledge 三方确认的实现设计为准：
-
-- Knowledge 接收 gateway 转发的 multipart 请求后，先调用 File Service `/internal/v1/files` 保存原文件，再创建文档记录和 ingestion job。
-- Knowledge 先创建待处理文档记录，再调用 File Service 保存原文件；失败时按文档状态和补偿任务处理。
-
-无论采用哪种方式，Knowledge Service 只把 file reference 作为内部字段保存，不把 file 内部 ID、MinIO object key 或内部 URL 暴露给前端作为权限依据。
-
-## 4. 工程技术选型
-
-Knowledge Service 跟随 [技术选型基线](../../../architecture/technology-decisions.md)。本文只记录服务本地实现状态：
-
-- Redis 队列用于入库、重处理和删除清理任务；Redis 不作为长期业务事实来源。
-- Qdrant 当前使用面较窄，短期保持轻量 HTTP client；接口扩张后再评估官方 client 或生成 client。
-- 配置启动时校验必填值和枚举值。
-- 服务本地 integration tests 覆盖 repository、service 和 HTTP 适配行为。
-
-确需偏离通用技术选型时，必须先更新技术决策并在本文说明原因。
-
-## 5. 当前 Go 实现
-
-### 5.1 运维接口
-
-```http
-GET /healthz
-GET /readyz
-```
-
-健康检查 JSON 响应使用项目统一 envelope，格式见 [前后端集成契约](../../../architecture/frontend-backend-contract.md)；本文不重复定义通用响应结构。
-
-当前 readiness 返回本地配置摘要，包括 service version、environment、storage backend、embedding provider、embedding dimension 和 Qdrant collection 名称。它不检查 PostgreSQL、Redis、Qdrant 或 MinIO 连通性；这些会在对应 platform client 接入后逐步增强。
-
-### 5.2 配置
-
-| Variable | Default | Description |
+| 项目 | 状态 | 说明 |
 | --- | --- | --- |
-| `KNOWLEDGE_HTTP_ADDR` | `:8000` | HTTP listen address. |
-| `KNOWLEDGE_SERVICE_VERSION` | `0.3.0` | Service version shown by readiness. |
-| `KNOWLEDGE_ENV` | `local` | Runtime environment label. |
-| `KNOWLEDGE_STORAGE_BACKEND` | `memory` | Metadata backend. Supported values: `memory`, `postgres`. |
-| `DATABASE_URL` | unset | PostgreSQL connection string required when `KNOWLEDGE_STORAGE_BACKEND=postgres`. |
-| `FILE_SERVICE_BASE_URL` | unset | File Service base URL used for document upload storage and ingestion source reads. |
-| `KNOWLEDGE_REDIS_ADDR` | unset | Redis/asynq endpoint used to enqueue ingestion tasks; PostgreSQL remains the durable job state authority. |
-| `KNOWLEDGE_MAX_UPLOAD_BYTES` | `33554432` | Multipart upload limit in bytes. |
-| `KNOWLEDGE_SERVICE_TOKEN` | unset | Optional internal service token forwarded when Knowledge calls File Service. |
-| `KNOWLEDGE_SHUTDOWN_TIMEOUT` | `10s` | Graceful shutdown timeout. |
-| `EMBEDDING_PROVIDER` | `local_hashing` | Embedding provider label. |
-| `EMBEDDING_MODEL` | `local_hashing` | Embedding model label. |
-| `EMBEDDING_DIMENSION` | `384` | Embedding vector dimension. |
-| `QDRANT_URL` | unset | Optional Qdrant REST base URL. When unset, service uses an in-memory vector index. |
-| `QDRANT_COLLECTION` | `knowledge_chunks` | Qdrant collection name for vector indexing and retrieval. |
+| 文档状态 | active | README、公开草案、数据模型、内部 OpenAPI 和实现说明存在。 |
+| 代码状态 | partial | Go service 已实现知识库 CRUD、文档列表/上传/详情、File Service handoff、PostgreSQL repository 和 asynq enqueue。 |
+| 契约对齐 | drifted | Gateway OpenAPI 已声明 chunks、content、knowledge-queries、parser configs；gateway route matrix 将其中多个 Knowledge active path 标为 `NotImplemented`。 |
+| 数据持久化 | postgres / Redis queue | runtime 使用 PostgreSQL；上传后投递 asynq ingestion task。Qdrant 和 chunk/vector 写入未落地。 |
+| 测试状态 | partial | 单元和 handler tests 覆盖 CRUD、权限、上传补偿和 queue handoff；缺端到端入库、Qdrant、检索测试。 |
+| 建议动作 | 补实现 / 回写文档 | 优先补文档内容/切片/检索链路，或回写公开契约为阶段性未实现。 |
 
-## 6. RESTful 对齐原则
+## 3. 已实现
 
-RESTful 规范由 `docs/services/gateway/api/openapi.yaml`、`docs/services/gateway/README.md`、`docs/architecture/frontend-backend-contract.md` 和 `docs/architecture/service-boundaries.md` 维护。Knowledge Service 只跟随这些规则：所有稳定 path 必须是资源路径，由 HTTP method 表达动作。
+| 能力 | 代码位置 | 契约来源 | 验证方式 | 备注 |
+| --- | --- | --- | --- | --- |
+| 健康检查 | `services/knowledge/internal/http/server.go` | `services/knowledge/api/openapi.yaml` | `cd services/knowledge && go test ./...` | `GET /healthz`、`GET /readyz`。 |
+| 知识库 CRUD | `services/knowledge/internal/http/server.go`、`internal/service/service.go` | `services/knowledge/api/openapi.yaml` | `TestKnowledgeBaseCRUDAndSoftDelete` | 支持列表、创建、详情、更新、软删除。 |
+| 用户上下文和权限校验 | `services/knowledge/internal/service/service.go` | `docs/services/knowledge/README.md` | service tests | 依赖 gateway 注入的 user/permission context。 |
+| 文档列表和详情 | `services/knowledge/internal/http/server.go` | `services/knowledge/api/openapi.yaml` | `TestDocumentListAndDetailExcludeDeletedKnowledgeBase` | 只覆盖文档元数据/状态。 |
+| 文档上传 handoff | `services/knowledge/internal/platform/fileclient/client.go`、`internal/service/service.go` | `docs/services/knowledge/README.md`、`docs/services/file/README.md` | `TestUploadDocumentCreatesDocumentJobAndQueuesIngestion` | multipart 上传后调用 File `/internal/v1/files`，保存 `file_ref`，创建 processing job。 |
+| asynq 入队 | `services/knowledge/internal/platform/queue` | `docs/architecture/technology-decisions.md` | service tests with fake queue | 只投递 ingestion task；worker 未落地。 |
+| PostgreSQL migration/repository | `services/knowledge/migrations/0001_create_knowledge_core_tables.sql`、`internal/repository/postgres.go` | `docs/services/knowledge/docs/data-models.md` | `go test ./...` | runtime 使用 PostgreSQL。 |
 
-当前已稳定的 gateway 公开 Knowledge 路径包括：
+## 4. 未实现
 
-```text
-GET    /api/v1/knowledge-bases
-POST   /api/v1/knowledge-bases
-GET    /api/v1/knowledge-bases/{knowledgeBaseId}
-PATCH  /api/v1/knowledge-bases/{knowledgeBaseId}
-DELETE /api/v1/knowledge-bases/{knowledgeBaseId}
-GET    /api/v1/knowledge-bases/{knowledgeBaseId}/documents
-POST   /api/v1/knowledge-bases/{knowledgeBaseId}/documents
-GET    /api/v1/documents/{documentId}
-GET    /api/v1/documents/{documentId}/chunks
-POST   /api/v1/knowledge-queries
-```
+| 缺口 | 文档来源 | 影响范围 | 建议任务 |
+| --- | --- | --- | --- |
+| 文档处理 worker 未实现 | `docs/services/knowledge/README.md`、`docs/requirements-analysis/overall-requirements-analysis.md` | worker / DB / Redis | 待确认：实现 parsing/chunking/embedding 状态流转。 |
+| chunks API 未实现 | `docs/services/gateway/api/openapi.yaml` | API / frontend / QA | 待确认：实现 `GET /internal/v1/documents/{documentId}/chunks` 并开放 gateway route。 |
+| 原文 content API 未实现 | `docs/services/gateway/api/openapi.yaml` | API / file integration | 待确认：通过 file reference 读取原文件内容。 |
+| `knowledge-queries` 检索未实现 | `docs/services/gateway/api/openapi.yaml`、`docs/services/knowledge/api/public.openapi.yaml` | API / QA / document | 待确认：实现 retrieval response，接入 Qdrant 或阶段性检索 adapter。 |
+| Qdrant adapter / embedding / rerank 未实现 | `docs/architecture/service-boundaries.md`、`docs/services/knowledge/docs/data-models.md` | vector store / AI provider | 待确认：接入 AI Gateway embeddings/rerank 和 Qdrant。 |
+| admin parser-configs 未实现 | `docs/services/gateway/api/openapi.yaml` | API / admin | 待确认：实现解析器配置资源或回写 active contract 状态。 |
+| document PATCH/DELETE 未实现 | `docs/services/gateway/api/openapi.yaml` | API / frontend | 待确认：实现标签更新、删除和 file/index cleanup。 |
 
-Knowledge-owned related document paths include：
+## 5. 文档与实现出入
 
-```text
-POST   /api/v1/knowledge-bases/{knowledgeBaseId}/documents
-PATCH  /api/v1/documents/{documentId}
-DELETE /api/v1/documents/{documentId}
-GET    /api/v1/documents/{documentId}/content
-```
+| 出入点 | 文档要求 | 当前实现 | 风险 | 建议处理 |
+| --- | --- | --- | --- | --- |
+| Gateway active Knowledge paths | Gateway OpenAPI 将 18 个 knowledge operation 设为 active | `services/gateway/internal/http/routes.go` 中 `PATCH/DELETE /documents`、chunks、content、knowledge-queries、parser-configs 标为 `NotImplemented` | 前端生成 client 后调用会得到 501 | 要么补实现并取消 `NotImplemented`，要么把阶段性未实现状态回写到契约说明。 |
+| 旧实现说明提到 Qdrant/local hashing | 早期文档描述 Qdrant HTTP adapter 和 local hashing embedding | 当前 `services/knowledge/` 无 Qdrant/embedding platform 代码 | 文档高估实现成熟度 | 已在本文改为未实现；同步更新技术选型状态。 |
+| 公开 Knowledge 草案范围 | `docs/services/knowledge/api/public.openapi.yaml` 覆盖 deletion jobs、processing jobs、query tests、support materials、settings、statistics | runtime 只实现 KB CRUD 和文档 upload/list/detail | 公开草案可能被误读为已落地 | 保留为设计草案，在 implementation 中明确缺口。 |
+| File handoff 边界 | Knowledge 拥有文档资源，File 只保存基础 file object | 当前已按 `/internal/v1/files` 保存 raw file，但 content/delete cleanup 未闭环 | 删除或内容读取时 file reference 可能残留 | 实现 document lifecycle cleanup。 |
+| asynq 任务状态权威 | PostgreSQL 为 job 状态权威，Redis 只排队 | 已创建 job 并投递任务，但无 worker 更新状态 | 文档状态可能长期停留在 uploaded | 补 worker 或阶段性标记为 pending implementation。 |
 
-禁止把动作词放进稳定 path：
+## 6. MVP / mock / memory backend / 占位
 
-```text
-/search
-/upload
-/retry
-/batch-delete
-/generate
-/export
-/chat/stream
-```
+| 项目 | 当前用途 | 退出条件 | 关联任务 |
+| --- | --- | --- | --- |
+| memory repository | 单元测试 | PostgreSQL integration tests 覆盖关键 CRUD 后仍可保留测试用 | 待确认 |
+| fake file client / fake queue | 上传补偿和入队测试 | 真实 file/Redis 集成测试补齐 | 待确认 |
+| gateway `NotImplemented` Knowledge routes | 暂时占住 active contract | 对应服务实现或契约降级 | 待确认 |
 
-如果未来需要重试、批量删除、事件流，应建模为资源：
+## 7. 运行与配置
 
-| 需求 | RESTful 建议 | 说明 |
+| 项目 | 当前状态 | 缺口 |
 | --- | --- | --- |
-| 重试处理 | `POST /api/v1/documents/{documentId}/processing-jobs` 或服务内 `POST /internal/v1/jobs/{jobId}/processing-runs` | 任务或尝试建模为资源，不使用 `retry` path |
-| 批量删除 | 多次 `DELETE /api/v1/{resource}/{id}`，或设计批处理资源 | 不使用 `batch-delete` path |
-| 处理事件流 | `GET /api/v1/jobs/{jobId}/events` | `events` 是 job 的子资源 |
-| QA 流式回答 | `GET /api/v1/qa-sessions/{sessionId}/events` | 归 `qa`，不归 `knowledge` |
+| 启动命令 | `cd services/knowledge && go run ./cmd/server` | 需要 PostgreSQL、File Service 和 Redis。 |
+| 环境变量 | `DATABASE_URL`、`FILE_SERVICE_BASE_URL`、`KNOWLEDGE_REDIS_ADDR` 必填；另有 HTTP/version/env/max upload/service token/shutdown | 缺 Qdrant、embedding/rerank、parser 配置 runtime env。 |
+| PostgreSQL / migration | `migrations/0001_create_knowledge_core_tables.sql`，runtime `pgx/v5` | 需要 migration apply CI/集成测试证据。 |
+| Redis / queue | 使用 `asynq` client 投递 ingestion | worker 未实现。 |
+| Object storage / vector store / AI provider | 通过 File Service 保存 raw file | Qdrant adapter 尚未落地；Knowledge 尚未接入 AI Gateway embedding/rerank 调用。 |
 
-## 7. 字段命名约定
+## 8. 测试与验证
 
-| 层 | 命名风格 | 示例 |
-| --- | --- | --- |
-| Public HTTP JSON | camelCase | `knowledgeBaseId`, `chunkCount`, `createdAt` |
-| Query parameter | camelCase | `pageSize`, `topK`, `scoreThreshold` |
-| PostgreSQL table/column | snake_case | `knowledge_base_id`, `chunk_count`, `created_at` |
-| Go variable/function | mixedCaps | `knowledgeBaseID`, `chunkCount` |
-| Qdrant payload | snake_case | `knowledge_base_id`, `document_id`, `chunk_id` |
-| Public error code | lower_snake_case | `validation_error`, `not_found` |
-| Public document status | lowercase enum | `uploaded`, `ready`, `failed` |
+| 验证项 | 命令或步骤 | 当前结果 | 缺口 |
+| --- | --- | --- | --- |
+| 单元测试 | `cd services/knowledge && go test ./...` | pass（本次执行） | 主要使用 memory/fake 依赖。 |
+| 集成测试 | PostgreSQL + File + Redis end-to-end upload | missing | 需要真实依赖联调。 |
+| 契约测试 | gateway route matrix + Knowledge handler tests | partial | active path 中多个仍 501。 |
+| 手工 smoke | 启动 PostgreSQL、File、Redis 后上传文档 | not run | 需要可复现脚本或 Compose。 |
 
-## 8. 状态约定
+## 9. 建议任务
 
-### 8.1 Public DocumentStatus
+| 任务 | 类型 | 优先级 | 依据 | 说明 |
+| --- | --- | --- | --- | --- |
+| 实现 Knowledge 文档内容、删除和 chunks API | 新任务 | P0 | Gateway active contract | 解除 `/documents/**` 相关 501。 |
+| 实现 ingestion worker 与状态流转 | 新任务 | P0 | 上传后必须进入处理闭环 | 处理 parsing/chunking/embedding/ready/failed。 |
+| 实现 knowledge-queries 检索 | 新任务 | P0 | QA/Document 依赖检索 | 返回 chunk/document/source/score。 |
+| 实现 parser configs 或回写契约状态 | 新任务 | P1 | Gateway active admin paths | 避免 active path 长期 501。 |
 
-当前应与 gateway OpenAPI 中 `DocumentStatus` 对齐：
+## 10. 最近检查记录
 
-```text
-uploaded
-parsing
-chunking
-embedding
-ready
-failed
-```
-
-`indexing`、`reprocessing`、`deleted` 不进入当前 public `DocumentStatus`。如果后续确需公开，必须先更新 `docs/services/gateway/api/openapi.yaml`、`docs/architecture/frontend-backend-contract.md` 和对应服务文档。
-
-### 8.2 Future JobStatus
-
-后续异步任务建议使用：
-
-```text
-queued
-running
-succeeded
-failed
-cancelled
-```
-
-## 9. 存储模型方向
-
-完整逻辑数据模型、字段映射、状态机、索引和 Qdrant payload 规则见 [Knowledge Service 数据模型文档](data-models.md)。本文只保留当前实现摘要。
-
-### 9.1 PostgreSQL
-
-当前 Go 服务通过 `pgx` + `sqlc` 访问自己的 PostgreSQL schema。核心表包括：
-
-```text
-knowledge_bases
-knowledge_documents
-processing_jobs
-document_chunks
-```
-
-PostgreSQL 是知识库元数据、文档状态、任务状态、切片正文和处理错误的事实来源。迁移由 `goose` 执行，当前 migration 位于 `services/knowledge/migrations/0001_create_knowledge_core_tables.sql`。
-
-### 9.2 Qdrant
-
-默认 collection：
-
-```text
-knowledge_chunks
-```
-
-Qdrant point ID 使用由 `chunk_id` 稳定派生的 UUID 字符串。业务 ID 继续使用 `chunk_xxx`、`doc_xxx`、`kb_xxx`。
-
-Qdrant payload 只保留检索和引用溯源需要的最小字段，例如：
-
-```json
-{
-  "knowledge_base_id": "kb_123",
-  "document_id": "doc_123",
-  "chunk_id": "chunk_123",
-  "chunk_index": 0,
-  "chunk_type": "text",
-  "section_path": "root",
-  "tags": ["linux", "local-test"],
-  "metadata": {}
-}
-```
-
-完整文本、错误原因、文档状态和任务状态必须以 PostgreSQL 为准。
-
-## 10. 本地 Docker Compose
-
-启动目录：
-
-```bash
-cd services/knowledge
-docker compose up -d --build
-```
-
-本地端口：
-
-| Service | Port | 用途 |
-| --- | ---: | --- |
-| `knowledge-api` | 8000 | Go Knowledge Service baseline |
-| `postgres` | 5432 | Metadata database |
-| `redis` | 6379 | asynq queue and short-lived coordination backend |
-| `qdrant` | 6333 / 6334 | Vector database |
-| `minio` | 9000 / 9001 | Local object storage backing file service integration |
-| `adminer` | 8080 | PostgreSQL management |
-| `redis-commander` | 8081 | Redis management |
-
-当前 Docker Compose 是 knowledge 组本地开发拓扑，不放在仓库根目录，避免影响其他组。
-
-## 11. 旧 Python 原型移除状态
-
-旧 Python 原型曾经实现本地 multipart 上传、解析、切片、embedding、Qdrant 写入、job 查询、`admin-overview` 和 folder ingest。这些能力已随原型移除，暂不作为当前 Go baseline 的已实现能力。
-
-后续重建原则：
-
-- 先以 Go 服务稳定工程骨架、HTTP envelope、错误码和配置入口。
-- 再迁移知识库 metadata、文档状态、chunks、job 和 retrieval 的 vertical slice。
-- 不允许重新引入 Python/FastAPI runtime 作为正式服务入口。
-- 不允许前端或 gateway 依赖旧 Python 原型的临时调试字段，例如 `_fieldDescriptions`。
-
-## 12. 后续对齐步骤
-
-Knowledge 相关公开契约已进入 gateway OpenAPI。后续接入实现按以下顺序推进：
-
-1. 以 `docs/services/gateway/api/openapi.yaml` 的 active knowledge operations 作为前端稳定契约。
-2. 明确 `POST /api/v1/knowledge-bases/{knowledgeBaseId}/documents` 中 Knowledge 调用 File Service `/internal/v1/files/**` 的顺序、失败补偿和 file reference 保存方式。
-3. `services/knowledge/api/openapi.yaml` 维护服务本地 `/internal/v1/**` 接口，不作为 browser-facing 契约。
-4. Gateway 只做路由、鉴权上下文传递和 envelope 归一化，不实现解析、切片、Qdrant 检索。
-5. 前端只消费 gateway active OpenAPI，不直接调用 `services/knowledge`。
-6. 用契约测试逐项校验 Knowledge Service 响应字段与 gateway schema 的差异。
-
-## 13. 当前验收口径
-
-当前 Go service-local 验收：
-
-- `go test ./...` 通过。
-- `go build ./cmd/server` 通过。
-- Docker image 能 build。
-- `docker compose config --quiet` 通过。
-- `GET /healthz`、`GET /readyz` 和 `/internal/v1/**` 返回统一 envelope。
-- KnowledgeBase metadata CRUD、File handoff、ProcessingJob 状态、Document chunks、Qdrant/memory vector indexing、`knowledge-queries` retrieval 和内部 admin endpoints 已有 service-local tests。
-- Gateway 代理实现、契约测试和前端类型生成不属于当前 `services/knowledge` owner 范围，需由 gateway owner 接入。
+| 日期 | 检查人/工具 | 代码基准 | 结论 |
+| --- | --- | --- | --- |
+| 2026-06-29 | Codex goal | `eddf917` + working tree | Knowledge 已完成 KB CRUD 和文档上传 handoff，但入库 worker、chunks、content、retrieval、parser config 仍是关键缺口。 |

@@ -85,15 +85,16 @@ AI Gateway 的物理实现以 [`docs/architecture/technology-decisions.md`](../.
 
 ### 3.2 迁移基线
 
-首批 `goose` migration 建议按以下顺序拆分，减少后续回滚和审查成本：
+当前 `goose` migration 基线按以下顺序拆分，减少后续回滚和审查成本：
 
 | 迁移 | 内容 |
 | --- | --- |
 | `0001_create_model_profiles.sql` | 创建模型 profile 表、枚举检查约束、默认 profile 部分唯一索引。 |
 | `0002_create_provider_credentials.sql` | 创建凭据元数据表、active 凭据唯一约束和 storage mode 检查约束。 |
 | `0003_create_model_profile_revisions.sql` | 创建配置变更审计表和 profile 内版本号索引。 |
-| `0004_create_provider_invocations.sql` | 创建调用摘要表、attempt 表和排障索引。 |
-| `0005_create_model_usage_aggregates.sql` | 可选聚合表；如果第一阶段不做配额或成本统计，可以延后。 |
+| `0004_create_provider_invocations.sql` | 创建调用摘要表和排障索引。 |
+| `0005_create_provider_invocation_attempts.sql` | 创建 provider invocation attempt 表。 |
+| `0006_create_model_usage_aggregates.sql` | 创建按小时聚合的 request/success/failure/token/duration 用量表。 |
 
 迁移必须能在空库重复从头 apply。首期允许 forward-only migration；如果提供 down migration，必须在本地和 CI 中验证可执行。涉及密钥表的 down migration 不得把密文或 secret ref 打印到错误信息、日志或注释示例中。
 

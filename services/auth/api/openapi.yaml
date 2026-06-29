@@ -1,0 +1,95 @@
+openapi: 3.0.3
+info:
+  title: Auth Service Implemented API
+  version: 0.1.0
+  description: Implemented operational API for the auth service baseline. Full internal business API drafts remain in docs/services/auth/api/openapi.yaml until handlers are implemented.
+servers:
+  - url: http://localhost:8001
+tags:
+  - name: health
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Liveness check
+      operationId: getHealthz
+      responses:
+        '200':
+          description: Auth service is alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /readyz:
+    get:
+      tags: [health]
+      summary: Readiness check
+      operationId: getReadyz
+      responses:
+        '200':
+          description: Auth service is connected to PostgreSQL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: PostgreSQL is unavailable or not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [service, status, version]
+          properties:
+            service:
+              type: string
+              example: auth
+            status:
+              type: string
+              example: ok
+            version:
+              type: string
+              example: 0.1.0
+        requestId:
+          type: string
+    ReadinessResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [service, status, version, environment, dependencies]
+          properties:
+            service:
+              type: string
+              example: auth
+            status:
+              type: string
+              enum: [ready, not_ready]
+            version:
+              type: string
+            environment:
+              type: string
+            dependencies:
+              type: array
+              items:
+                type: object
+                required: [name, status]
+                properties:
+                  name:
+                    type: string
+                    example: postgres
+                  status:
+                    type: string
+                    enum: [ready, unavailable, not_configured]
+                  message:
+                    type: string
+        requestId:
+          type: string

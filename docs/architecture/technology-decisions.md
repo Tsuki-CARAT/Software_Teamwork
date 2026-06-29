@@ -23,7 +23,7 @@
 
 | 领域 | 选型 | 说明 |
 | --- | --- | --- |
-| PostgreSQL 访问 | `pgx` + `sqlc` | 不默认引入 ORM。SQL 写在服务本地 query 文件，由 `sqlc` 生成类型安全查询代码；运行时使用 `pgx`。 |
+| PostgreSQL 访问 | `pgx` + `sqlc` | 不默认引入 ORM。SQL 写在服务本地 query 文件，由 `sqlc` 生成类型安全查询代码；运行时使用 `pgx`。Auth 基线固定 `github.com/jackc/pgx/v4@v4.18.3` 和 `sqlc@v1.31.1`。 |
 | ORM | 不使用 ORM | 禁止默认引入 GORM/ent 等 ORM。确有必要时必须单独记录设计理由。 |
 | 数据库迁移 | `goose` | 每个服务维护自己的 `migrations/`，CI 后续用 `goose` 校验迁移可应用。 |
 | 日志 | Go 标准库 `log/slog` | 所有后端服务使用结构化日志，生产默认 JSON 输出。 |
@@ -47,9 +47,9 @@
 
 ## 三选一决策记录
 
-| 领域 | 备选 1 | 备选 2 | 备选 3 | 当前决定 |
-| --- | --- | --- | --- | --- |
-| 数据库访问 | `pgx` + 手写 SQL | `pgx` + `sqlc` | GORM/ent ORM | `pgx` + `sqlc` |
+| 领域 | 备选 1 | 备选 2 | 备选 3 | 当前决定 | 版本状态 |
+| --- | --- | --- | --- | --- | --- |
+| 数据库访问 | `pgx` + 手写 SQL | `pgx` + `sqlc` | GORM/ent ORM | `pgx` + `sqlc` | Auth 基线固定 `pgx/v4@v4.18.3`、`sqlc@v1.31.1`。 |
 | 数据库迁移 | `goose` | `golang-migrate` | Atlas | `goose` |
 | 日志 | `slog` | `zap` | `zerolog` | `slog` |
 | HTTP 路由 | 标准库 `ServeMux` | `chi` | `gin` | 标准库 `ServeMux` |

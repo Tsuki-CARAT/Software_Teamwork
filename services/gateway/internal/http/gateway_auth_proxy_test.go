@@ -14,6 +14,7 @@ import (
 	"time"
 
 	gatewayhttp "github.com/Sakayori-Iroha-168/Software_Teamwork/services/gateway/internal/http"
+	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/gateway/internal/platform/authclient"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/gateway/internal/service"
 )
 
@@ -153,6 +154,99 @@ func TestProxyInjectsAuthenticatedContextHeaders(t *testing.T) {
 	}
 	if captured.Get("Authorization") != "" {
 		t.Fatalf("authorization leaked to downstream: %q", captured.Get("Authorization"))
+	}
+}
+
+func TestProxyOverwritesSpoofedForwardingHeaders(t *testing.T) {
+	hasher := testHasher(t)
+	store := newMemorySessionStore()
+	accessToken := "valid-token"
+	store.putToken(t, hasher, accessToken, service.SessionCacheEntry{
+		SessionID:   "sess_1",
+		UserID:      "usr_1",
+		Username:    "alice",
+		Roles:       []string{"admin"},
+		Permissions: []string{"knowledge:read"},
+		TokenType:   "Bearer",
+		ExpiresAt:   time.Now().Add(time.Hour).UTC(),
+	})
+
+	var captured http.Header
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[],"requestId":"req_proxy"}`))
+	}))
+	defer downstream.Close()
+
+	server := newGatewayTestServer(t, gatewayDeps{
+		store:         store,
+		hasher:        hasher,
+		ownerBaseURLs: map[string]string{"knowledge": downstream.URL},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/knowledge-bases", nil)
+	req.RemoteAddr = "198.51.100.10:12345"
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("X-Request-Id", "req_proxy")
+	req.Header.Set("Forwarded", "for=203.0.113.9;proto=https")
+	req.Header.Set("X-Forwarded-For", "203.0.113.9")
+	req.Header.Set("X-Forwarded-Host", "evil.example")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	res := httptest.NewRecorder()
+
+	server.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
+	}
+	if captured.Get("X-Forwarded-For") != "198.51.100.10" {
+		t.Fatalf("x-forwarded-for = %q", captured.Get("X-Forwarded-For"))
+	}
+	if captured.Get("X-Forwarded-Proto") != "http" {
+		t.Fatalf("x-forwarded-proto = %q", captured.Get("X-Forwarded-Proto"))
+	}
+	if captured.Get("Forwarded") != "" || captured.Get("X-Forwarded-Host") != "" {
+		t.Fatalf("spoofed forwarding headers leaked: %#v", captured)
+	}
+}
+
+func TestAuthClientErrorIsSanitized(t *testing.T) {
+	auth := &fakeAuthClient{
+		createSessionErr: &authclient.RemoteError{
+			Status: http.StatusBadRequest,
+			Detail: authclient.ErrorDetail{
+				Code:    "internal_sql_error",
+				Message: "select * from auth_credentials",
+				Fields:  map[string]string{"password_hash": "secret"},
+			},
+		},
+	}
+	server := newGatewayTestServer(t, gatewayDeps{
+		auth:   auth,
+		store:  newMemorySessionStore(),
+		hasher: testHasher(t),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sessions", strings.NewReader(`{"username":"alice","password":"secret"}`))
+	req.Header.Set("X-Request-Id", "req_auth_sanitized")
+	res := httptest.NewRecorder()
+
+	server.ServeHTTP(res, req)
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
+	}
+	raw := res.Body.String()
+	for _, sensitive := range []string{"internal_sql_error", "auth_credentials", "password_hash", "select *"} {
+		if strings.Contains(raw, sensitive) {
+			t.Fatalf("auth internal detail leaked in response: %s", raw)
+		}
+	}
+	var body errorBody
+	decodeJSON(t, res.Body, &body)
+	if body.Error.Code != "validation_error" ||
+		body.Error.Message != "request validation failed" ||
+		body.Error.RequestID != "req_auth_sanitized" {
+		t.Fatalf("error = %+v", body.Error)
 	}
 }
 
@@ -322,19 +416,31 @@ func testHasher(t *testing.T) service.TokenHasher {
 
 type fakeAuthClient struct {
 	createUserResult    service.SessionResponse
+	createUserErr       error
 	createSessionResult service.SessionResponse
+	createSessionErr    error
 	deleteSessionID     string
+	deleteSessionErr    error
 }
 
 func (c *fakeAuthClient) CreateUser(context.Context, string, []byte) (service.SessionResponse, error) {
+	if c.createUserErr != nil {
+		return service.SessionResponse{}, c.createUserErr
+	}
 	return c.createUserResult, nil
 }
 
 func (c *fakeAuthClient) CreateSession(context.Context, string, []byte) (service.SessionResponse, error) {
+	if c.createSessionErr != nil {
+		return service.SessionResponse{}, c.createSessionErr
+	}
 	return c.createSessionResult, nil
 }
 
 func (c *fakeAuthClient) DeleteSession(_ context.Context, _ string, sessionID string) error {
+	if c.deleteSessionErr != nil {
+		return c.deleteSessionErr
+	}
 	c.deleteSessionID = sessionID
 	return nil
 }

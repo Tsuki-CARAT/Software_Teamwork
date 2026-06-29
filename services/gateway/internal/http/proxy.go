@@ -91,7 +91,7 @@ func (s *Server) writeDownstreamError(w http.ResponseWriter, r *http.Request, ro
 
 	var envelope response.ErrorEnvelope
 	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&envelope); err == nil {
-		if isPublicDownstreamCode(envelope.Error.Code) {
+		if isPublicErrorCode(envelope.Error.Code) {
 			detail.Code = envelope.Error.Code
 		}
 		if message := strings.TrimSpace(envelope.Error.Message); message != "" {
@@ -131,7 +131,16 @@ func cloneProxyHeaders(source http.Header) http.Header {
 			continue
 		}
 		switch http.CanonicalHeaderKey(key) {
-		case "Authorization", "X-User-Id", "X-User-Roles", "X-User-Permissions", "X-Service-Token", "X-Caller-Service":
+		case "Authorization",
+			"Forwarded",
+			"X-Forwarded-For",
+			"X-Forwarded-Host",
+			"X-Forwarded-Proto",
+			"X-User-Id",
+			"X-User-Roles",
+			"X-User-Permissions",
+			"X-Service-Token",
+			"X-Caller-Service":
 			continue
 		}
 		target[key] = append([]string(nil), values...)
@@ -161,14 +170,10 @@ func applyGatewayHeaders(proxyReq *http.Request, incoming *http.Request, authCon
 	proxyReq.Header.Set("X-User-Id", authContext.UserID)
 	proxyReq.Header.Set("X-User-Roles", strings.Join(authContext.Roles, ","))
 	proxyReq.Header.Set("X-User-Permissions", strings.Join(authContext.Permissions, ","))
-	proxyReq.Header.Set("X-Forwarded-For", forwardedFor(incoming))
-	proto := strings.TrimSpace(incoming.Header.Get("X-Forwarded-Proto"))
-	if proto == "" {
-		if incoming.TLS != nil {
-			proto = "https"
-		} else {
-			proto = "http"
-		}
+	proxyReq.Header.Set("X-Forwarded-For", clientIP(incoming))
+	proto := "http"
+	if incoming.TLS != nil {
+		proto = "https"
 	}
 	proxyReq.Header.Set("X-Forwarded-Proto", proto)
 }
@@ -190,7 +195,7 @@ func downstreamErrorCode(status int) response.Code {
 	}
 }
 
-func isPublicDownstreamCode(code response.Code) bool {
+func isPublicErrorCode(code response.Code) bool {
 	switch code {
 	case response.CodeValidation,
 		response.CodeUnauthorized,
@@ -202,18 +207,6 @@ func isPublicDownstreamCode(code response.Code) bool {
 	default:
 		return false
 	}
-}
-
-func forwardedFor(r *http.Request) string {
-	clientIP := clientIP(r)
-	current := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
-	if current == "" {
-		return clientIP
-	}
-	if clientIP == "" {
-		return current
-	}
-	return current + ", " + clientIP
 }
 
 func clientIP(r *http.Request) string {

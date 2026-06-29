@@ -154,25 +154,40 @@ func readRequestBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 func (s *Server) writeAuthClientError(w http.ResponseWriter, r *http.Request, err error) {
 	var remote *authclient.RemoteError
 	if errors.As(err, &remote) {
-		code := response.Code(remote.Detail.Code)
-		status := remote.Status
-		message := strings.TrimSpace(remote.Detail.Message)
-		if status >= http.StatusInternalServerError || code == "" {
+		if remote.Status < http.StatusBadRequest || remote.Status >= http.StatusInternalServerError {
 			s.writeDependencyError(w, r, "auth service is unavailable")
 			return
 		}
-		if message == "" {
-			message = http.StatusText(status)
-		}
-		response.WriteError(w, status, response.ErrorDetail{
-			Code:      code,
-			Message:   message,
+		response.WriteError(w, remote.Status, response.ErrorDetail{
+			Code:      downstreamErrorCode(remote.Status),
+			Message:   authClientErrorMessage(remote.Status),
 			RequestID: middleware.RequestIDFromContext(r.Context()),
-			Fields:    remote.Detail.Fields,
 		})
 		return
 	}
 	s.writeDependencyError(w, r, "auth service is unavailable")
+}
+
+func authClientErrorMessage(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "request validation failed"
+	case http.StatusUnauthorized:
+		return "invalid authentication"
+	case http.StatusForbidden:
+		return "forbidden"
+	case http.StatusNotFound:
+		return "not found"
+	case http.StatusConflict:
+		return "conflict"
+	case http.StatusTooManyRequests:
+		return "rate limited"
+	default:
+		if text := http.StatusText(status); text != "" {
+			return text
+		}
+		return "request failed"
+	}
 }
 
 func (s *Server) writeUnauthorized(w http.ResponseWriter, r *http.Request, message string) {

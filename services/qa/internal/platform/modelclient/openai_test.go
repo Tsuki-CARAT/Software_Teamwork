@@ -27,9 +27,15 @@ func TestCompleteSendsFunctionToolsAndParsesToolCalls(t *testing.T) {
 		if got := r.Header.Get("X-User-Id"); got != "user-model-test" {
 			t.Errorf("X-User-Id = %q", got)
 		}
+		if got := r.Header.Get("Accept"); got != "text/event-stream" {
+			t.Errorf("Accept = %q", got)
+		}
 		var request completionRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatal(err)
+		}
+		if !request.Stream {
+			t.Errorf("stream = false, want true for function-calling requests")
 		}
 		if request.ToolChoice != "auto" || len(request.Tools) != 1 {
 			t.Errorf("unexpected tool request: %+v", request)
@@ -43,7 +49,7 @@ func TestCompleteSendsFunctionToolsAndParsesToolCalls(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
           "choices":[{
-            "message":{"role":"assistant","tool_calls":[{"id":"call-1","type":"function","function":{"name":"add","arguments":"{\"a\":1}"}}]},
+            "message":{"role":"assistant","content":null,"tool_calls":[{"id":"call-1","type":"function","function":{"name":"add","arguments":"{\"a\":1}"}}]},
             "finish_reason":"tool_calls"
           }],
           "usage":{"prompt_tokens":7,"completion_tokens":5,"total_tokens":12,"completion_tokens_details":{"reasoning_tokens":2}}
@@ -64,6 +70,9 @@ func TestCompleteSendsFunctionToolsAndParsesToolCalls(t *testing.T) {
 	}
 	if completion.FinishReason != "tool_calls" || completion.Message.ToolCalls[0].Function.Name != "add" {
 		t.Fatalf("unexpected completion: %+v", completion)
+	}
+	if completion.Message.Content != "" {
+		t.Fatalf("content = %q, want empty normalized value", completion.Message.Content)
 	}
 	if completion.Usage.PromptTokens != 7 || completion.Usage.CompletionTokens != 3 || completion.Usage.ReasoningTokens != 2 || completion.Usage.TotalTokens != 12 {
 		t.Fatalf("unexpected usage: %+v", completion.Usage)
@@ -109,15 +118,40 @@ func TestCompleteMapsGatewayValidationError(t *testing.T) {
 	}
 }
 
-func TestParseToolCallDeltasMergesStreamingArguments(t *testing.T) {
-	stream := []byte(`data: {"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"search_","arguments":"{\"q\""}}]},"finish_reason":null}]}
-data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"name":"knowledge","arguments":":\"breaker\"}"}}]},"finish_reason":"tool_calls"}]}
+func TestCompleteParsesStreamedToolCallDeltas(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Accept"); got != "text/event-stream" {
+			t.Errorf("Accept = %q", got)
+		}
+		var request completionRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		if !request.Stream {
+			t.Fatal("stream = false, want true")
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`data: {"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"search_","arguments":"{\"q\""}}]},"finish_reason":null}]}
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"name":"knowledge","arguments":":\"breaker\"}"}}]},"finish_reason":null}]}
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":7,"completion_tokens":5,"total_tokens":12,"completion_tokens_details":{"reasoning_tokens":2}}}
 data: [DONE]
-`)
+`))
+	}))
+	defer server.Close()
 
-	calls, err := parseToolCallDeltas(stream)
+	client, err := New(Config{Endpoint: server.URL, TokenHeader: "X-Service-Token", Model: "test", MaxTokens: 100, Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
+	}
+	completion, err := client.Complete(context.Background(), []agent.Message{{Role: agent.RoleUser, Content: "search"}}, []agent.ToolDefinition{{
+		Type: "function", Function: agent.FunctionTool{Name: "search_knowledge", Parameters: map[string]any{"type": "object"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := completion.Message.ToolCalls
+	if completion.FinishReason != "tool_calls" {
+		t.Fatalf("finish reason = %q", completion.FinishReason)
 	}
 	if len(calls) != 1 {
 		t.Fatalf("tool calls = %+v", calls)
@@ -130,5 +164,8 @@ data: [DONE]
 	}
 	if calls[0].Function.Arguments != `{"q":"breaker"}` {
 		t.Fatalf("arguments = %q", calls[0].Function.Arguments)
+	}
+	if completion.Usage.PromptTokens != 7 || completion.Usage.CompletionTokens != 3 || completion.Usage.ReasoningTokens != 2 || completion.Usage.TotalTokens != 12 {
+		t.Fatalf("unexpected usage: %+v", completion.Usage)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/platform/httpclient"
@@ -83,19 +84,21 @@ type completionRequest struct {
 	Stream            bool                   `json:"stream"`
 }
 
+type usagePayload struct {
+	PromptTokens            int `json:"prompt_tokens"`
+	CompletionTokens        int `json:"completion_tokens"`
+	TotalTokens             int `json:"total_tokens"`
+	CompletionTokensDetails struct {
+		ReasoningTokens int `json:"reasoning_tokens"`
+	} `json:"completion_tokens_details"`
+}
+
 type completionResponse struct {
 	Choices []struct {
 		Message      agent.Message `json:"message"`
 		FinishReason string        `json:"finish_reason"`
 	} `json:"choices"`
-	Usage struct {
-		PromptTokens            int `json:"prompt_tokens"`
-		CompletionTokens        int `json:"completion_tokens"`
-		TotalTokens             int `json:"total_tokens"`
-		CompletionTokensDetails struct {
-			ReasoningTokens int `json:"reasoning_tokens"`
-		} `json:"completion_tokens_details"`
-	} `json:"usage"`
+	Usage usagePayload `json:"usage"`
 }
 
 func (c *Client) Complete(ctx context.Context, messages []agent.Message, tools []agent.ToolDefinition) (agent.Completion, error) {
@@ -106,7 +109,7 @@ func (c *Client) Complete(ctx context.Context, messages []agent.Message, tools [
 		Tools:             tools,
 		ParallelToolCalls: c.parallel,
 		MaxTokens:         c.maxTokens,
-		Stream:            false,
+		Stream:            len(tools) > 0,
 	}
 	if len(tools) > 0 {
 		payload.ToolChoice = "auto"
@@ -120,7 +123,11 @@ func (c *Client) Complete(ctx context.Context, messages []agent.Message, tools [
 		return agent.Completion{}, fmt.Errorf("create completion request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
+	if payload.Stream {
+		request.Header.Set("Accept", "text/event-stream")
+	} else {
+		request.Header.Set("Accept", "application/json")
+	}
 	request.Header.Set("X-Caller-Service", "qa")
 	if requestID := service.RequestIDFromContext(ctx); requestID != "" {
 		request.Header.Set("X-Request-Id", requestID)
@@ -136,6 +143,9 @@ func (c *Client) Complete(ctx context.Context, messages []agent.Message, tools [
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return agent.Completion{}, normalizeGatewayError(response.StatusCode, response.Body)
+	}
+	if isEventStream(response.Header.Get("Content-Type")) {
+		return decodeStreamCompletion(response.Body)
 	}
 	limited := io.LimitReader(response.Body, maxResponseBytes+1)
 	data, err := io.ReadAll(limited)
@@ -153,21 +163,7 @@ func (c *Client) Complete(ctx context.Context, messages []agent.Message, tools [
 		return agent.Completion{}, errors.New("completion response has no choices")
 	}
 	choice := decoded.Choices[0]
-	reasoningTokens := decoded.Usage.CompletionTokensDetails.ReasoningTokens
-	completionTokens := decoded.Usage.CompletionTokens
-	if reasoningTokens > 0 && completionTokens >= reasoningTokens {
-		completionTokens -= reasoningTokens
-	}
-	usage := agent.TokenUsage{
-		PromptTokens:     decoded.Usage.PromptTokens,
-		CompletionTokens: completionTokens,
-		ReasoningTokens:  reasoningTokens,
-		TotalTokens:      decoded.Usage.TotalTokens,
-	}
-	if usage.TotalTokens == 0 {
-		usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens + usage.ReasoningTokens
-	}
-	return agent.Completion{Message: choice.Message, FinishReason: choice.FinishReason, Usage: usage}, nil
+	return agent.Completion{Message: choice.Message, FinishReason: choice.FinishReason, Usage: tokenUsageFromPayload(decoded.Usage)}, nil
 }
 
 func normalizeGatewayError(statusCode int, body io.Reader) error {
@@ -183,6 +179,7 @@ type streamChunk struct {
 		Delta        agent.Message `json:"delta"`
 		FinishReason string        `json:"finish_reason"`
 	} `json:"choices"`
+	Usage usagePayload `json:"usage"`
 }
 
 type toolCallAccumulator struct {
@@ -219,11 +216,24 @@ func (a *toolCallAccumulator) apply(deltas []agent.ToolCall) {
 	}
 }
 
-func parseToolCallDeltas(data []byte) ([]agent.ToolCall, error) {
+func isEventStream(contentType string) bool {
+	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+}
+
+func decodeStreamCompletion(body io.Reader) (agent.Completion, error) {
+	message := agent.Message{Role: agent.RoleAssistant}
 	accumulator := newToolCallAccumulator()
-	scanner := bufio.NewScanner(bytes.NewReader(data))
+	var finishReason string
+	var usage agent.TokenUsage
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxResponseBytes)
+	var totalBytes int
 	for scanner.Scan() {
 		line := bytes.TrimSpace(scanner.Bytes())
+		totalBytes += len(line) + 1
+		if totalBytes > maxResponseBytes {
+			return agent.Completion{}, errors.New("completion response exceeds size limit")
+		}
 		if len(line) == 0 || bytes.HasPrefix(line, []byte(":")) {
 			continue
 		}
@@ -236,14 +246,43 @@ func parseToolCallDeltas(data []byte) ([]agent.ToolCall, error) {
 		}
 		var chunk streamChunk
 		if err := json.Unmarshal(payload, &chunk); err != nil {
-			return nil, fmt.Errorf("decode completion stream chunk: %w", err)
+			return agent.Completion{}, fmt.Errorf("decode completion stream chunk: %w", err)
 		}
 		for _, choice := range chunk.Choices {
+			if choice.Delta.Role != "" {
+				message.Role = choice.Delta.Role
+			}
+			message.Content += choice.Delta.Content
 			accumulator.apply(choice.Delta.ToolCalls)
+			if choice.FinishReason != "" {
+				finishReason = choice.FinishReason
+			}
+		}
+		if chunk.Usage.TotalTokens > 0 || chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
+			usage = tokenUsageFromPayload(chunk.Usage)
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read completion stream: %w", err)
+		return agent.Completion{}, fmt.Errorf("read completion stream: %w", err)
 	}
-	return accumulator.calls, nil
+	message.ToolCalls = accumulator.calls
+	return agent.Completion{Message: message, FinishReason: finishReason, Usage: usage}, nil
+}
+
+func tokenUsageFromPayload(payload usagePayload) agent.TokenUsage {
+	reasoningTokens := payload.CompletionTokensDetails.ReasoningTokens
+	completionTokens := payload.CompletionTokens
+	if reasoningTokens > 0 && completionTokens >= reasoningTokens {
+		completionTokens -= reasoningTokens
+	}
+	usage := agent.TokenUsage{
+		PromptTokens:     payload.PromptTokens,
+		CompletionTokens: completionTokens,
+		ReasoningTokens:  reasoningTokens,
+		TotalTokens:      payload.TotalTokens,
+	}
+	if usage.TotalTokens == 0 {
+		usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens + usage.ReasoningTokens
+	}
+	return usage
 }

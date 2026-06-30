@@ -23,6 +23,29 @@ type Message struct {
 	Name       string     `json:"name,omitempty"`
 }
 
+func (m *Message) UnmarshalJSON(data []byte) error {
+	var decoded struct {
+		Role       string     `json:"role"`
+		Content    *string    `json:"content"`
+		ToolCalls  []ToolCall `json:"tool_calls"`
+		ToolCallID string     `json:"tool_call_id"`
+		Name       string     `json:"name"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	m.Role = decoded.Role
+	if decoded.Content != nil {
+		m.Content = *decoded.Content
+	} else {
+		m.Content = ""
+	}
+	m.ToolCalls = decoded.ToolCalls
+	m.ToolCallID = decoded.ToolCallID
+	m.Name = decoded.Name
+	return nil
+}
+
 type ToolCall struct {
 	ID       string       `json:"id"`
 	Index    *int         `json:"index,omitempty"`

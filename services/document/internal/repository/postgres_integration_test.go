@@ -187,22 +187,28 @@ func TestPostgresRepositoryTerminalStatusPreservesDetailedProgress(t *testing.T)
 	}
 
 	tests := []struct {
-		name       string
-		jobID      string
-		markFinal  func(context.Context, string) error
-		wantStatus service.JobStatus
+		name             string
+		jobID            string
+		markFinal        func(context.Context, string) error
+		wantStatus       service.JobStatus
+		wantReportStatus service.ReportStatus
+		wantGeneratedAt  bool
 	}{
 		{
-			name:       "partial succeeded",
-			jobID:      "00000000-0000-0000-0000-000000000802",
-			markFinal:  repo.SetJobPartialSucceeded,
-			wantStatus: service.JobStatusPartialSucceeded,
+			name:             "partial succeeded",
+			jobID:            "00000000-0000-0000-0000-000000000802",
+			markFinal:        repo.SetJobPartialSucceeded,
+			wantStatus:       service.JobStatusPartialSucceeded,
+			wantReportStatus: service.ReportStatusGenerated,
+			wantGeneratedAt:  true,
 		},
 		{
-			name:       "succeeded",
-			jobID:      "00000000-0000-0000-0000-000000000803",
-			markFinal:  repo.SetJobSucceeded,
-			wantStatus: service.JobStatusSucceeded,
+			name:             "succeeded",
+			jobID:            "00000000-0000-0000-0000-000000000803",
+			markFinal:        repo.SetJobSucceeded,
+			wantStatus:       service.JobStatusSucceeded,
+			wantReportStatus: service.ReportStatusGenerated,
+			wantGeneratedAt:  true,
 		},
 	}
 
@@ -243,6 +249,16 @@ func TestPostgresRepositoryTerminalStatusPreservesDetailedProgress(t *testing.T)
 			}
 			if completedJob.Progress["completed"] != float64(1) || completedJob.Progress["total"] != float64(2) {
 				t.Fatalf("Progress = %#v, want completed/total 1/2", completedJob.Progress)
+			}
+			updatedReport, err := repo.GetReportByID(ctx, report.ID)
+			if err != nil {
+				t.Fatalf("GetReportByID() error = %v", err)
+			}
+			if updatedReport.Status != tt.wantReportStatus || updatedReport.LatestJobID != job.ID {
+				t.Fatalf("report metadata = %+v, want status %q latest job %q", updatedReport, tt.wantReportStatus, job.ID)
+			}
+			if (updatedReport.GeneratedAt != nil) != tt.wantGeneratedAt {
+				t.Fatalf("report generatedAt = %v, want present=%v", updatedReport.GeneratedAt, tt.wantGeneratedAt)
 			}
 		})
 	}

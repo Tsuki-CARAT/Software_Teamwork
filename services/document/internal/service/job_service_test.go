@@ -428,7 +428,15 @@ func (f *fakeJobRepository) UpdateReportGenerationStatus(_ context.Context, repo
 			generatedAt := updatedAt
 			f.report.GeneratedAt = &generatedAt
 		}
-	case JobStatusPartialSucceeded, JobStatusFailed, JobStatusCanceled:
+	case JobStatusPartialSucceeded:
+		if jobType == JobTypeOutlineGeneration || jobType == JobTypeOutlineRegeneration {
+			f.report.Status = ReportStatusOutlineGenerated
+		} else {
+			f.report.Status = ReportStatusGenerated
+			generatedAt := updatedAt
+			f.report.GeneratedAt = &generatedAt
+		}
+	case JobStatusFailed, JobStatusCanceled:
 		f.report.Status = ReportStatusFailed
 	}
 	f.report.LatestJobID = jobID

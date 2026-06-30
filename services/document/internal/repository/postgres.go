@@ -994,7 +994,12 @@ func reportStatusForGenerationJob(jobType service.JobType, jobStatus service.Job
 			return service.ReportStatusOutlineGenerated, true
 		}
 		return service.ReportStatusGenerated, true
-	case service.JobStatusPartialSucceeded, service.JobStatusFailed, service.JobStatusCanceled:
+	case service.JobStatusPartialSucceeded:
+		if isOutline {
+			return service.ReportStatusOutlineGenerated, true
+		}
+		return service.ReportStatusGenerated, true
+	case service.JobStatusFailed, service.JobStatusCanceled:
 		return service.ReportStatusFailed, true
 	default:
 		return "", false
@@ -1002,7 +1007,7 @@ func reportStatusForGenerationJob(jobType service.JobType, jobStatus service.Job
 }
 
 func shouldSetReportGeneratedAt(jobType service.JobType, jobStatus service.JobStatus) bool {
-	if jobStatus != service.JobStatusSucceeded {
+	if jobStatus != service.JobStatusSucceeded && jobStatus != service.JobStatusPartialSucceeded {
 		return false
 	}
 	switch jobType {

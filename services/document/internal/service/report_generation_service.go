@@ -85,8 +85,8 @@ func (s *ReportGenerationService) ExecuteReportGeneration(ctx context.Context, p
 }
 
 func (s *ReportGenerationService) executeOutlineGeneration(ctx context.Context, reqCtx RequestContext, payload ReportGenerationExecutionPayload, job ReportJob, report Report) (ReportGenerationExecutionResult, error) {
-	if report.ReportType != "summer_peak_inspection" {
-		return ReportGenerationExecutionResult{}, ValidationError(map[string]string{"reportType": "unsupported report type for AI outline generation"})
+	if err := validateSupportedAIReportType(report.ReportType, "outline"); err != nil {
+		return ReportGenerationExecutionResult{}, err
 	}
 	settings, err := s.safeSettings(ctx)
 	if err != nil {
@@ -153,6 +153,9 @@ func (s *ReportGenerationService) executeOutlineGeneration(ctx context.Context, 
 }
 
 func (s *ReportGenerationService) executeContentGeneration(ctx context.Context, reqCtx RequestContext, payload ReportGenerationExecutionPayload, job ReportJob, report Report) (ReportGenerationExecutionResult, error) {
+	if err := validateSupportedAIReportType(report.ReportType, "content"); err != nil {
+		return ReportGenerationExecutionResult{}, err
+	}
 	settings, err := s.safeSettings(ctx)
 	if err != nil {
 		return ReportGenerationExecutionResult{}, err
@@ -169,7 +172,14 @@ func (s *ReportGenerationService) executeContentGeneration(ctx context.Context, 
 	_ = s.recordEvent(ctx, report.ID, payload.JobID, "content.started", "content generation started")
 	completed := 0
 	total := len(sections)
+	preserveManual := preserveManualEdits(job)
 	for _, section := range sections {
+		if preserveManual && section.ManualEdited {
+			completed++
+			_ = s.repo.UpdateReportJobProgress(ctx, payload.JobID, completed, total)
+			_ = s.recordEvent(ctx, report.ID, payload.JobID, "section.skipped", "section generation skipped because manual edits are preserved")
+			continue
+		}
 		section.GenerationStatus = JobStatusRunning
 		section.LastJobID = payload.JobID
 		section.UpdatedAt = s.clock()
@@ -258,6 +268,26 @@ func (s *ReportGenerationService) executeContentGeneration(ctx context.Context, 
 	}
 	_ = s.recordEvent(ctx, report.ID, payload.JobID, "content.succeeded", "content generation succeeded")
 	return ReportGenerationExecutionResult{Status: JobStatusSucceeded}, nil
+}
+
+func validateSupportedAIReportType(reportType, generationKind string) error {
+	if reportType != "summer_peak_inspection" {
+		return ValidationError(map[string]string{"reportType": fmt.Sprintf("unsupported report type for AI %s generation", generationKind)})
+	}
+	return nil
+}
+
+func preserveManualEdits(job ReportJob) bool {
+	payload := jsonObject(job.RequestPayload)
+	options, ok := payload["options"].(map[string]any)
+	if !ok {
+		return true
+	}
+	value, ok := options["preserveManualEdits"].(bool)
+	if !ok {
+		return true
+	}
+	return value
 }
 
 func (s *ReportGenerationService) safeSettings(ctx context.Context) (ReportSettings, error) {

@@ -121,6 +121,206 @@ func TestReportGenerationServiceKeepsGeneratedSectionsOnPartialFailure(t *testin
 	}
 }
 
+func TestReportGenerationServiceRejectsUnsupportedReportTypeForContentJobs(t *testing.T) {
+	tests := []struct {
+		name       string
+		jobType    JobType
+		targetType string
+		targetID   string
+	}{
+		{name: "content generation", jobType: JobTypeContentGeneration, targetType: "report", targetID: "report-1"},
+		{name: "content regeneration", jobType: JobTypeContentRegeneration, targetType: "report", targetID: "report-1"},
+		{name: "section regeneration", jobType: JobTypeSectionRegeneration, targetType: "section", targetID: "section-1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newFakeReportGenerationRepository()
+			repo.reports["report-1"] = Report{
+				ID:         "report-1",
+				Name:       "Coal inventory audit",
+				ReportType: "coal_inventory_audit",
+				Topic:      "coal storage",
+				CreatorID:  "user-1",
+				Status:     ReportStatusOutlineGenerated,
+			}
+			repo.jobs["job-1"] = ReportJob{
+				ID:         "job-1",
+				JobType:    tt.jobType,
+				ReportID:   "report-1",
+				TargetType: tt.targetType,
+				TargetID:   tt.targetID,
+			}
+			repo.sections["section-1"] = ReportSection{
+				ID:               "section-1",
+				ReportID:         "report-1",
+				Title:            "Unsupported content",
+				SortOrder:        0,
+				Version:          1,
+				GenerationStatus: JobStatusPending,
+			}
+			chat := &fakeGenerationChatClient{}
+			svc := NewReportGenerationService(repo, chat)
+
+			_, err := svc.ExecuteReportGeneration(context.Background(), ReportGenerationExecutionPayload{
+				RequestID: "req-content",
+				JobType:   tt.jobType,
+				JobID:     "job-1",
+				UserID:    "user-1",
+			})
+			if code := errorCode(t, err); code != CodeValidation {
+				t.Fatalf("error code = %q, want %q", code, CodeValidation)
+			}
+			if len(chat.requests) != 0 {
+				t.Fatalf("chat request count = %d, want 0", len(chat.requests))
+			}
+		})
+	}
+}
+
+func TestReportGenerationServicePreservesManualEditedSectionsByDefault(t *testing.T) {
+	repo := newFakeReportGenerationRepository()
+	repo.reports["report-1"] = Report{
+		ID:         "report-1",
+		Name:       "Summer peak inspection",
+		ReportType: "summer_peak_inspection",
+		Topic:      "summer power supply",
+		CreatorID:  "user-1",
+		Status:     ReportStatusOutlineGenerated,
+	}
+	repo.jobs["job-1"] = ReportJob{ID: "job-1", JobType: JobTypeContentGeneration, ReportID: "report-1"}
+	manualSection := ReportSection{
+		ID:               "section-1",
+		ReportID:         "report-1",
+		Title:            "Manual section",
+		SortOrder:        0,
+		Content:          "manual body",
+		GenerationStatus: JobStatusSucceeded,
+		ContentSource:    ContentSourceManual,
+		ManualEdited:     true,
+		Version:          2,
+		LastJobID:        "manual-job",
+	}
+	repo.sections["section-1"] = manualSection
+	repo.sections["section-2"] = ReportSection{
+		ID:               "section-2",
+		ReportID:         "report-1",
+		Title:            "AI section",
+		SortOrder:        1,
+		Version:          1,
+		GenerationStatus: JobStatusPending,
+	}
+	chat := &fakeGenerationChatClient{
+		responses: []ChatCompletionResponse{{Content: `{"content":"generated body","tables":[]}`}},
+	}
+	svc := NewReportGenerationService(repo, chat)
+	svc.clock = func() time.Time { return time.Date(2026, 6, 30, 10, 0, 0, 0, time.UTC) }
+
+	result, err := svc.ExecuteReportGeneration(context.Background(), ReportGenerationExecutionPayload{
+		RequestID: "req-content",
+		JobType:   JobTypeContentGeneration,
+		JobID:     "job-1",
+		UserID:    "user-1",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteReportGeneration() error = %v", err)
+	}
+	if result.Status != JobStatusSucceeded {
+		t.Fatalf("result status = %q, want succeeded", result.Status)
+	}
+	if len(chat.requests) != 1 {
+		t.Fatalf("chat request count = %d, want 1", len(chat.requests))
+	}
+	if got := repo.sections["section-1"]; got.Content != manualSection.Content || got.Version != manualSection.Version || !got.ManualEdited || got.LastJobID != manualSection.LastJobID {
+		t.Fatalf("manual section was modified: %+v", got)
+	}
+	if len(repo.sectionVersions["section-1"]) != 0 {
+		t.Fatalf("manual section versions = %+v, want none", repo.sectionVersions["section-1"])
+	}
+	generated := repo.sections["section-2"]
+	if generated.Content != "generated body" || generated.Version != 2 || generated.GenerationStatus != JobStatusSucceeded || generated.ContentSource != ContentSourceAI {
+		t.Fatalf("generated section = %+v", generated)
+	}
+	if len(repo.progressUpdates) != 2 {
+		t.Fatalf("progress update count = %d, want 2", len(repo.progressUpdates))
+	}
+	lastProgress := repo.progressUpdates[len(repo.progressUpdates)-1]
+	if lastProgress["completed"] != 2 || lastProgress["total"] != 2 {
+		t.Fatalf("last progress = %+v, want 2/2", lastProgress)
+	}
+	foundSkippedEvent := false
+	for _, event := range repo.events {
+		if event.EventType == "section.skipped" {
+			foundSkippedEvent = true
+			break
+		}
+	}
+	if !foundSkippedEvent {
+		t.Fatalf("expected section.skipped event, got %+v", repo.events)
+	}
+}
+
+func TestReportGenerationServiceCanOverwriteManualEditedSectionWhenExplicitlyAllowed(t *testing.T) {
+	repo := newFakeReportGenerationRepository()
+	repo.reports["report-1"] = Report{
+		ID:         "report-1",
+		Name:       "Summer peak inspection",
+		ReportType: "summer_peak_inspection",
+		Topic:      "summer power supply",
+		CreatorID:  "user-1",
+		Status:     ReportStatusOutlineGenerated,
+	}
+	repo.jobs["job-1"] = ReportJob{
+		ID:         "job-1",
+		JobType:    JobTypeSectionRegeneration,
+		ReportID:   "report-1",
+		TargetID:   "section-1",
+		TargetType: "section",
+		RequestPayload: map[string]any{
+			"options": map[string]any{"preserveManualEdits": false},
+		},
+	}
+	repo.sections["section-1"] = ReportSection{
+		ID:               "section-1",
+		ReportID:         "report-1",
+		Title:            "Manual section",
+		SortOrder:        0,
+		Content:          "manual body",
+		GenerationStatus: JobStatusSucceeded,
+		ContentSource:    ContentSourceManual,
+		ManualEdited:     true,
+		Version:          2,
+	}
+	chat := &fakeGenerationChatClient{
+		responses: []ChatCompletionResponse{{Content: `{"content":"AI replacement","tables":[{"name":"replacement"}]}`}},
+	}
+	svc := NewReportGenerationService(repo, chat)
+	svc.clock = func() time.Time { return time.Date(2026, 6, 30, 10, 0, 0, 0, time.UTC) }
+
+	result, err := svc.ExecuteReportGeneration(context.Background(), ReportGenerationExecutionPayload{
+		RequestID: "req-content",
+		JobType:   JobTypeSectionRegeneration,
+		JobID:     "job-1",
+		UserID:    "user-1",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteReportGeneration() error = %v", err)
+	}
+	if result.Status != JobStatusSucceeded {
+		t.Fatalf("result status = %q, want succeeded", result.Status)
+	}
+	if len(chat.requests) != 1 {
+		t.Fatalf("chat request count = %d, want 1", len(chat.requests))
+	}
+	updated := repo.sections["section-1"]
+	if updated.Content != "AI replacement" || updated.Version != 3 || updated.ManualEdited || updated.ContentSource != ContentSourceAI {
+		t.Fatalf("manual section was not overwritten by explicit opt-out: %+v", updated)
+	}
+	if len(repo.sectionVersions["section-1"]) != 1 || repo.sectionVersions["section-1"][0].Content != "AI replacement" {
+		t.Fatalf("section versions = %+v", repo.sectionVersions["section-1"])
+	}
+}
+
 func TestReportGenerationServiceRetrievesKnowledgeContextForOutline(t *testing.T) {
 	repo := newFakeReportGenerationRepository()
 	repo.reports["report-1"] = Report{

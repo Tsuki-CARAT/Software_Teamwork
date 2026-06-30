@@ -79,3 +79,47 @@ Implemented issue #288 with an env-gated QA to AI Gateway chat smoke, token/prof
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Fix PR 300 review findings
+
+**Date**: 2026-06-30
+**Task**: Fix PR 300 review findings
+**Branch**: `JerryTeam/test/qa-ai-gateway-smoke`
+
+### Summary
+
+Addressed both Codex findings for PR #300, completed Trellis audit records, and synchronized the branch with the latest develop.
+
+### Main Changes
+
+- Changed the missing-profile probe to use the request-scoped smoke ID instead of deriving a predictable name from the configured valid profile.
+- Completed the archived issue #288 implementation/check context with the backend specs and smoke-design research actually used.
+- Replaced the issue #288 journal placeholders with concrete changes and verification evidence.
+- Extended the backend cross-service smoke contract with a unique missing-resource identifier rule.
+- Rebased PR #300 onto the latest upstream/develop before archival.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c9ae097` | (see git log) |
+| `251a521` | (see git log) |
+
+### Testing
+
+- [OK] `cd services/qa && go test -run '^TestAIGatewaySmoke$' -count=1 -v ./internal/platform/modelclient` (gate unset; explicit `SKIP`)
+- [OK] `cd services/qa && go test -count=1 ./...`
+- [OK] `cd services/qa && go build -buildvcs=false ./cmd/server`
+- [OK] `cd services/qa && go build -buildvcs=false ./cmd/agent`
+- [OK] Parsed all touched Trellis JSONL records with PowerShell `ConvertFrom-Json`.
+- [OK] `git diff --check`
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

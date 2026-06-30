@@ -19,14 +19,15 @@ Use this stack unless a task has an explicit reason to diverge:
 
 | Layer | Choice | Purpose |
 | --- | --- | --- |
-| Build | Vite | React SPA development and production builds. |
-| Language | TypeScript | API, form, permission, report, and UI state contracts. |
-| UI framework | React | Component model and app runtime. |
+| Runtime / package manager | Bun workspace (`bun@1.3.12`) | Dependency install and all frontend scripts. |
+| Build | Vite (`8.1.0`) | React SPA development and production builds. |
+| Language | TypeScript (`6.0.3`) | API, form, permission, report, and UI state contracts. |
+| UI framework | React (`19.2.7`) | Component model and app runtime. |
 | Routing | TanStack Router | Type-safe nested routes and route guards. |
 | Server state | TanStack Query | API caching, pagination, invalidation, polling, and mutations. |
 | Local global state | Zustand | Auth shell state, theme, sidebar, and chat draft/session state. |
-| Styling | Tailwind CSS | Layout, responsive design, and theme tokens. |
-| Components | shadcn/ui + Radix UI | Accessible dialogs, popovers, forms, tabs, dropdowns, toast, command palette, and primitives. |
+| Styling | Tailwind CSS (`4.3.1`) | Layout, responsive design, and theme tokens. |
+| Components | Base UI + Radix primitives through the `base-nova` shadcn registry config | Accessible dialogs, popovers, forms, tabs, dropdowns, toast, command palette, and primitives. |
 | Tables | TanStack Table | Knowledge bases, documents, report records, users, and system lists. |
 | Forms | React Hook Form + Zod | Auth, model settings, retrieval settings, report parameters, and template settings. |
 | Upload | react-dropzone | Drag-and-drop and click-to-select uploads. |
@@ -38,6 +39,11 @@ Use this stack unless a task has an explicit reason to diverge:
 | API types | OpenAPI + `openapi-typescript@7.13.0` | Generated API client/types from the public Gateway contract. |
 | Tests | Vitest + React Testing Library + Playwright | Unit, component, and critical workflow E2E tests. |
 | Formatting | ESLint + Prettier + Husky + lint-staged | Team consistency and pre-commit checks. |
+
+The current fixed package versions are recorded in
+`docs/architecture/technology-decisions.md` and the lockfile. Do not treat a
+library listed here as installed if it is absent from `apps/web/package.json`;
+first update the package manifest, lockfile, and technology-decision baseline.
 
 ## Guideline Index
 
@@ -57,7 +63,7 @@ Read these files before frontend implementation:
 The frontend spec was merged from two sources:
 
 - `upstream/develop` already had a frontend spec structure and repository collaboration rules. Those files established that frontend guidance belongs under `.trellis/spec/frontend/` and that repository-level branch/PR policy belongs in `CONTRIBUTING.md`.
-- L1ngg's previous frontend work filled the placeholders with concrete implementation decisions for `apps/web`: Vite, React, TypeScript, TanStack Router/Query, Zustand, Tailwind, shadcn/Radix, Bun commands, `openapi-typescript@7.13.0`, and the AI management product modules.
+- L1ngg's previous frontend work filled the placeholders with concrete implementation decisions for `apps/web`: Bun, Vite, React, TypeScript, TanStack Router/Query, Zustand, Tailwind, Base UI/Radix via the `base-nova` shadcn config, `openapi-typescript@7.13.0`, and the AI management product modules.
 
 The merged result keeps the `develop` ownership model: `CONTRIBUTING.md` remains the source of truth for branch, PR, commit, and merge policy. The frontend spec only defines how to implement and verify frontend code under `apps/web/`.
 

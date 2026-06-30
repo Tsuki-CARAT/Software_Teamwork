@@ -85,6 +85,47 @@ func TestResolveParserConfigFallsBackToBuiltinWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestResolveParserConfigPrefersMatchingNonDefaultOverDefaultFallback(t *testing.T) {
+	repo := repository.NewMemoryRepository()
+	now := time.Date(2026, 6, 29, 0, 0, 0, 0, time.UTC)
+	repo.SeedParserConfig(service.ParserConfig{
+		ID:                    "parser_default",
+		Name:                  "Default builtin",
+		Backend:               service.ParserBackendBuiltin,
+		Enabled:               true,
+		IsDefault:             true,
+		Concurrency:           4,
+		SupportedContentTypes: nil,
+		DefaultParameters:     json.RawMessage(`{}`),
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	})
+	repo.SeedParserConfig(service.ParserConfig{
+		ID:                    "parser_images",
+		Name:                  "Image OCR",
+		Backend:               service.ParserBackendLocalOCR,
+		Enabled:               true,
+		IsDefault:             false,
+		Concurrency:           2,
+		SupportedContentTypes: []string{"image/*"},
+		DefaultParameters:     json.RawMessage(`{"mode":"ocr"}`),
+		CreatedAt:             now.Add(time.Second),
+		UpdatedAt:             now.Add(time.Second),
+	})
+	svc := service.New(repo)
+
+	snapshot, err := svc.ResolveParserConfig(context.Background(), "image/png")
+	if err != nil {
+		t.Fatalf("ResolveParserConfig() error = %v", err)
+	}
+	if snapshot.ParserConfigID != "parser_images" {
+		t.Fatalf("parser config id = %q, want parser_images", snapshot.ParserConfigID)
+	}
+	if snapshot.Backend != service.ParserBackendLocalOCR || snapshot.Concurrency != 2 {
+		t.Fatalf("snapshot = %+v", snapshot)
+	}
+}
+
 func validParserInput(backend string, isDefault bool) service.CreateParserConfigInput {
 	return service.CreateParserConfigInput{Name: "Parser " + backend, Backend: service.ParserBackend(backend), Concurrency: 4, IsDefault: &isDefault, SupportedContentTypes: []string{"application/pdf"}, DefaultParameters: json.RawMessage(`{"language":"auto"}`)}
 }

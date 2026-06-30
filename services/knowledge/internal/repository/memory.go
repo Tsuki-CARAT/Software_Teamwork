@@ -126,12 +126,38 @@ func (r *MemoryRepository) GetEffectiveParserConfig(ctx context.Context, content
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	for _, config := range r.parserConfigs {
-		if config.DeletedAt == nil && config.Enabled && config.IsDefault && supportsContentType(config, contentType) {
-			return cloneParserConfig(config), nil
-		}
+	type candidate struct {
+		config service.ParserConfig
+		rank   int
 	}
-	return service.ParserConfig{}, service.ErrNotFound
+	candidates := []candidate{}
+	for _, config := range r.parserConfigs {
+		if config.DeletedAt != nil || !config.Enabled {
+			continue
+		}
+		rank, ok := parserContentTypeMatchRank(config, contentType)
+		if !ok {
+			continue
+		}
+		candidates = append(candidates, candidate{config: config, rank: rank})
+	}
+	if len(candidates) == 0 {
+		return service.ParserConfig{}, service.ErrNotFound
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		left, right := candidates[i], candidates[j]
+		if left.rank != right.rank {
+			return left.rank < right.rank
+		}
+		if left.config.IsDefault != right.config.IsDefault {
+			return left.config.IsDefault
+		}
+		if !left.config.CreatedAt.Equal(right.config.CreatedAt) {
+			return left.config.CreatedAt.Before(right.config.CreatedAt)
+		}
+		return left.config.ID < right.config.ID
+	})
+	return cloneParserConfig(candidates[0].config), nil
 }
 
 func (r *MemoryRepository) SeedParserConfig(config service.ParserConfig) {
@@ -157,16 +183,26 @@ func (r *MemoryRepository) clearDefaultLocked(except string, updatedAt time.Time
 		}
 	}
 }
-func supportsContentType(config service.ParserConfig, contentType string) bool {
-	if contentType == "" || len(config.SupportedContentTypes) == 0 {
-		return true
+func parserContentTypeMatchRank(config service.ParserConfig, contentType string) (int, bool) {
+	if contentType == "" {
+		return 0, true
 	}
+	if len(config.SupportedContentTypes) == 0 {
+		return 2, true
+	}
+	wildcardMatch := false
 	for _, candidate := range config.SupportedContentTypes {
-		if candidate == contentType || strings.HasSuffix(candidate, "/*") && strings.HasPrefix(contentType, strings.TrimSuffix(candidate, "*")) {
-			return true
+		if candidate == contentType {
+			return 0, true
+		}
+		if strings.HasSuffix(candidate, "/*") && strings.HasPrefix(contentType, strings.TrimSuffix(candidate, "*")) {
+			wildcardMatch = true
 		}
 	}
-	return false
+	if wildcardMatch {
+		return 1, true
+	}
+	return 0, false
 }
 func cloneParserConfig(config service.ParserConfig) service.ParserConfig {
 	config.SupportedContentTypes = append([]string(nil), config.SupportedContentTypes...)

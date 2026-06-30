@@ -119,6 +119,10 @@ async function redirectToAdminHome() {
     throw redirect({ to: '/admin/qa-settings' })
   }
 
+  if (canAccess(store.user, parserConfigsPerm)) {
+    throw redirect({ to: '/admin/parser-configs' })
+  }
+
   throw redirect({ to: '/forbidden' })
 }
 
@@ -143,6 +147,7 @@ const adminAccess: PermissionRequirement = {
     'reports:write',
     'knowledge:read',
     'knowledge:write',
+    'knowledge:admin',
     'document:upload',
     'admin:model-profile:write',
     'admin:parser-config:write',
@@ -364,7 +369,7 @@ const modelProfilesPerm: PermissionRequirement = {
   any: ['admin:model-profile:write', 'system:admin'],
 }
 const parserConfigsPerm: PermissionRequirement = {
-  any: ['admin:parser-config:write', 'system:admin'],
+  any: ['admin:parser-config:write', 'knowledge:admin', 'system:admin'],
 }
 
 const adminModelProfilesRoute = createRoute({

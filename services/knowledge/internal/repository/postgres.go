@@ -149,7 +149,28 @@ func (r *PostgresRepository) SoftDeleteParserConfig(ctx context.Context, id stri
 }
 
 func (r *PostgresRepository) GetEffectiveParserConfig(ctx context.Context, contentType string) (service.ParserConfig, error) {
-	config, err := scanParserConfig(r.pool.QueryRow(ctx, `SELECT `+parserConfigColumns+` FROM parser_configs WHERE enabled AND is_default AND deleted_at IS NULL AND ($1='' OR cardinality(supported_content_types)=0 OR $1=ANY(supported_content_types) OR split_part($1,'/',1)||'/*'=ANY(supported_content_types)) LIMIT 1`, contentType))
+	const query = `SELECT ` + parserConfigColumns + `
+		FROM parser_configs
+		WHERE enabled
+			AND deleted_at IS NULL
+			AND (
+				$1=''
+				OR cardinality(supported_content_types)=0
+				OR $1=ANY(supported_content_types)
+				OR split_part($1,'/',1)||'/*'=ANY(supported_content_types)
+			)
+		ORDER BY
+			CASE
+				WHEN $1='' THEN 0
+				WHEN $1=ANY(supported_content_types) THEN 0
+				WHEN split_part($1,'/',1)||'/*'=ANY(supported_content_types) THEN 1
+				WHEN cardinality(supported_content_types)=0 THEN 2
+				ELSE 3
+			END,
+			is_default DESC,
+			created_at ASC
+		LIMIT 1`
+	config, err := scanParserConfig(r.pool.QueryRow(ctx, query, contentType))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return service.ParserConfig{}, service.ErrNotFound
 	}

@@ -556,13 +556,11 @@ export function ParserConfigsPage() {
               <Input
                 id="pc-create-filetypes"
                 type="text"
-                placeholder="pdf, docx, txt (逗号分隔)"
+                placeholder="application/pdf, text/plain (逗号分隔)"
                 value={form.fileTypes}
                 onChange={(e) => updateField('fileTypes', e.target.value)}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                支持的文件 MIME 类型或扩展名，逗号分隔。
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">支持的文件 MIME 类型，逗号分隔。</p>
             </div>
 
             {/* Chunk Size */}
@@ -759,13 +757,11 @@ export function ParserConfigsPage() {
               <Input
                 id="pc-edit-filetypes"
                 type="text"
-                placeholder="pdf, docx, txt (逗号分隔)"
+                placeholder="application/pdf, text/plain (逗号分隔)"
                 value={form.fileTypes}
                 onChange={(e) => updateField('fileTypes', e.target.value)}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                支持的文件 MIME 类型或扩展名，逗号分隔。
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">支持的文件 MIME 类型，逗号分隔。</p>
             </div>
 
             {/* Chunk Size */}

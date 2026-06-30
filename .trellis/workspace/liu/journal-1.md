@@ -430,17 +430,24 @@ Fixed PR #290 second review by aligning report DELETE and retry attempt API cont
 
 ### Main Changes
 
-(Add details)
+- Updated report DELETE wrappers to use void transport for `204 No Content`.
+- Corrected retry attempt typing to `ReportJobAttempt` and refreshed related job/events queries.
+- Added regression coverage for DELETE 204 handling and retry attempt envelope unwrapping.
+- Cleaned PR #290 Trellis context placeholders from archived task files and recent journal entries.
 
 ### Git Commits
 
 | Hash | Message |
 |------|---------|
-| `e2ca6cb` | (see git log) |
+| `e2ca6cb` | fix(frontend): align report api contracts |
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `bun run --cwd apps/web test:unit`
+- [OK] `bun run --cwd apps/web build`
+- [OK] `bun run --cwd apps/web check` reached `typecheck`, `typecheck:test`, and `lint`; failed only at existing global `format:check` baseline.
+- [OK] `bunx prettier --check` on touched frontend files.
+- [OK] `git diff --check`
 
 ### Status
 

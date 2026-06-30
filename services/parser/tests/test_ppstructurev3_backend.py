@@ -2,6 +2,7 @@ import pytest
 
 from parser_service.backends.ppstructurev3 import (
     PPStructureV3Backend,
+    _callable_accepts_kwargs,
     _ChildSuccess,
     _collect_pages_and_markdown,
     _merged_markdown_from_items,
@@ -93,6 +94,16 @@ class FakeVisualPagePipeline:
 
     def concatenate_markdown_pages(self, markdown_items):
         return markdown_items[0]
+
+
+class FakePPStructureV3:
+    def __init__(self, *, lang=None, use_doc_orientation_classify=None, **kwargs) -> None:
+        pass
+
+
+class StrictPPStructureV3:
+    def __init__(self, *, lang=None) -> None:
+        pass
 
 
 def _write_large_parsed_document(result_path: str) -> None:
@@ -256,6 +267,64 @@ def test_backend_omits_engine_even_when_configured_for_official_ppstructurev3():
     kwargs = PPStructureV3Backend(engine="paddle")._pipeline_kwargs()
 
     assert "engine" not in kwargs
+
+
+def test_callable_accepts_kwargs_respects_constructor_signature():
+    assert _callable_accepts_kwargs(FakePPStructureV3, {"lang": "ch", "device": "cpu"}) is True
+    assert _callable_accepts_kwargs(StrictPPStructureV3, {"lang": "ch"}) is True
+    assert _callable_accepts_kwargs(StrictPPStructureV3, {"lang": "ch", "device": "cpu"}) is False
+
+
+def test_health_uses_lightweight_runtime_probe_without_loading_model(monkeypatch):
+    class FakeModule:
+        PPStructureV3 = FakePPStructureV3
+
+    imports = []
+
+    def fake_import_module(name):
+        imports.append(name)
+        if name == "paddleocr":
+            return FakeModule()
+        if name == "pypdfium2":
+            return object()
+        raise AssertionError(name)
+
+    class FakeBackend(PPStructureV3Backend):
+        def _ensure_pipeline(self):
+            raise AssertionError("health must not load the model")
+
+    monkeypatch.setattr(
+        "parser_service.backends.ppstructurev3.importlib.import_module",
+        fake_import_module,
+    )
+
+    health = FakeBackend().health()
+
+    assert health.ready is True
+    assert health.status == "ready"
+    assert imports == ["paddleocr", "pypdfium2"]
+
+
+def test_health_reports_incompatible_constructor_args(monkeypatch):
+    class FakeModule:
+        PPStructureV3 = StrictPPStructureV3
+
+    def fake_import_module(name):
+        if name == "paddleocr":
+            return FakeModule()
+        if name == "pypdfium2":
+            return object()
+        raise AssertionError(name)
+
+    monkeypatch.setattr(
+        "parser_service.backends.ppstructurev3.importlib.import_module",
+        fake_import_module,
+    )
+
+    health = PPStructureV3Backend(device="cpu").health()
+
+    assert health.ready is False
+    assert health.reason == "ppstructurev3 constructor arguments are not compatible"
 
 
 def test_backend_pipeline_kwargs_enable_precision_preprocessing_when_configured():

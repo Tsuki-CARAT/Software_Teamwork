@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import multiprocessing as mp
 import pickle
 import tempfile
@@ -124,12 +125,27 @@ class PPStructureV3Backend:
         if self._pipeline is not None:
             return BackendHealth(ready=True, status="ready")
         try:
-            from paddleocr import PPStructureV3  # noqa: F401
+            module = importlib.import_module("paddleocr")
+            pp_structure_v3 = module.PPStructureV3
         except Exception:
             return BackendHealth(
                 ready=False,
                 status="not_ready",
                 reason="paddleocr PPStructureV3 runtime is not installed",
+            )
+        try:
+            importlib.import_module("pypdfium2")
+        except Exception:
+            return BackendHealth(
+                ready=False,
+                status="not_ready",
+                reason="pypdfium2 runtime is not installed",
+            )
+        if not _callable_accepts_kwargs(pp_structure_v3, self._pipeline_kwargs()):
+            return BackendHealth(
+                ready=False,
+                status="not_ready",
+                reason="ppstructurev3 constructor arguments are not compatible",
             )
         return BackendHealth(ready=True, status="ready")
 
@@ -483,6 +499,26 @@ def _predict_result(pipeline: Any, input_path: str) -> Any:
     if callable(predict_iter):
         return predict_iter(input=input_path)
     return pipeline.predict(input=input_path)
+
+
+def _callable_accepts_kwargs(callable_obj: Any, kwargs: dict[str, Any]) -> bool:
+    try:
+        signature = inspect.signature(callable_obj)
+    except (TypeError, ValueError):
+        return True
+    parameters = signature.parameters.values()
+    accepted_names: set[str] = set()
+    accepts_extra_kwargs = False
+    for parameter in parameters:
+        if parameter.kind is inspect.Parameter.VAR_KEYWORD:
+            accepts_extra_kwargs = True
+            break
+        if parameter.kind in {
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        }:
+            accepted_names.add(parameter.name)
+    return accepts_extra_kwargs or all(key in accepted_names for key in kwargs)
 
 
 def _collect_pages_and_markdown(

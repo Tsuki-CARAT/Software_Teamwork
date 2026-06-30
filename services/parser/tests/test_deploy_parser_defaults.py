@@ -7,10 +7,10 @@ def test_deploy_defaults_enable_ppstructurev3_backend():
     compose = (repo_root / "deploy/docker-compose.yml").read_text(encoding="utf-8")
 
     assert "PARSER_BACKEND=ppstructurev3" in env_example
-    assert "PARSER_LOAD_BACKEND_ON_STARTUP=true" in env_example
+    assert "PARSER_LOAD_BACKEND_ON_STARTUP=false" in env_example
     assert "PARSER_BACKEND: ${PARSER_BACKEND:-ppstructurev3}" in compose
     assert (
-        "PARSER_LOAD_BACKEND_ON_STARTUP: ${PARSER_LOAD_BACKEND_ON_STARTUP:-true}" in compose
+        "PARSER_LOAD_BACKEND_ON_STARTUP: ${PARSER_LOAD_BACKEND_ON_STARTUP:-false}" in compose
     )
     assert "PARSER_BACKEND=document" not in env_example
     assert "PARSER_BACKEND: ${PARSER_BACKEND:-document}" not in compose

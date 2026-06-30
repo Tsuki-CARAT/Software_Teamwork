@@ -46,6 +46,13 @@ still trigger a DPI retry, but short English labels, numeric tables, and other
 non-CJK pages should not be treated as low-quality by default. Only obvious
 encoding-artefact pages such as `I¥J` / `B"J` sequences keep the retry warning.
 
+Default deployments keep `PARSER_LOAD_BACKEND_ON_STARTUP=false` when
+`PARSER_SUBPROCESS_ISOLATION=true`. Loading PP-StructureV3 in the main process
+while each parse batch also loads it in a child process can double model memory
+pressure. `/readyz` should therefore use lightweight runtime dependency and
+constructor-argument checks unless an operator explicitly chooses eager model
+loading.
+
 The backend keeps PP-StructureV3 inside the Parser runtime boundary. Knowledge
 continues to receive normalized parsed content over HTTP and remains
 responsible for chunking, embedding, indexing, and retrieval.

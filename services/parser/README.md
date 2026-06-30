@@ -172,7 +172,7 @@ docker build -t software-teamwork-parser:local .
 | `PARSER_MAX_CONCURRENCY` | `1` | Maximum concurrent parse jobs in one process. |
 | `PARSER_QUEUE_TIMEOUT_SECONDS` | `0` | Queue wait timeout; `0` waits until capacity is available. |
 | `PARSER_PARSE_TIMEOUT_SECONDS` | `120` | Per-document backend timeout. |
-| `PARSER_LOAD_BACKEND_ON_STARTUP` | `false` | Eagerly load PaddleOCR at startup when true. Root Compose enables this by default for the `ppstructurev3` deployment baseline so `/readyz` reflects real model readiness. |
+| `PARSER_LOAD_BACKEND_ON_STARTUP` | `false` | Eagerly load PaddleOCR at startup when true. Keep this false with PP-StructureV3 subprocess isolation in 16 GB deployments to avoid keeping a main-process model resident while child processes load their own models. |
 | `PARSER_PROFILE` | `accurate` | Runtime profile marker. Current defaults favor fidelity; lighter profiles must be selected explicitly with model/env overrides. |
 | `PARSER_DEFAULT_DPI` | `180` | Initial PDF page render DPI for PP-StructureV3 OCR. |
 | `PARSER_RETRY_DPI` | `220` | Retry DPI for pages with low OCR confidence or low text quality. |

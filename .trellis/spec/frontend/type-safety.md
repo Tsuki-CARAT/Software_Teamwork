@@ -179,6 +179,85 @@ const data = await requestJson<KnowledgeQuerySummary>('/knowledge-queries', {
 return data.results
 ```
 
+## Scenario: Gateway Capability Error Presentation
+
+### 1. Scope / Trigger
+
+- Trigger: frontend pages call Gateway active paths whose backend workflow may
+  still be staged, not implemented, or dependency-bound.
+- Applies to Knowledge retrieval, document chunks/content, parser configs, and
+  similar active contract paths under `apps/web/src/`.
+
+### 2. Signatures
+
+- Input error type: `ApiError` from `apps/web/src/api/client.ts`.
+- Minimum fields used by UI classifiers: `status`, `code`, `message`,
+  optional `requestId`.
+- UI helper returns a typed issue with `kind`, `title`, `description`,
+  `variant`, and `requestIdText`.
+
+### 3. Contracts
+
+- `501` or `error.code === "not_implemented"` means the route is active in
+  Gateway but the backend workflow is not ready.
+- `502` or `error.code === "dependency_error"` means a downstream service or
+  infrastructure dependency failed.
+- `403` or `error.code === "forbidden"` means permission denied and must not be
+  presented as a readiness problem.
+- User-visible notices must include `requestId` when present. If absent, say
+  the response did not include one.
+- Browser code must continue calling Gateway `/api/v1/**`; do not bypass
+  Gateway to probe internal service readiness.
+
+### 4. Validation & Error Matrix
+
+| Condition | UI behavior |
+| --- | --- |
+| `501 not_implemented` | Show "capability not ready"; do not render empty data or fake success. |
+| `502 dependency_error` | Show dependency failure with retry affordance when relevant. |
+| `403 forbidden` | Show permission denied / forbidden state. |
+| Gateway error with requestId | Include `requestId: <id>` in the notice detail. |
+| Gateway error without requestId | State that no requestId was returned. |
+| Non-Gateway error | State that requestId is unavailable because it was not a Gateway error. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: Knowledge search clears stale results before mutation and shows a
+  `not_implemented` warning if Gateway returns `501`.
+- Base: A table query uses the shared classifier in its error state and keeps a
+  retry button.
+- Bad: Rendering `[]` when `/knowledge-queries` returns `501`.
+- Bad: Matching localized error message text instead of `ApiError.code` or
+  `ApiError.status`.
+
+### 6. Tests Required
+
+- Unit-test the classifier for `501/not_implemented`, `502/dependency_error`,
+  `403/forbidden`, and missing requestId.
+- For pages with stale mutable results, assert failed capability calls do not
+  leave prior fake or stale success content visible.
+- `bun run --cwd apps/web check` and `bun run --cwd apps/web build` must pass
+  after changing shared API/error helpers.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+if (error instanceof Error) {
+  setNotice(`加载失败: ${error.message}`)
+}
+setResults([])
+```
+
+#### Correct
+
+```ts
+const issue = getGatewayCapabilityIssue(error, '知识检索')
+setNotice(`${issue.title}: ${issue.description}`)
+setResults(null)
+```
+
 ## Scenario: QA/LLM Config Version Forms
 
 ### 1. Scope / Trigger

@@ -55,6 +55,10 @@ func TestDocumentedResourceRoundTrip(t *testing.T) {
 	if err != nil || len(replayed) != 3 {
 		t.Fatalf("events=%d err=%v", len(replayed), err)
 	}
+	replayedAfterFirst, err := repo.ListStreamEvents(ctx, "integration-user", conversationID, run.ID, 1)
+	if err != nil || len(replayedAfterFirst) != 2 || replayedAfterFirst[0].EventSeq != 2 {
+		t.Fatalf("events after seq=%+v err=%v", replayedAfterFirst, err)
+	}
 	calls, err := repo.ListToolCalls(ctx, "integration-user", run.ID)
 	if err != nil || len(calls) != 1 || calls[0].Status != "completed" {
 		t.Fatalf("calls=%+v err=%v", calls, err)

@@ -10,11 +10,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/http/middleware"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/service"
 )
+
+var streamHeartbeatInterval = 15 * time.Second
 
 type QAService interface {
 	CreateConversation(context.Context, string, string) (service.Conversation, error)
@@ -318,8 +321,19 @@ func (s *Server) handleAskStream(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
+	var streamMu sync.Mutex
 	sentError := false
+	writeStream := func(event string, sequence int, payload any) {
+		streamMu.Lock()
+		defer streamMu.Unlock()
+		writeSSE(w, flusher, event, sequence, payload)
+	}
+	stopHeartbeat := startStreamHeartbeat(r.Context(), writeStream)
+	defer stopHeartbeat()
+
 	observe := func(event service.ProgressEvent) {
+		streamMu.Lock()
+		defer streamMu.Unlock()
 		if event.Type == "error" {
 			sentError = true
 		}
@@ -331,10 +345,39 @@ func (s *Server) handleAskStream(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			appErr = service.NewError(service.CodeInternal, "answer generation failed", err)
 		}
+		streamMu.Lock()
+		defer streamMu.Unlock()
 		if !sentError {
 			writeSSE(w, flusher, "error", 0, map[string]any{"code": appErr.Code, "message": appErr.Message, "requestId": requestIDFromContext(r.Context())})
 		}
 		return
+	}
+}
+
+func startStreamHeartbeat(ctx context.Context, write func(string, int, any)) func() {
+	if streamHeartbeatInterval <= 0 {
+		return func() {}
+	}
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(streamHeartbeatInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			case <-ticker.C:
+				write("heartbeat", 0, map[string]any{"status": "alive"})
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-stopped
 	}
 }
 

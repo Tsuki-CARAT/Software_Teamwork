@@ -165,6 +165,17 @@ func (r cancelBeforeCompletedObserverRunner) RunWithObserver(_ context.Context, 
 	return agent.Result{Final: final, Messages: append(input, final), Iterations: 1}, nil
 }
 
+type toolProgressRunner struct{}
+
+func (toolProgressRunner) RunWithObserver(_ context.Context, input []agent.Message, observer agent.Observer) (agent.Result, error) {
+	observer(agent.Event{Type: agent.EventModelStarted, Iteration: 1})
+	observer(agent.Event{Type: agent.EventToolStarted, Iteration: 1, ToolCallID: "call-1", ToolName: "search_knowledge"})
+	observer(agent.Event{Type: agent.EventToolCompleted, Iteration: 1, ToolCallID: "call-1", ToolName: "search_knowledge"})
+	observer(agent.Event{Type: agent.EventModelCompleted, Iteration: 1, Usage: agent.TokenUsage{PromptTokens: 7, CompletionTokens: 5, TotalTokens: 12}})
+	final := agent.Message{Role: agent.RoleAssistant, Content: "tool answer"}
+	return agent.Result{Final: final, Messages: append(input, final), Iterations: 1}, nil
+}
+
 func (r *fakeAgentRunner) RunWithObserver(ctx context.Context, input []agent.Message, observer agent.Observer) (agent.Result, error) {
 	r.userID = UserIDFromContext(ctx)
 	r.input = append([]agent.Message(nil), input...)
@@ -369,6 +380,12 @@ func TestCancelActiveRunCancelsAgentAndPersistsCancelledMessage(t *testing.T) {
 	}
 	if len(repository.invocations) != 0 {
 		t.Fatalf("invocations=%+v", repository.invocations)
+	}
+	if len(repository.savedEvents) == 0 || repository.savedEvents[len(repository.savedEvents)-1].EventType != "error" {
+		t.Fatalf("saved events=%+v, want replayable cancellation error event", repository.savedEvents)
+	}
+	if got := repository.savedEvents[len(repository.savedEvents)-1].Payload["code"]; got != string(CodeDependency) {
+		t.Fatalf("cancel error code=%v, want %s", got, CodeDependency)
 	}
 }
 
@@ -579,5 +596,38 @@ func TestAskPersistsMaxIterationsReason(t *testing.T) {
 	}
 	if len(repository.invocations) != 1 || repository.invocations[0].Status != "completed" || repository.invocations[0].TotalTokens != 5 {
 		t.Fatalf("invocations=%+v", repository.invocations)
+	}
+}
+
+func TestAskToolProgressEventsExposeOnlySafeSummaries(t *testing.T) {
+	repository := &fakeRepository{conversation: Conversation{ID: "conversation-id", OwnerUserID: "user-id", Status: "active"}}
+	qa, err := NewQAService(repository, fakeRuntimeProvider{runner: toolProgressRunner{}, prompt: "system prompt with private instruction"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var events []ProgressEvent
+	_, err = qa.Ask(context.Background(), "user-id", "conversation-id", AskInput{Message: "use tool"}, func(event ProgressEvent) {
+		events = append(events, event)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seenToolEvent := false
+	for _, event := range events {
+		if event.Type != "tool.started" && event.Type != "tool.completed" && event.Type != "tool.failed" {
+			continue
+		}
+		seenToolEvent = true
+		for _, forbidden := range []string{"arguments", "args", "result", "rawResult", "internalUrl", "prompt"} {
+			if _, ok := event.Payload[forbidden]; ok {
+				t.Fatalf("tool event leaked %q in payload %#v", forbidden, event.Payload)
+			}
+		}
+		if event.Payload["toolCallId"] != "call-1" || event.Payload["tool"] != "search_knowledge" || event.Payload["iterationNo"] != 1 {
+			t.Fatalf("unexpected safe tool payload: %#v", event.Payload)
+		}
+	}
+	if !seenToolEvent {
+		t.Fatal("expected tool progress events")
 	}
 }

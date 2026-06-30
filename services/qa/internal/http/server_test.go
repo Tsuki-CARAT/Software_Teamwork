@@ -286,6 +286,35 @@ func TestStreamDoesNotDuplicateServiceErrorEvent(t *testing.T) {
 	}
 }
 
+func TestStreamEmitsHeartbeatWhileAskIsIdle(t *testing.T) {
+	originalInterval := streamHeartbeatInterval
+	streamHeartbeatInterval = time.Millisecond
+	t.Cleanup(func() { streamHeartbeatInterval = originalInterval })
+
+	server := newTestServer(t, fakeQAService{ask: func(ctx context.Context, _, _ string, _ service.AskInput, _ service.ProgressObserver) (service.AskResult, error) {
+		select {
+		case <-time.After(10 * time.Millisecond):
+			return service.AskResult{}, nil
+		case <-ctx.Done():
+			return service.AskResult{}, ctx.Err()
+		}
+	}})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/internal/v1/qa-sessions/session-id/messages", strings.NewReader(`{"message":"question"}`))
+	request.Header.Set("Accept", "text/event-stream")
+	request.Header.Set("X-User-Id", "user-1")
+	request.Header.Set("X-Service-Token", "test-service-token")
+	server.ServeHTTP(recorder, request)
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, "event: heartbeat") {
+		t.Fatalf("missing heartbeat in stream body: %s", body)
+	}
+	if strings.Contains(body, "event: heartbeat\nid:") {
+		t.Fatalf("heartbeat must not use a replay event id: %s", body)
+	}
+}
+
 func TestListMessagesUsesDocumentedQueryParameters(t *testing.T) {
 	server := newTestServer(t, fakeQAService{listMessages: func(_ context.Context, userID, sessionID string, options service.MessageListOptions) (service.Page[service.Message], error) {
 		if userID != "user-1" || sessionID != "session-1" {

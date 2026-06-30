@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 PARSER_OPENAPI_FILES = (
     "services/parser/api/openapi.yaml",
     "docs/services/parser/api/internal.openapi.yaml",
@@ -33,14 +35,45 @@ def test_parser_openapi_matches_lightweight_parsed_document_response():
 
 def test_parser_openapi_documents_readiness_contract():
     repo_root = Path(__file__).resolve().parents[3]
+    health_schemas = {
+        relative_path: _load_health_response_schema(repo_root, relative_path)
+        for relative_path in PARSER_OPENAPI_FILES
+    }
+
+    assert (
+        health_schemas["services/parser/api/openapi.yaml"]
+        == health_schemas["docs/services/parser/api/internal.openapi.yaml"]
+    )
+
+    health_schema = health_schemas["services/parser/api/openapi.yaml"]
+    data_schema = health_schema["properties"]["data"]
+    data_properties = data_schema["properties"]
+
+    assert data_schema["required"] == ["service", "status"]
+    assert data_properties["status"]["enum"] == ["ok", "ready", "not_ready"]
+    assert data_properties["backend"]["nullable"] is True
+    assert data_properties["reason"] == {
+        "type": "string",
+        "description": "Optional diagnostic for not-ready backend state.",
+    }
+    assert "reason" not in data_schema["required"]
+
+
+def _load_health_response_schema(repo_root: Path, relative_path: str) -> dict[str, object]:
+    openapi = yaml.safe_load(_read_repo_file(repo_root, relative_path))
+    assert isinstance(openapi, dict)
+    schema = openapi["components"]["schemas"]["HealthResponse"]
+    assert isinstance(schema, dict)
+    return schema
+
+
+def test_parser_openapi_does_not_document_degraded_readiness_status():
+    repo_root = Path(__file__).resolve().parents[3]
 
     for relative_path in PARSER_OPENAPI_FILES:
         openapi = _read_repo_file(repo_root, relative_path)
 
-        assert "enum: [ok, ready, not_ready]" in openapi
         assert "degraded" not in openapi
-        assert "reason:" in openapi
-        assert "Optional diagnostic for not-ready backend state." in openapi
 
 
 def _read_repo_file(repo_root: Path, relative_path: str) -> str:

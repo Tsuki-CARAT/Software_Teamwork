@@ -9,7 +9,7 @@
 - 服务间通信以 RESTful HTTP API 为主，公开接口以 gateway OpenAPI 为权威。
 - 技术选型优先选择团队可维护、容易在 CI 中验证、和当前代码形态一致的方案。
 - 已经写入 `package.json`、`bun.lock`、`go.mod`、Dockerfile、Compose 或 GitHub Actions 的版本视为当前仓库版本。
-- 本地开发 Compose 中仍有 `latest` 镜像 tag；这些只代表当前未固定版本状态，不允许直接作为生产部署基线。
+- 本地开发 Compose 中的共享基础设施镜像必须使用明确 tag；新增或升级镜像时必须同步本文和对应 Compose/README。
 
 ## 版本标注规则
 
@@ -18,7 +18,7 @@
 | 已固定 | 版本已经在仓库配置或锁文件中固定，新代码默认沿用该版本或同一大版本。 |
 | 已选型，待固定 | 技术路线已确认，但仓库尚未引入依赖、CLI 或镜像版本；首次落地时必须写入明确版本并更新本文。 |
 | 标准库 / 协议 | 由 Go 标准库、Web 标准、HTTP/OpenAPI 协议或团队契约定义，不存在独立第三方依赖版本。 |
-| 当前为 `latest` | 本地 Compose 已使用 `latest` tag，但还没有可复现版本；生产前必须改成明确 tag。 |
+| Compose 镜像 tag | 本地或部署 Compose 使用的镜像 tag，必须明确记录并与 Compose 文件一致。 |
 
 ## 服务文档使用方式
 
@@ -56,7 +56,7 @@
 | PostgreSQL client | Auth、Knowledge、QA、Document、AI Gateway 均使用 `pgx/v5@v5.7.6`。 | 新增 PostgreSQL 服务沿用 `pgx/v5@v5.7.6`，不得重新引入 `pgx/v4` 或第三种 major 版本。 |
 | Redis client | Gateway 直接使用 `go-redis/v9@v9.21.0`；Knowledge 通过 asynq 间接使用 `go-redis/v9@v9.14.1`。 | 后续统一 Redis client 版本策略，并同步 `go.mod` 和本文。 |
 | asynq | Knowledge 和 Document 已接入 `asynq v0.26.0`；队列目标基线已确认。 | 技术表和三选一记录统一标为已固定；新增异步任务复用该版本或显式决策升级。 |
-| File object store | Runtime 已有 memory/local/MinIO object store；MinIO server/mc 本地初始化尚未落地。 | File 仍是 MinIO 对象存储边界；SDK 已固定，server/client 镜像版本在 Compose 或部署落地时固定。 |
+| File object store | Runtime 已有 memory/local/MinIO object store；根目录本地 Compose 已固定 MinIO server/mc 镜像并初始化本地 bucket。 | File 仍是 MinIO 对象存储边界；SDK 和本地 server/client 镜像版本需保持同步记录。 |
 | 前端 OpenAPI 类型生成 | `openapi-typescript@7.13.0` 已进入 `apps/web/package.json` 和 `bun.lock`。 | API type drift check 持续约束 generated diff；升级版本需同步本文。 |
 
 ## 已确认选型总览
@@ -89,9 +89,9 @@
 | 关系数据库 | PostgreSQL | `postgres:16-alpine` | 已固定 | 当前本地 Compose 固定在 16 Alpine。 |
 | Redis 队列 | `asynq` over Redis | `asynq v0.26.0`；Redis `7-alpine` | 已固定 | Knowledge 和 Document 已接入 asynq client/worker；后续异步服务按需复用该队列基线。 |
 | Redis 缓存/会话 | `go-redis` | `go-redis/v9 v9.21.0`、`v9.14.1` 间接依赖 | 部分已固定 | Gateway 直接使用 `github.com/redis/go-redis/v9@v9.21.0`；Knowledge 通过 asynq 间接固定 `v9.14.1`。后续需统一版本策略。 |
-| 向量数据库 | Qdrant | 镜像版本待固定 | 已选型，待固定 | Knowledge schema 已保留 Qdrant point 字段；runtime adapter 尚未落地。 |
+| 向量数据库 | Qdrant | `qdrant/qdrant:v1.18.2` | 已固定 | 根目录本地 Compose 已固定 Qdrant 镜像；Knowledge schema 已保留 Qdrant point 字段，runtime adapter 尚未落地。 |
 | Qdrant 客户端 | 手写 HTTP client | Go 标准 HTTP client | 已选型，待落地 | 当前代码尚未实现 Qdrant client；落地时先不引入官方 client。 |
-| 对象存储 | MinIO 边界；当前 memory/local/MinIO object store | MinIO 镜像版本待固定 | 部分已固定 | File service runtime 已有 MinIO adapter；MinIO server/mc 镜像版本待本地 Compose 或部署落地时固定。 |
+| 对象存储 | MinIO 边界；当前 memory/local/MinIO object store | `minio/minio:RELEASE.2025-09-07T16-13-09Z`；`minio/mc:RELEASE.2025-08-13T08-35-41Z` | 已固定 | File service runtime 已有 MinIO adapter；根目录本地 Compose 使用固定 MinIO server/client 镜像。 |
 | MinIO Go SDK | 官方 MinIO Go SDK | `github.com/minio/minio-go/v7@v7.2.1` | 已固定 | `services/file` 通过 `internal/platform/storage` 封装 SDK，不向 handler 或 owner service client 泄露 MinIO 细节。 |
 | 认证 token | Opaque Bearer token | 协议契约 | 标准库 / 协议 | 不使用 JWT access token；服务端保存 token hash。 |
 | 密码哈希 | `argon2id` | `argon2id-v1`，PHC `v=19` | 已固定 | 参数：`m=65536 KiB`、`t=3`、`p=2`、`salt=16 bytes`、`key=32 bytes`。 |
@@ -106,7 +106,7 @@
 | 观测 | `slog` + Prometheus metrics；关键链路 OpenTelemetry tracing | `github.com/prometheus/client_golang@v1.23.2`；`go.opentelemetry.io/otel@v1.44.0`；`go.opentelemetry.io/otel/sdk@v1.44.0`；`go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.44.0`；`go.opentelemetry.io/otel/exporters/prometheus@v0.66.0` | 已选型，待固定 | 第一阶段先保证结构化日志和低基数字段指标；首次落地 metrics/tracing 时必须写入对应服务 `go.mod` 并同步本文状态。 |
 | DOCX 生成 | Document worker 当前使用内置 Go `SimpleDOCXGenerator`；Pandoc/LibreOffice 作为后续富 DOCX 工具链 | 内置 Go 生成器：标准库；Pandoc 候选基线 `3.10`；LibreOffice 待 worker image 落地固定 tag + digest | 部分已固定 | 当前不依赖外部 CLI；引入 Pandoc/LibreOffice 前必须固定 worker 镜像或 CLI 版本和摘要。 |
 | MCP 集成 | 官方 MCP Go SDK；暂不拆独立 sidecar | `github.com/modelcontextprotocol/go-sdk@v1.1.0` | 已固定 | QA 负责工具白名单、权限、参数校验、超时和脱敏记录；SDK 升级或 sidecar 化另开兼容性任务。 |
-| 本地部署 | Docker Compose | Compose 文件格式无 top-level version | 已选型 | QA 和 Document 已有服务本地 Compose；根 `deploy/docker-compose.yml` 尚未落地。 |
+| 本地部署 | Docker Compose | Compose 文件格式无 top-level version | 已选型 | 根 `deploy/docker-compose.yml` 已提供本地/演示联调基线；服务本地 Compose 可继续用于单服务调试。 |
 
 ## 前端版本明细
 
@@ -157,9 +157,9 @@
 | `github.com/pressly/goose/v3` | `v3.27.1` | 技术选型基线 | 迁移工具版本固定；可用 CLI 或库方式接入。 |
 | PostgreSQL | `16-alpine` | `services/qa/docker-compose.yml`、`services/qa/docker-compose.db.yml`、`services/document/docker-compose.yml` | 本地开发数据库。 |
 | Redis | `7-alpine` | `services/qa/docker-compose.yml` | 本地队列、缓存、短期协调依赖。 |
-| Qdrant | 待固定 | 尚无 Compose/runtime adapter | Knowledge 需要时补版本和运行配置。 |
-| MinIO server | 待固定 | 尚无 Compose/部署版本锁定 | File MinIO adapter 已落地；补本地或部署依赖时固定版本。 |
-| MinIO client (`mc`) | 待固定 | 尚无 Compose/部署版本锁定 | 本地 bucket 初始化方案待补。 |
+| Qdrant | `qdrant/qdrant:v1.18.2` | `deploy/docker-compose.yml` | 根目录本地 Compose 向量数据库镜像。 |
+| MinIO server | `minio/minio:RELEASE.2025-09-07T16-13-09Z` | `deploy/docker-compose.yml` | 根目录本地 Compose 对象存储服务端镜像。 |
+| MinIO client (`mc`) | `minio/mc:RELEASE.2025-08-13T08-35-41Z` | `deploy/docker-compose.yml` | 根目录本地 Compose bucket 初始化镜像。 |
 | Prometheus Go client | `github.com/prometheus/client_golang@v1.23.2` | 目标技术基线，尚未写入 `go.mod` | 新增 Go 服务暴露 Prometheus metrics 时默认沿用该版本，指标 label 不得包含用户输入、prompt、token、object key 或 API key 指纹。 |
 | OpenTelemetry Go API | `go.opentelemetry.io/otel@v1.44.0` | 目标技术基线，尚未写入 `go.mod` | OpenTelemetry API/root module；新增 tracing 不应只引入该 module。 |
 | OpenTelemetry Go SDK | `go.opentelemetry.io/otel/sdk@v1.44.0` | 目标技术基线，尚未写入 `go.mod` | 关键链路 tracing 使用 parent-based ratio sampler；dev/local 可配置为 100%，生产默认 1%。 |
@@ -275,7 +275,7 @@ services/<service>/
 - Qdrant adapter 尚未落地；落地时优先使用服务内手写 HTTP client，不默认引入官方 client。
 - Qdrant 只保存向量和最小 payload；展示正文、权限判断和状态判断必须回 PostgreSQL hydrate。
 - File service 是 MinIO 对象存储边界；业务服务不得直接暴露 bucket、object key、内部 URL、access key 或 presigned URL。
-- MinIO adapter 已在 File Service 落地，Go SDK 固定为 `github.com/minio/minio-go/v7@v7.2.1`；后续补本地 Compose 或生产部署时必须固定 MinIO server/client 镜像版本，并同步本文。
+- MinIO adapter 已在 File Service 落地，Go SDK 固定为 `github.com/minio/minio-go/v7@v7.2.1`；根目录本地 Compose 固定 MinIO server/client 镜像版本，后续生产部署应沿用明确 tag 并同步本文。
 
 ## 前端落地约定
 
@@ -312,5 +312,5 @@ services/<service>/
 - 为需要异步任务的服务接入 `asynq` client/worker；Knowledge 已固定首个 asynq/go-redis 版本，后续服务接入前应复核是否沿用该版本。
 - 前端接入 `openapi-typescript`，生成 gateway 类型，并固定生成器版本。
 - 前端测试接入 Vitest、React Testing Library 和 Playwright，并固定版本。
-- 本地 Compose 和生产部署补齐 Qdrant、MinIO、MinIO mc 等依赖时，必须使用固定镜像 tag，不能以 `latest` 作为生产基线。
-- 为 Document 富 DOCX worker 固定 Pandoc/LibreOffice 运行镜像或 CLI 包版本、checksum 和部署策略；若后续需要 MCP sidecar 或 SDK 升级，单独开兼容性任务。
+- 本地 Compose 已固定 Qdrant、MinIO、MinIO mc 等依赖镜像 tag；后续升级或生产部署必须继续使用明确 tag，不能以 `latest` 作为基线。
+- 为 Prometheus metrics、OpenTelemetry tracing、Document 富 DOCX worker 工具链和 MCP SDK/sidecar 固定版本；Document 工具链需记录镜像或 CLI 包版本、checksum 和部署策略。

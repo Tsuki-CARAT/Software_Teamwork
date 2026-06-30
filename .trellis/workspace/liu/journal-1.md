@@ -416,3 +416,36 @@ Handled PR #290 review feedback by reusing draft reports after outline job failu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: Address PR 290 second review
+
+**Date**: 2026-06-30
+**Task**: Address PR 290 second review
+**Branch**: `Frontend/feat/report-real-document-api`
+
+### Summary
+
+Fixed PR #290 second review by aligning report DELETE and retry attempt API contracts, adding regression tests, and cleaning Trellis placeholders.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e2ca6cb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

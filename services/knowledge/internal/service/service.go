@@ -307,25 +307,37 @@ func (s *Service) UploadDocument(ctx context.Context, reqCtx RequestContext, inp
 	if sizeBytes == 0 {
 		sizeBytes = file.SizeBytes
 	}
+	parserSnapshot, err := s.ResolveParserConfig(ctx, contentType)
+	if err != nil {
+		_ = s.files.DeleteFile(ctx, reqCtx, fileID)
+		return KnowledgeDocument{}, err
+	}
+	parserSnapshotJSON, err := marshalParserConfigSnapshot(parserSnapshot)
+	if err != nil {
+		_ = s.files.DeleteFile(ctx, reqCtx, fileID)
+		return KnowledgeDocument{}, DependencyError("effective parser config is invalid", err)
+	}
 	doc, job, err := s.repo.CreateDocumentWithJob(ctx, CreateDocumentWithJobRecord{
-		DocumentID:      documentID,
-		KnowledgeBaseID: knowledgeBaseID,
-		FileRef:         fileID,
-		Name:            displayName(createdFile.Filename, filename),
-		ContentType:     contentType,
-		SizeBytes:       sizeBytes,
-		Status:          DocumentStatusUploaded,
-		Tags:            tags,
-		CurrentJobID:    jobID,
-		CreatedBy:       scope.UserID,
-		JobID:           jobID,
-		JobType:         JobTypeDocumentIngestion,
-		JobStatus:       JobStatusQueued,
-		JobStage:        "uploaded",
-		JobMessage:      "document uploaded and queued for ingestion",
-		MaxAttempts:     3,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		DocumentID:           documentID,
+		KnowledgeBaseID:      knowledgeBaseID,
+		FileRef:              fileID,
+		Name:                 displayName(createdFile.Filename, filename),
+		ContentType:          contentType,
+		SizeBytes:            sizeBytes,
+		Status:               DocumentStatusUploaded,
+		Tags:                 tags,
+		CurrentJobID:         jobID,
+		CreatedBy:            scope.UserID,
+		JobID:                jobID,
+		JobType:              JobTypeDocumentIngestion,
+		JobStatus:            JobStatusQueued,
+		JobStage:             "uploaded",
+		JobMessage:           "document uploaded and queued for ingestion",
+		MaxAttempts:          3,
+		ParserConfigID:       parserSnapshot.ParserConfigID,
+		ParserConfigSnapshot: parserSnapshotJSON,
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}, scope)
 	if err != nil {
 		_ = s.files.DeleteFile(ctx, reqCtx, fileID)

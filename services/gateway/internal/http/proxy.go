@@ -35,6 +35,14 @@ func (s *Server) handleProxy(route routeSpec) http.HandlerFunc {
 			s.writeNotImplemented(w, r)
 			return
 		}
+		if route.requiresAdmin() && !hasAdminRouteAccess(authContext, route.AdminPermissions) {
+			response.WriteError(w, http.StatusForbidden, response.ErrorDetail{
+				Code:      response.CodeForbidden,
+				Message:   "forbidden",
+				RequestID: middleware.RequestIDFromContext(r.Context()),
+			})
+			return
+		}
 
 		baseURL := s.ownerBaseURLs[route.Owner]
 		if baseURL == nil {
@@ -104,11 +112,63 @@ func (s *Server) writeDownstreamError(w http.ResponseWriter, r *http.Request, ro
 		if isPublicErrorCode(envelope.Error.Code) {
 			detail.Code = envelope.Error.Code
 		}
+		if detail.Code == response.CodeValidation {
+			detail.Fields = sanitizeValidationFields(envelope.Error.Fields)
+		}
 	} else {
 		io.Copy(io.Discard, res.Body)
 	}
 
 	response.WriteError(w, res.StatusCode, detail)
+}
+
+func sanitizeValidationFields(fields map[string]string) map[string]string {
+	if len(fields) == 0 {
+		return nil
+	}
+	safe := make(map[string]string, len(fields))
+	for key, value := range fields {
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" || value == "" || containsSensitiveValidationText(key) || containsSensitiveValidationText(value) {
+			continue
+		}
+		safe[key] = value
+	}
+	if len(safe) == 0 {
+		return nil
+	}
+	return safe
+}
+
+func containsSensitiveValidationText(value string) bool {
+	value = strings.ToLower(value)
+	sensitive := []string{
+		"http://",
+		"https://",
+		"postgres",
+		"mysql",
+		"minio",
+		"qdrant",
+		"object key",
+		"object_key",
+		"bucket",
+		"stack",
+		"panic",
+		"secret",
+		"token",
+		"api key",
+		"apikey",
+		"password",
+		"prompt",
+		"provider",
+	}
+	for _, marker := range sensitive {
+		if strings.Contains(value, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) writeNotImplemented(w http.ResponseWriter, r *http.Request) {

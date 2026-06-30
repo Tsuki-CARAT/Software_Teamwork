@@ -195,6 +195,26 @@ func bearerToken(value string) (string, bool) {
 	return strings.TrimSpace(parts[1]), true
 }
 
+func hasAdminRouteAccess(entry service.SessionCacheEntry, allowedPermissions []string) bool {
+	for _, role := range entry.Roles {
+		if strings.EqualFold(strings.TrimSpace(role), "admin") {
+			return true
+		}
+	}
+	for _, permission := range entry.Permissions {
+		permission = strings.TrimSpace(permission)
+		for _, allowed := range allowedPermissions {
+			if permission == allowed {
+				return true
+			}
+		}
+		if permission == "system:admin" {
+			return true
+		}
+	}
+	return false
+}
+
 func readRequestBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)

@@ -18,7 +18,7 @@ import {
   useParserConfigs,
   useUpdateParserConfig,
 } from '@/features/admin-config'
-import type { ParserConfig } from '@/lib/types'
+import type { ParserBackend, ParserConfig } from '@/lib/types'
 
 // ── Constants ──
 
@@ -42,7 +42,9 @@ const BACKEND_LABELS: Record<string, string> = {
 
 interface FormData {
   name: string
-  backend: string
+  backend: ParserBackend
+  enabled: boolean
+  isDefault: boolean
   concurrency: number
   fileTypes: string
   chunkSize: number
@@ -61,6 +63,8 @@ type NotificationState = {
 const EMPTY_FORM: FormData = {
   name: '',
   backend: 'builtin',
+  enabled: true,
+  isDefault: false,
   concurrency: 4,
   fileTypes: '',
   chunkSize: 512,
@@ -76,8 +80,8 @@ function formToCreateRequest(form: FormData) {
     name: form.name,
     backend: form.backend,
     concurrency: form.concurrency,
-    enabled: true,
-    isDefault: false,
+    enabled: form.enabled,
+    isDefault: form.isDefault,
   }
 
   if (form.backend === 'remote_compatible' && form.endpointUrl.trim()) {
@@ -108,6 +112,8 @@ function formToUpdateRequest(form: FormData) {
   const params: Record<string, unknown> = {
     name: form.name,
     backend: form.backend,
+    enabled: form.enabled,
+    isDefault: form.isDefault,
     concurrency: form.concurrency,
     endpointUrl: form.backend === 'remote_compatible' ? form.endpointUrl.trim() || null : null,
     supportedContentTypes: form.fileTypes.trim()
@@ -209,6 +215,8 @@ export function ParserConfigsPage() {
     setForm({
       name: config.name,
       backend: config.backend,
+      enabled: config.enabled,
+      isDefault: config.isDefault,
       concurrency: config.concurrency,
       fileTypes: config.supportedContentTypes?.join(', ') ?? '',
       chunkSize: (config.defaultParameters?.chunk_size as number) ?? 512,
@@ -389,11 +397,14 @@ export function ParserConfigsPage() {
                       {typeof chunkOverlap === 'number' ? chunkOverlap : '-'}
                     </td>
                     <td className="px-4 py-2.5">
-                      {config.enabled ? (
-                        <Badge variant="default">启用</Badge>
-                      ) : (
-                        <Badge variant="secondary">禁用</Badge>
-                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {config.enabled ? (
+                          <Badge variant="default">启用</Badge>
+                        ) : (
+                          <Badge variant="secondary">禁用</Badge>
+                        )}
+                        {config.isDefault && <Badge variant="outline">默认</Badge>}
+                      </div>
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
@@ -461,7 +472,7 @@ export function ParserConfigsPage() {
               <select
                 id="pc-create-backend"
                 value={form.backend}
-                onChange={(e) => updateField('backend', e.target.value)}
+                onChange={(e) => updateField('backend', e.target.value as ParserBackend)}
                 className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
               >
                 {BACKEND_OPTIONS.map((opt) => (
@@ -470,6 +481,25 @@ export function ParserConfigsPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={form.enabled}
+                  onChange={(e) => updateField('enabled', e.target.checked)}
+                />
+                启用
+              </label>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={form.isDefault}
+                  onChange={(e) => updateField('isDefault', e.target.checked)}
+                />
+                设为默认配置
+              </label>
             </div>
 
             {/* Conditional: endpointUrl (remote_compatible) */}
@@ -526,13 +556,11 @@ export function ParserConfigsPage() {
               <Input
                 id="pc-create-filetypes"
                 type="text"
-                placeholder="pdf, docx, txt (逗号分隔)"
+                placeholder="application/pdf, text/plain (逗号分隔)"
                 value={form.fileTypes}
                 onChange={(e) => updateField('fileTypes', e.target.value)}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                支持的文件 MIME 类型或扩展名，逗号分隔。
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">支持的文件 MIME 类型，逗号分隔。</p>
             </div>
 
             {/* Chunk Size */}
@@ -645,7 +673,7 @@ export function ParserConfigsPage() {
               <select
                 id="pc-edit-backend"
                 value={form.backend}
-                onChange={(e) => updateField('backend', e.target.value)}
+                onChange={(e) => updateField('backend', e.target.value as ParserBackend)}
                 className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
               >
                 {BACKEND_OPTIONS.map((opt) => (
@@ -654,6 +682,25 @@ export function ParserConfigsPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={form.enabled}
+                  onChange={(e) => updateField('enabled', e.target.checked)}
+                />
+                启用
+              </label>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={form.isDefault}
+                  onChange={(e) => updateField('isDefault', e.target.checked)}
+                />
+                设为默认配置
+              </label>
             </div>
 
             {/* Conditional: endpointUrl (remote_compatible) */}
@@ -710,13 +757,11 @@ export function ParserConfigsPage() {
               <Input
                 id="pc-edit-filetypes"
                 type="text"
-                placeholder="pdf, docx, txt (逗号分隔)"
+                placeholder="application/pdf, text/plain (逗号分隔)"
                 value={form.fileTypes}
                 onChange={(e) => updateField('fileTypes', e.target.value)}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                支持的文件 MIME 类型或扩展名，逗号分隔。
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">支持的文件 MIME 类型，逗号分隔。</p>
             </div>
 
             {/* Chunk Size */}

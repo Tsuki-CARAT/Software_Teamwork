@@ -37,6 +37,7 @@ const navItems: Array<{
         'reports:write',
         'knowledge:read',
         'knowledge:write',
+        'knowledge:admin',
         'document:upload',
         'admin:model-profile:write',
         'admin:parser-config:write',

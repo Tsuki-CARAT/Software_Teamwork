@@ -58,20 +58,22 @@ type KnowledgeDocument struct {
 }
 
 type ProcessingJob struct {
-	ID              string             `json:"id"`
-	KnowledgeBaseID string             `json:"knowledge_base_id"`
-	DocumentID      pgtype.Text        `json:"document_id"`
-	JobType         string             `json:"job_type"`
-	Status          string             `json:"status"`
-	CurrentStage    pgtype.Text        `json:"current_stage"`
-	ProgressPercent int32              `json:"progress_percent"`
-	Message         pgtype.Text        `json:"message"`
-	ErrorCode       pgtype.Text        `json:"error_code"`
-	ErrorMessage    pgtype.Text        `json:"error_message"`
-	Attempts        int32              `json:"attempts"`
-	MaxAttempts     int32              `json:"max_attempts"`
-	StartedAt       pgtype.Timestamptz `json:"started_at"`
-	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ID                   string             `json:"id"`
+	KnowledgeBaseID      string             `json:"knowledge_base_id"`
+	DocumentID           pgtype.Text        `json:"document_id"`
+	JobType              string             `json:"job_type"`
+	Status               string             `json:"status"`
+	CurrentStage         pgtype.Text        `json:"current_stage"`
+	ProgressPercent      int32              `json:"progress_percent"`
+	Message              pgtype.Text        `json:"message"`
+	ErrorCode            pgtype.Text        `json:"error_code"`
+	ErrorMessage         pgtype.Text        `json:"error_message"`
+	Attempts             int32              `json:"attempts"`
+	MaxAttempts          int32              `json:"max_attempts"`
+	ParserConfigID       pgtype.Text        `json:"parser_config_id"`
+	ParserConfigSnapshot []byte             `json:"parser_config_snapshot"`
+	StartedAt            pgtype.Timestamptz `json:"started_at"`
+	FinishedAt           pgtype.Timestamptz `json:"finished_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }

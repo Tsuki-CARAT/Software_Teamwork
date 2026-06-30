@@ -1,5 +1,7 @@
 package httpapi
 
+import "strings"
+
 type routeSpec struct {
 	Method            string
 	Pattern           string
@@ -8,7 +10,11 @@ type routeSpec struct {
 	DownstreamPattern string
 	NotImplemented    bool
 	StreamResponse    bool
+	AdminPermissions  []string
 }
+
+var modelProfileAdminPermissions = []string{"system:admin", "admin:model-profile:write"}
+var parserConfigAdminPermissions = []string{"system:admin", "knowledge:admin", "admin:parser-config:write"}
 
 var activeProxyRoutes = []routeSpec{
 	{Method: "GET", Pattern: "/api/v1/knowledge-bases", Owner: "knowledge", OperationID: "listKnowledgeBases"},
@@ -24,16 +30,16 @@ var activeProxyRoutes = []routeSpec{
 	{Method: "GET", Pattern: "/api/v1/documents/{documentId}/chunks", Owner: "knowledge", OperationID: "listDocumentChunks", NotImplemented: true},
 	{Method: "GET", Pattern: "/api/v1/documents/{documentId}/content", Owner: "knowledge", OperationID: "getDocumentContent", NotImplemented: true},
 	{Method: "POST", Pattern: "/api/v1/knowledge-queries", Owner: "knowledge", OperationID: "createKnowledgeQuery", NotImplemented: true},
-	{Method: "GET", Pattern: "/api/v1/admin/model-profiles", Owner: "ai-gateway", OperationID: "listAdminModelProfiles", DownstreamPattern: "/internal/v1/model-profiles"},
-	{Method: "POST", Pattern: "/api/v1/admin/model-profiles", Owner: "ai-gateway", OperationID: "createAdminModelProfile", DownstreamPattern: "/internal/v1/model-profiles"},
-	{Method: "GET", Pattern: "/api/v1/admin/model-profiles/{profileId}", Owner: "ai-gateway", OperationID: "getAdminModelProfile", DownstreamPattern: "/internal/v1/model-profiles/{profileId}"},
-	{Method: "PATCH", Pattern: "/api/v1/admin/model-profiles/{profileId}", Owner: "ai-gateway", OperationID: "updateAdminModelProfile", DownstreamPattern: "/internal/v1/model-profiles/{profileId}"},
-	{Method: "DELETE", Pattern: "/api/v1/admin/model-profiles/{profileId}", Owner: "ai-gateway", OperationID: "deleteAdminModelProfile", DownstreamPattern: "/internal/v1/model-profiles/{profileId}"},
-	{Method: "GET", Pattern: "/api/v1/admin/parser-configs", Owner: "knowledge", OperationID: "listAdminParserConfigs", NotImplemented: true},
-	{Method: "POST", Pattern: "/api/v1/admin/parser-configs", Owner: "knowledge", OperationID: "createAdminParserConfig", NotImplemented: true},
-	{Method: "GET", Pattern: "/api/v1/admin/parser-configs/{parserConfigId}", Owner: "knowledge", OperationID: "getAdminParserConfig", NotImplemented: true},
-	{Method: "PATCH", Pattern: "/api/v1/admin/parser-configs/{parserConfigId}", Owner: "knowledge", OperationID: "updateAdminParserConfig", NotImplemented: true},
-	{Method: "DELETE", Pattern: "/api/v1/admin/parser-configs/{parserConfigId}", Owner: "knowledge", OperationID: "deleteAdminParserConfig", NotImplemented: true},
+	{Method: "GET", Pattern: "/api/v1/admin/model-profiles", Owner: "ai-gateway", OperationID: "listAdminModelProfiles", DownstreamPattern: "/internal/v1/model-profiles", AdminPermissions: modelProfileAdminPermissions},
+	{Method: "POST", Pattern: "/api/v1/admin/model-profiles", Owner: "ai-gateway", OperationID: "createAdminModelProfile", DownstreamPattern: "/internal/v1/model-profiles", AdminPermissions: modelProfileAdminPermissions},
+	{Method: "GET", Pattern: "/api/v1/admin/model-profiles/{profileId}", Owner: "ai-gateway", OperationID: "getAdminModelProfile", DownstreamPattern: "/internal/v1/model-profiles/{profileId}", AdminPermissions: modelProfileAdminPermissions},
+	{Method: "PATCH", Pattern: "/api/v1/admin/model-profiles/{profileId}", Owner: "ai-gateway", OperationID: "updateAdminModelProfile", DownstreamPattern: "/internal/v1/model-profiles/{profileId}", AdminPermissions: modelProfileAdminPermissions},
+	{Method: "DELETE", Pattern: "/api/v1/admin/model-profiles/{profileId}", Owner: "ai-gateway", OperationID: "deleteAdminModelProfile", DownstreamPattern: "/internal/v1/model-profiles/{profileId}", AdminPermissions: modelProfileAdminPermissions},
+	{Method: "GET", Pattern: "/api/v1/admin/parser-configs", Owner: "knowledge", OperationID: "listAdminParserConfigs", DownstreamPattern: "/internal/v1/parser-configs", AdminPermissions: parserConfigAdminPermissions},
+	{Method: "POST", Pattern: "/api/v1/admin/parser-configs", Owner: "knowledge", OperationID: "createAdminParserConfig", DownstreamPattern: "/internal/v1/parser-configs", AdminPermissions: parserConfigAdminPermissions},
+	{Method: "GET", Pattern: "/api/v1/admin/parser-configs/{parserConfigId}", Owner: "knowledge", OperationID: "getAdminParserConfig", DownstreamPattern: "/internal/v1/parser-configs/{parserConfigId}", AdminPermissions: parserConfigAdminPermissions},
+	{Method: "PATCH", Pattern: "/api/v1/admin/parser-configs/{parserConfigId}", Owner: "knowledge", OperationID: "updateAdminParserConfig", DownstreamPattern: "/internal/v1/parser-configs/{parserConfigId}", AdminPermissions: parserConfigAdminPermissions},
+	{Method: "DELETE", Pattern: "/api/v1/admin/parser-configs/{parserConfigId}", Owner: "knowledge", OperationID: "deleteAdminParserConfig", DownstreamPattern: "/internal/v1/parser-configs/{parserConfigId}", AdminPermissions: parserConfigAdminPermissions},
 	{Method: "GET", Pattern: "/api/v1/report-types", Owner: "document", OperationID: "listReportTypes"},
 	{Method: "GET", Pattern: "/api/v1/report-templates", Owner: "document", OperationID: "listReportTemplates"},
 	{Method: "POST", Pattern: "/api/v1/report-templates", Owner: "document", OperationID: "createReportTemplate"},
@@ -115,4 +121,8 @@ var activeDirectRoutes = []routeSpec{
 
 func activeOperationCount() int {
 	return len(activeDirectRoutes) + len(activeProxyRoutes)
+}
+
+func (route routeSpec) requiresAdmin() bool {
+	return strings.HasPrefix(route.Pattern, "/api/v1/admin/")
 }

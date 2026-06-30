@@ -161,20 +161,25 @@ func newPostgresRepositoryForTest(t *testing.T) (*repository.PostgresRepository,
 func applyKnowledgeMigration(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
 
-	contents, err := os.ReadFile("../../migrations/0001_create_knowledge_core_tables.sql")
-	if err != nil {
-		t.Fatalf("read knowledge migration: %v", err)
-	}
-	upSQL, _, _ := strings.Cut(string(contents), "-- +goose Down")
-	upSQL = strings.ReplaceAll(upSQL, "-- +goose Up", "")
-
-	for _, statement := range strings.Split(upSQL, ";") {
-		statement = strings.TrimSpace(statement)
-		if statement == "" {
-			continue
+	for _, migration := range []string{
+		"../../migrations/0001_create_knowledge_core_tables.sql",
+		"../../migrations/0002_create_parser_configs.sql",
+	} {
+		contents, err := os.ReadFile(migration)
+		if err != nil {
+			t.Fatalf("read knowledge migration %s: %v", migration, err)
 		}
-		if _, err := pool.Exec(ctx, statement); err != nil {
-			t.Fatalf("apply migration statement %q: %v", statement, err)
+		upSQL, _, _ := strings.Cut(string(contents), "-- +goose Down")
+		upSQL = strings.ReplaceAll(upSQL, "-- +goose Up", "")
+
+		for _, statement := range strings.Split(upSQL, ";") {
+			statement = strings.TrimSpace(statement)
+			if statement == "" {
+				continue
+			}
+			if _, err := pool.Exec(ctx, statement); err != nil {
+				t.Fatalf("apply migration %s statement %q: %v", migration, statement, err)
+			}
 		}
 	}
 }

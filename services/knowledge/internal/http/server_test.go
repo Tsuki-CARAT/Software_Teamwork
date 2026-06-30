@@ -214,6 +214,7 @@ func TestUploadDocumentReturnsPublicSummaryOnly(t *testing.T) {
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	})
+	seedHTTPParserConfig(repo, now)
 	svc := service.NewWithDependencies(repo, &httpUploadFileClient{}, &httpUploadQueue{}, func() time.Time { return now }, func(prefix string) string {
 		return prefix + "_test"
 	})
@@ -291,6 +292,7 @@ func TestUploadDocumentAcceptsJSONTagsField(t *testing.T) {
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	})
+	seedHTTPParserConfig(repo, now)
 	svc := service.NewWithDependencies(repo, &httpUploadFileClient{}, &httpUploadQueue{}, func() time.Time { return now }, func(prefix string) string {
 		return prefix + "_test"
 	})
@@ -462,6 +464,21 @@ type errorResponseBody struct {
 		RequestID string            `json:"requestId"`
 		Fields    map[string]string `json:"fields"`
 	} `json:"error"`
+}
+
+func seedHTTPParserConfig(repo *repository.MemoryRepository, now time.Time) {
+	repo.SeedParserConfig(service.ParserConfig{
+		ID:                    "parser_default",
+		Name:                  "Default builtin parser",
+		Backend:               service.ParserBackendBuiltin,
+		Enabled:               true,
+		IsDefault:             true,
+		Concurrency:           4,
+		SupportedContentTypes: []string{"application/pdf"},
+		DefaultParameters:     json.RawMessage(`{}`),
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	})
 }
 
 type httpUploadFileClient struct{}

@@ -185,8 +185,9 @@ type healthBody struct {
 
 type errorBody struct {
 	Error struct {
-		Code      string `json:"code"`
-		Message   string `json:"message"`
-		RequestID string `json:"requestId"`
+		Code      string            `json:"code"`
+		Message   string            `json:"message"`
+		RequestID string            `json:"requestId"`
+		Fields    map[string]string `json:"fields"`
 	} `json:"error"`
 }

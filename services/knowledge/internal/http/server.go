@@ -64,7 +64,101 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /internal/v1/knowledge-bases/{knowledgeBaseId}/documents", s.handleListDocuments)
 	s.mux.HandleFunc("POST /internal/v1/knowledge-bases/{knowledgeBaseId}/documents", s.handleUploadDocument)
 	s.mux.HandleFunc("GET /internal/v1/documents/{documentId}", s.handleGetDocument)
+	s.mux.HandleFunc("GET /internal/v1/parser-configs", s.handleListParserConfigs)
+	s.mux.HandleFunc("POST /internal/v1/parser-configs", s.handleCreateParserConfig)
+	s.mux.HandleFunc("GET /internal/v1/parser-configs/{parserConfigId}", s.handleGetParserConfig)
+	s.mux.HandleFunc("PATCH /internal/v1/parser-configs/{parserConfigId}", s.handleUpdateParserConfig)
+	s.mux.HandleFunc("DELETE /internal/v1/parser-configs/{parserConfigId}", s.handleDeleteParserConfig)
 	s.mux.HandleFunc("/", s.handleNotFound)
+}
+
+func (s *Server) handleListParserConfigs(w http.ResponseWriter, r *http.Request) {
+	reqCtx, ok := s.gatewayContext(w, r)
+	if !ok {
+		return
+	}
+	var enabled *bool
+	if raw := strings.TrimSpace(r.URL.Query().Get("enabled")); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeAppError(w, r, service.ValidationError("request validation failed", map[string]string{"enabled": "must be a boolean"}))
+			return
+		}
+		enabled = &value
+	}
+	result, err := s.knowledge.ListParserConfigs(r.Context(), reqCtx, enabled)
+	if err != nil {
+		writeAppError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, parserConfigsFromDomain(result.Items), requestIDFromContext(r.Context()))
+}
+
+func (s *Server) handleCreateParserConfig(w http.ResponseWriter, r *http.Request) {
+	reqCtx, ok := s.gatewayContext(w, r)
+	if !ok {
+		return
+	}
+	var body createParserConfigRequest
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	result, err := s.knowledge.CreateParserConfig(r.Context(), reqCtx, service.CreateParserConfigInput{Name: body.Name, Backend: body.Backend, Enabled: body.Enabled, IsDefault: body.IsDefault, Concurrency: body.Concurrency, SupportedContentTypes: body.SupportedContentTypes, EndpointURL: body.EndpointURL, DefaultParameters: body.DefaultParameters})
+	if err != nil {
+		writeAppError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, parserConfigFromDomain(result), requestIDFromContext(r.Context()))
+}
+
+func (s *Server) handleGetParserConfig(w http.ResponseWriter, r *http.Request) {
+	reqCtx, ok := s.gatewayContext(w, r)
+	if !ok {
+		return
+	}
+	result, err := s.knowledge.GetParserConfig(r.Context(), reqCtx, r.PathValue("parserConfigId"))
+	if err != nil {
+		writeAppError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, parserConfigFromDomain(result), requestIDFromContext(r.Context()))
+}
+
+func (s *Server) handleUpdateParserConfig(w http.ResponseWriter, r *http.Request) {
+	reqCtx, ok := s.gatewayContext(w, r)
+	if !ok {
+		return
+	}
+	var body updateParserConfigRequest
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	endpointURL, ok, err := parseNullableString(body.EndpointURL)
+	if err != nil {
+		writeAppError(w, r, service.ValidationError("request validation failed", map[string]string{"endpointUrl": "must be a string or null"}))
+		return
+	}
+	var endpointURLPatch **string
+	if ok {
+		endpointURLPatch = &endpointURL
+	}
+	result, err := s.knowledge.UpdateParserConfig(r.Context(), reqCtx, service.UpdateParserConfigInput{ID: r.PathValue("parserConfigId"), Name: body.Name, Backend: body.Backend, Enabled: body.Enabled, IsDefault: body.IsDefault, Concurrency: body.Concurrency, SupportedContentTypes: body.SupportedContentTypes, EndpointURL: endpointURLPatch, DefaultParameters: body.DefaultParameters})
+	if err != nil {
+		writeAppError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, parserConfigFromDomain(result), requestIDFromContext(r.Context()))
+}
+func (s *Server) handleDeleteParserConfig(w http.ResponseWriter, r *http.Request) {
+	reqCtx, ok := s.gatewayContext(w, r)
+	if !ok {
+		return
+	}
+	if err := s.knowledge.DeleteParserConfig(r.Context(), reqCtx, r.PathValue("parserConfigId")); err != nil {
+		writeAppError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

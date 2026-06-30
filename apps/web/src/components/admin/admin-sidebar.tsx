@@ -57,6 +57,7 @@ const menuItems: AdminNavigationItem[] = [
         'system:admin',
         'knowledge:read',
         'knowledge:write',
+        'knowledge:admin',
         'document:upload',
         'admin:model-profile:write',
         'admin:parser-config:write',
@@ -113,7 +114,9 @@ const menuItems: AdminNavigationItem[] = [
         key: 'parser-configs',
         label: '解析器配置',
         path: '/admin/parser-configs',
-        requirement: { any: ['admin:parser-config:write', 'system:admin'] },
+        requirement: {
+          any: ['admin:parser-config:write', 'knowledge:admin', 'system:admin'],
+        },
       },
     ],
   },

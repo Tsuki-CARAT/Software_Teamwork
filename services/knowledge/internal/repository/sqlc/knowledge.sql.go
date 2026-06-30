@@ -295,6 +295,8 @@ INSERT INTO processing_jobs (
   error_message,
   attempts,
   max_attempts,
+  parser_config_id,
+  parser_config_snapshot,
   started_at,
   finished_at,
   created_at,
@@ -312,10 +314,12 @@ INSERT INTO processing_jobs (
   NULL,
   0,
   $8,
+  NULLIF($9, ''),
+  $10,
   NULL,
   NULL,
-  $9,
-  $10
+  $11,
+  $12
 )
 RETURNING
   id,
@@ -330,6 +334,8 @@ RETURNING
   error_message,
   attempts,
   max_attempts,
+  parser_config_id,
+  parser_config_snapshot,
   started_at,
   finished_at,
   created_at,
@@ -337,16 +343,18 @@ RETURNING
 `
 
 type CreateProcessingJobParams struct {
-	ID              string             `json:"id"`
-	KnowledgeBaseID string             `json:"knowledge_base_id"`
-	DocumentID      interface{}        `json:"document_id"`
-	JobType         string             `json:"job_type"`
-	Status          string             `json:"status"`
-	CurrentStage    interface{}        `json:"current_stage"`
-	Message         interface{}        `json:"message"`
-	MaxAttempts     int32              `json:"max_attempts"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ID                   string             `json:"id"`
+	KnowledgeBaseID      string             `json:"knowledge_base_id"`
+	DocumentID           interface{}        `json:"document_id"`
+	JobType              string             `json:"job_type"`
+	Status               string             `json:"status"`
+	CurrentStage         interface{}        `json:"current_stage"`
+	Message              interface{}        `json:"message"`
+	MaxAttempts          int32              `json:"max_attempts"`
+	ParserConfigID       interface{}        `json:"parser_config_id"`
+	ParserConfigSnapshot []byte             `json:"parser_config_snapshot"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) CreateProcessingJob(ctx context.Context, arg CreateProcessingJobParams) (ProcessingJob, error) {
@@ -359,6 +367,8 @@ func (q *Queries) CreateProcessingJob(ctx context.Context, arg CreateProcessingJ
 		arg.CurrentStage,
 		arg.Message,
 		arg.MaxAttempts,
+		arg.ParserConfigID,
+		arg.ParserConfigSnapshot,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -376,6 +386,8 @@ func (q *Queries) CreateProcessingJob(ctx context.Context, arg CreateProcessingJ
 		&i.ErrorMessage,
 		&i.Attempts,
 		&i.MaxAttempts,
+		&i.ParserConfigID,
+		&i.ParserConfigSnapshot,
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.CreatedAt,

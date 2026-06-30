@@ -107,6 +107,9 @@ func Load() (Config, error) {
 	if err := validateHTTPURL("FILE_SERVICE_BASE_URL", cfg.FileServiceURL); err != nil {
 		return Config{}, err
 	}
+	if err := validateHTTPURL("PARSER_SERVICE_BASE_URL", cfg.ParserServiceBaseURL); err != nil {
+		return Config{}, err
+	}
 	if cfg.RedisAddr == "" {
 		return Config{}, fmt.Errorf("KNOWLEDGE_REDIS_ADDR is required")
 	}
@@ -114,9 +117,8 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("KNOWLEDGE_SERVICE_TOKEN is required")
 	}
 	for name, value := range map[string]string{
-		"AI_GATEWAY_BASE_URL":     cfg.AIGatewayBaseURL,
-		"PARSER_SERVICE_BASE_URL": cfg.ParserServiceBaseURL,
-		"QDRANT_URL":              cfg.QdrantURL,
+		"AI_GATEWAY_BASE_URL": cfg.AIGatewayBaseURL,
+		"QDRANT_URL":          cfg.QdrantURL,
 	} {
 		if err := validateOptionalHTTPURL(name, value); err != nil {
 			return Config{}, err

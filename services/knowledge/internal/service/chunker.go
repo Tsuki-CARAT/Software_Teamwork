@@ -1,4 +1,4 @@
-package parser
+package service
 
 import (
 	"context"
@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/knowledge/internal/service"
 )
 
 const (
@@ -24,7 +22,7 @@ func NewFixedChunker() *FixedChunker {
 	return &FixedChunker{}
 }
 
-func (c *FixedChunker) Chunk(ctx context.Context, input service.ChunkInput) ([]service.ChunkSpec, error) {
+func (c *FixedChunker) Chunk(ctx context.Context, input ChunkInput) ([]ChunkSpec, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -36,7 +34,7 @@ func (c *FixedChunker) Chunk(ctx context.Context, input service.ChunkInput) ([]s
 	runes := []rune(content)
 	if len(runes) <= size {
 		kind := "text"
-		return []service.ChunkSpec{{
+		return []ChunkSpec{{
 			Content:    content,
 			TokenCount: estimateTokenCount(content),
 			ChunkType:  &kind,
@@ -47,7 +45,7 @@ func (c *FixedChunker) Chunk(ctx context.Context, input service.ChunkInput) ([]s
 	if step <= 0 {
 		step = size
 	}
-	chunks := []service.ChunkSpec{}
+	chunks := []ChunkSpec{}
 	for start := 0; start < len(runes); start += step {
 		end := start + size
 		if end > len(runes) {
@@ -56,7 +54,7 @@ func (c *FixedChunker) Chunk(ctx context.Context, input service.ChunkInput) ([]s
 		text := strings.TrimSpace(string(runes[start:end]))
 		if text != "" {
 			kind := "text"
-			chunks = append(chunks, service.ChunkSpec{
+			chunks = append(chunks, ChunkSpec{
 				Content:    text,
 				TokenCount: estimateTokenCount(text),
 				ChunkType:  &kind,

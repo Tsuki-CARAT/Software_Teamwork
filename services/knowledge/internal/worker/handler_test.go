@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/knowledge/internal/platform/embedding"
-	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/knowledge/internal/platform/parser"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/knowledge/internal/repository"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/knowledge/internal/service"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/knowledge/internal/worker"
@@ -73,8 +72,8 @@ func TestIngestionHandlerProcessesA10PayloadFromFileServiceToReady(t *testing.T)
 	if doc.Status != service.DocumentStatusReady || doc.ChunkCount != 1 {
 		t.Fatalf("doc = %+v", doc)
 	}
-	if doc.ParserBackend == nil || *doc.ParserBackend != "router" {
-		t.Fatalf("parser backend = %v, want router", doc.ParserBackend)
+	if doc.ParserBackend == nil || *doc.ParserBackend != "parser-service" {
+		t.Fatalf("parser backend = %v, want parser-service", doc.ParserBackend)
 	}
 	chunks, err := svc.ListChunks(context.Background(), actorContext(), service.ListChunksInput{DocumentID: handoff.documentID})
 	if err != nil {
@@ -224,7 +223,7 @@ func TestIngestionHandlerReclaimsStaleRunningJob(t *testing.T) {
 		nil,
 		func() time.Time { return now },
 		sequenceIDs(),
-		service.WithProcessingPipeline(source, parser.NewRouter(), parser.NewFixedChunker()),
+		service.WithProcessingPipeline(source, fakeParser{}, service.NewFixedChunker()),
 		service.WithVectorIndex(embedding.NewLocalHasher("local_hashing", "local_hashing", 16), vectors),
 		service.WithIngestionRunningLease(5*time.Minute),
 	)
@@ -252,7 +251,7 @@ func TestIngestionHandlerReclaimsStaleRunningJob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDocument() error = %v", err)
 	}
-	if doc.Status != service.DocumentStatusReady || doc.ParserBackend == nil || *doc.ParserBackend != "router" {
+	if doc.Status != service.DocumentStatusReady || doc.ParserBackend == nil || *doc.ParserBackend != "parser-service" {
 		t.Fatalf("doc = %+v", doc)
 	}
 	if source.readCount != 1 || len(vectors.points) != 1 {
@@ -284,7 +283,7 @@ func TestIngestionAttemptFencingRejectsStaleCompletionAndFailure(t *testing.T) {
 		t.Fatalf("claimed attempts = %d, want 2", claimed.Attempts)
 	}
 
-	parserBackend := "router"
+	parserBackend := "parser-service"
 	finishedAt := claimAt.Add(time.Minute)
 	if _, err := repo.CompleteIngestion(context.Background(), service.CompleteIngestionRecord{
 		DocumentID:       handoff.documentID,
@@ -339,7 +338,7 @@ func TestIngestionAttemptFencingRejectsStaleCompletionAndFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDocument() error = %v", err)
 	}
-	if doc.Status != service.DocumentStatusReady || doc.ParserBackend == nil || *doc.ParserBackend != "router" {
+	if doc.Status != service.DocumentStatusReady || doc.ParserBackend == nil || *doc.ParserBackend != "parser-service" {
 		t.Fatalf("doc = %+v", doc)
 	}
 	chunks, err := repo.ListChunks(context.Background(), handoff.documentID, service.AccessScope{CanReadAll: true}, service.PageInput{Page: 1, PageSize: 10})
@@ -367,7 +366,7 @@ func TestIngestionHandlerRetriesWhenFailureStateCannotPersist(t *testing.T) {
 		nil,
 		fixedClock(),
 		sequenceIDs(),
-		service.WithProcessingPipeline(source, parser.NewRouter(), parser.NewFixedChunker()),
+		service.WithProcessingPipeline(source, failingParser{err: service.ValidationError("document parsing failed", map[string]string{"file": "could not be parsed"})}, service.NewFixedChunker()),
 		service.WithVectorIndex(embedding.NewLocalHasher("local_hashing", "local_hashing", 16), vectors),
 	)
 	handler := worker.NewIngestionHandler(svc)
@@ -394,7 +393,7 @@ func TestIngestionHandlerRetriesWhenFailureStateCannotPersist(t *testing.T) {
 func TestIngestionHandlerAcksPermanentParsingFailure(t *testing.T) {
 	source := newSourceStore()
 	source.Put("file_empty", "", "text/plain")
-	handler, svc, repo, vectors := newWorkerHarness(t, source)
+	handler, svc, repo, vectors := newWorkerHarnessWithParser(t, source, failingParser{err: service.ValidationError("document parsing failed", map[string]string{"file": "could not be parsed"})})
 	handoff := seedIngestionJob(t, repo, "file_empty")
 
 	if err := handler.HandleIngestionPayload(context.Background(), mustJSON(t, worker.IngestionPayload{
@@ -458,6 +457,11 @@ func TestDecodeIngestionPayloadRejectsUnknownFields(t *testing.T) {
 
 func newWorkerHarness(t *testing.T, source service.SourceReader) (*worker.IngestionHandler, *service.Service, *repository.MemoryRepository, *recordingVectorIndex) {
 	t.Helper()
+	return newWorkerHarnessWithParser(t, source, fakeParser{})
+}
+
+func newWorkerHarnessWithParser(t *testing.T, source service.SourceReader, parser service.Parser) (*worker.IngestionHandler, *service.Service, *repository.MemoryRepository, *recordingVectorIndex) {
+	t.Helper()
 	repo := repository.NewMemoryRepository()
 	seedKnowledgeBase(t, repo)
 	vectors := &recordingVectorIndex{}
@@ -467,10 +471,34 @@ func newWorkerHarness(t *testing.T, source service.SourceReader) (*worker.Ingest
 		nil,
 		fixedClock(),
 		sequenceIDs(),
-		service.WithProcessingPipeline(source, parser.NewRouter(), parser.NewFixedChunker()),
+		service.WithProcessingPipeline(source, parser, service.NewFixedChunker()),
 		service.WithVectorIndex(embedding.NewLocalHasher("local_hashing", "local_hashing", 16), vectors),
 	)
 	return worker.NewIngestionHandler(svc), svc, repo, vectors
+}
+
+type fakeParser struct{}
+
+func (p fakeParser) Parse(ctx context.Context, input service.ParseInput) (service.ParsedDocument, error) {
+	if err := ctx.Err(); err != nil {
+		return service.ParsedDocument{}, err
+	}
+	return service.ParsedDocument{
+		Content: "Parsed document content from parser service",
+		Title:   "Parsed document",
+		Backend: "parser-service",
+	}, nil
+}
+
+type failingParser struct {
+	err error
+}
+
+func (p failingParser) Parse(ctx context.Context, input service.ParseInput) (service.ParsedDocument, error) {
+	if err := ctx.Err(); err != nil {
+		return service.ParsedDocument{}, err
+	}
+	return service.ParsedDocument{}, p.err
 }
 
 type ingestionHandoff struct {

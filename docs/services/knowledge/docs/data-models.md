@@ -129,7 +129,7 @@ parser service
 | `ErrorMessage` | `errorMessage` | `error_message` | text nullable | 可展示或可排查的错误摘要。 |
 | `ChunkCount` | `chunkCount` | derived | integer | 从 `document_chunks` 聚合得出。 |
 | `Tags` | `tags` | `tags` | jsonb | 文档标签，当前最多 32 个，每个最多 64 字符。 |
-| `ParserBackend` | `parserBackend` | `parser_backend` | text nullable | 解析器标识，例如 `router` 或 `text`。 |
+| `ParserBackend` | `parserBackend` | `parser_backend` | text nullable | Parser 服务返回的后端标识，例如 `paddleocr`、`docx`、`text`。 |
 | `CreatedBy` | `createdBy` | `created_by` | text | 上传或 handoff 发起人。 |
 | `CurrentJobID` | `jobId` | `current_job_id` | text nullable | 当前处理任务引用。 |
 | `CreatedAt` | `createdAt` | `created_at` | timestamptz | 创建时间。 |

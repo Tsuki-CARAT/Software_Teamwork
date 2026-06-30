@@ -218,7 +218,7 @@ A-11 runtime。端到端 smoke 可以登记为 integration follow-up，不应阻
   "chunkCount": 86,
   "errorCode": null,
   "errorMessage": null,
-  "parserBackend": "router",
+  "parserBackend": "paddleocr",
   "createdBy": "user_001",
   "jobId": "job_001",
   "createdAt": "2026-06-28T10:00:00Z",

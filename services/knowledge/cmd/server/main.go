@@ -77,7 +77,7 @@ func main() {
 		ingestionQueue,
 		nil,
 		nil,
-		service.WithProcessingPipeline(fileClient, documentParser, parser.NewFixedChunker()),
+		service.WithProcessingPipeline(fileClient, documentParser, service.NewFixedChunker()),
 		service.WithVectorIndex(embedder, vectorIndex),
 	)
 	handler := knowledgehttp.NewServer(knowledgeService, knowledgehttp.Config{
@@ -143,9 +143,6 @@ func connectPostgres(ctx context.Context, databaseURL string) (*pgxpool.Pool, er
 }
 
 func buildParser(cfg config.Config) (service.Parser, error) {
-	if strings.TrimSpace(cfg.ParserServiceBaseURL) == "" {
-		return parser.NewRouter(), nil
-	}
 	return parser.NewServiceClient(parser.ServiceClientConfig{
 		BaseURL:      cfg.ParserServiceBaseURL,
 		ServiceToken: cfg.ParserServiceToken,

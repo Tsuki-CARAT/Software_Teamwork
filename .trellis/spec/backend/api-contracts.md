@@ -349,9 +349,10 @@ Knowledge owns ingestion job state, chunking, embedding, Qdrant writes, and
 retrieval. Parser owns document byte parsing and backend adapter details such
 as PaddleOCR model loading and parser concurrency. The Parser runtime target is
 Python/PaddleOCR; Go services should remain HTTP callers and should not embed
-PaddleOCR or PaddlePaddle inference dependencies. Parser may parse lightweight
-text and Office OpenXML formats locally before routing PDF and image OCR to
-PaddleOCR, but Knowledge remains responsible for ingestion state and chunks.
+document parsing logic, PaddleOCR, or PaddlePaddle inference dependencies.
+Parser may parse lightweight text and Office OpenXML formats locally before
+routing PDF and image OCR to PaddleOCR, but Knowledge remains responsible for
+ingestion state and chunks.
 
 ### 4. Validation & Error Matrix
 
@@ -366,8 +367,8 @@ PaddleOCR, but Knowledge remains responsible for ingestion state and chunks.
 
 - Good: Knowledge calls parser over HTTP with request/user context headers and
   no direct PaddleOCR dependency; Parser hosts PaddleOCR in a Python runtime.
-- Base: Knowledge keeps a local lightweight parser fallback only for local
-  development and tests when `PARSER_SERVICE_BASE_URL` is unset.
+- Base: Knowledge unit tests use fake `service.Parser` implementations, while
+  runtime configuration requires `PARSER_SERVICE_BASE_URL`.
 - Bad: importing parser runtime code into Knowledge, adding PaddleOCR/Python
   dependencies to the Knowledge Go service, or choosing Go as the PaddleOCR
   runtime just to match other backend services.

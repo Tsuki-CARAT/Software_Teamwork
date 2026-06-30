@@ -36,18 +36,18 @@ func TestServiceClientPostsDocumentAndContextHeaders(t *testing.T) {
 		t.Fatalf("NewServiceClient() error = %v", err)
 	}
 
-	result, err := client.ExtractText(context.Background(), parser.OCRRequest{
-		DocumentName: "scan.pdf",
-		ContentType:  "application/pdf",
-		Data:         []byte("%PDF"),
-		SizeBytes:    4,
-		RequestID:    "req_123",
-		UserID:       "usr_123",
+	result, err := client.Parse(context.Background(), service.ParseInput{
+		Name:        "scan.pdf",
+		ContentType: "application/pdf",
+		Body:        bytes.NewReader([]byte("%PDF")),
+		SizeBytes:   4,
+		RequestID:   "req_123",
+		UserID:      "usr_123",
 	})
 	if err != nil {
-		t.Fatalf("ExtractText() error = %v", err)
+		t.Fatalf("Parse() error = %v", err)
 	}
-	if result.Text != "Breaker OCR" {
+	if result.Content != "Breaker OCR" {
 		t.Fatalf("result = %+v", result)
 	}
 	if captured.URL.String() != "https://parser.internal/internal/v1/parsed-documents" {
@@ -126,13 +126,13 @@ func TestServiceClientSanitizesFailure(t *testing.T) {
 		t.Fatalf("NewServiceClient() error = %v", err)
 	}
 
-	_, err = client.ExtractText(context.Background(), parser.OCRRequest{
-		DocumentName: "scan.pdf",
-		ContentType:  "application/pdf",
-		Data:         []byte("secret document text"),
+	_, err = client.Parse(context.Background(), service.ParseInput{
+		Name:        "scan.pdf",
+		ContentType: "application/pdf",
+		Body:        bytes.NewReader([]byte("secret document text")),
 	})
 	if err == nil {
-		t.Fatal("ExtractText() error = nil, want error")
+		t.Fatal("Parse() error = nil, want error")
 	}
 	if containsAny(err.Error(), "secret", "private-path", "scan.pdf") {
 		t.Fatalf("error leaked sensitive detail: %v", err)
@@ -190,13 +190,13 @@ func TestServiceClientDoesNotFollowRedirectWithServiceToken(t *testing.T) {
 		t.Fatalf("NewServiceClient() error = %v", err)
 	}
 
-	_, err = client.ExtractText(context.Background(), parser.OCRRequest{
-		DocumentName: "scan.pdf",
-		ContentType:  "application/pdf",
-		Data:         []byte("%PDF"),
+	_, err = client.Parse(context.Background(), service.ParseInput{
+		Name:        "scan.pdf",
+		ContentType: "application/pdf",
+		Body:        bytes.NewReader([]byte("%PDF")),
 	})
 	if err == nil {
-		t.Fatal("ExtractText() error = nil, want redirect status error")
+		t.Fatal("Parse() error = nil, want redirect status error")
 	}
 	if len(requests) != 1 {
 		t.Fatalf("requests = %d, want no redirected request", len(requests))

@@ -29,6 +29,8 @@ type ServiceClient struct {
 	client        *http.Client
 }
 
+const maxParserPayloadBytes = 8 << 20
+
 func NewServiceClient(cfg ServiceClientConfig) (*ServiceClient, error) {
 	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
 	if baseURL == "" {
@@ -63,29 +65,16 @@ func NewServiceClient(cfg ServiceClientConfig) (*ServiceClient, error) {
 	}, nil
 }
 
-func (c *ServiceClient) ExtractText(ctx context.Context, request OCRRequest) (OCRResult, error) {
-	parsed, err := c.parseBytes(ctx, parserRequest{
-		DocumentName: strings.TrimSpace(request.DocumentName),
-		ContentType:  strings.TrimSpace(request.ContentType),
-		SizeBytes:    request.SizeBytes,
-		DataBase64:   base64.StdEncoding.EncodeToString(request.Data),
-	}, request.RequestID, request.UserID)
-	if err != nil {
-		return OCRResult{}, err
-	}
-	return OCRResult{Text: parsed.Content}, nil
-}
-
 func (c *ServiceClient) Parse(ctx context.Context, input service.ParseInput) (service.ParsedDocument, error) {
 	if input.Body == nil {
 		return service.ParsedDocument{}, fmt.Errorf("document body is required")
 	}
-	limited := io.LimitReader(input.Body, maxParsedTextBytes+1)
+	limited := io.LimitReader(input.Body, maxParserPayloadBytes+1)
 	data, err := io.ReadAll(limited)
 	if err != nil {
 		return service.ParsedDocument{}, err
 	}
-	if len(data) > maxParsedTextBytes {
+	if len(data) > maxParserPayloadBytes {
 		return service.ParsedDocument{}, fmt.Errorf("document is too large for parser")
 	}
 	parsed, err := c.parseBytes(ctx, parserRequest{
@@ -153,10 +142,10 @@ func (c *ServiceClient) parseBytes(ctx context.Context, payload parserRequest, r
 		}
 	}
 	var decoded parserResponse
-	if err := json.NewDecoder(io.LimitReader(res.Body, maxParsedTextBytes+1)).Decode(&decoded); err != nil {
+	if err := json.NewDecoder(io.LimitReader(res.Body, maxParserPayloadBytes+1)).Decode(&decoded); err != nil {
 		return parsedDocument{}, fmt.Errorf("parser service response could not be decoded")
 	}
-	if len(decoded.Data.Content) > maxParsedTextBytes {
+	if len(decoded.Data.Content) > maxParserPayloadBytes {
 		return parsedDocument{}, fmt.Errorf("parser service response is too large")
 	}
 	return decoded.Data, nil

@@ -3,7 +3,7 @@
   "name": "qa-sse-events",
   "title": "QA SSE streaming, replay, and cancellation",
   "description": "",
-  "status": "in_progress",
+  "status": "completed",
   "dev_type": "backend",
   "scope": "services/qa",
   "package": null,
@@ -11,7 +11,7 @@
   "creator": "ynxlna",
   "assignee": "ynxlna",
   "createdAt": "2026-06-30",
-  "completedAt": null,
+  "completedAt": "2026-06-30",
   "branch": "JerryTeam/feat/qa-sse-events",
   "base_branch": "upstream/develop",
   "worktree_path": "D:/agent/Software_Teamwork_qa_sse_events",
@@ -29,6 +29,11 @@
   "notes": "Implements GitHub issue #92 on top of latest upstream/develop after #89, #90, #91, and #75 are closed.",
   "meta": {
     "issue": 92,
-    "dependencies": [89, 90, 91, 75]
+    "dependencies": [
+      89,
+      90,
+      91,
+      75
+    ]
   }
 }

@@ -71,7 +71,7 @@ func TestRetrieveTreatsKnowledgeScoreAsVectorScoreWithoutRerank(t *testing.T) {
 	}
 }
 
-func TestRetrieveSendsExplicitZeroScoreThreshold(t *testing.T) {
+func TestRetrieveSendsConfiguredZeroScoreThreshold(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -93,10 +93,7 @@ func TestRetrieveSendsExplicitZeroScoreThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var retrieval service.RetrievalSettings
-	if err := json.Unmarshal([]byte(`{"topK":5,"scoreThreshold":0}`), &retrieval); err != nil {
-		t.Fatal(err)
-	}
+	retrieval := service.RetrievalSettings{TopK: 5}.WithScoreThresholdConfigured()
 	_, err = client.Retrieve(context.Background(), "user-1", service.RetrievalTestInput{Question: "query", Retrieval: retrieval})
 	if err != nil {
 		t.Fatal(err)

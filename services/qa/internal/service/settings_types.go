@@ -62,6 +62,11 @@ func (s RetrievalSettings) HasScoreThreshold() bool {
 	return s.scoreThresholdSet || s.similaritySet || s.ScoreThreshold > 0
 }
 
+func (s RetrievalSettings) WithScoreThresholdConfigured() RetrievalSettings {
+	s.scoreThresholdSet = true
+	return s
+}
+
 type StoredLLMConfig struct {
 	ID              string
 	Provider        string

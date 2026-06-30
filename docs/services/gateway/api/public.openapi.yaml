@@ -5308,6 +5308,22 @@ components:
           type: string
     CreateQARetrievalTestRunRequest:
       type: object
+      allOf:
+      - anyOf:
+        - type: object
+          required:
+          - question
+          properties:
+            question:
+              type: string
+        - type: object
+          required:
+          - query
+          properties:
+            query:
+              type: string
+              deprecated: true
+              description: Backward-compatible alias for `question`.
       properties:
         question:
           type: string

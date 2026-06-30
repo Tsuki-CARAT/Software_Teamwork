@@ -2509,7 +2509,15 @@ export interface components {
              * @description Backward-compatible alias for `retrieval`.
              */
             overrides?: components["schemas"]["QARetrievalOptions"];
-        };
+        } & ({
+            question: string;
+        } | {
+            /**
+             * @deprecated
+             * @description Backward-compatible alias for `question`.
+             */
+            query: string;
+        });
         QARetrievalTestResult: {
             rankNo: number;
             knowledgeBaseId?: string;

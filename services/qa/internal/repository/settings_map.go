@@ -102,13 +102,14 @@ func retrievalSettingsFromRow(row sqlc.GetActiveQAConfigRow) (service.RetrievalS
 	if err != nil {
 		return service.RetrievalSettings{}, fmt.Errorf("decode QA similarity threshold: %w", err)
 	}
-	return service.RetrievalSettings{
+	settings := service.RetrievalSettings{
 		TopK:            int(row.TopK),
 		ScoreThreshold:  threshold,
 		EnableRerank:    row.UseRerank,
 		RerankThreshold: row.RerankThreshold,
 		RerankTopN:      int(row.RerankTopN),
-	}, nil
+	}
+	return settings.WithScoreThresholdConfigured(), nil
 }
 
 func insertQAConfigVersionParams(settings service.RetrievalSettings, version int32, userID string) (sqlc.InsertQAConfigVersionParams, error) {

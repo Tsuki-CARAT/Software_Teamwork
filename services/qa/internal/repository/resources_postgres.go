@@ -201,6 +201,7 @@ func (r *Postgres) getQAConfigVersion(ctx context.Context, id string, active boo
 	if err != nil {
 		return service.QAConfigVersion{}, fmt.Errorf("get QA config version: %w", err)
 	}
+	v.Retrieval = v.Retrieval.WithScoreThresholdConfigured()
 	_ = json.Unmarshal(tools, &v.Agent.EnabledToolNames)
 	applyQAConfigVersionCompatibilityFields(&v)
 	rows, err := r.pool.Query(ctx, `SELECT external_kb_id,COALESCE(kb_type,''),COALESCE(display_name_snapshot,''),sort_order FROM qa_config_knowledge_bases WHERE config_id=$1 ORDER BY sort_order,external_kb_id`, v.ID)

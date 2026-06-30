@@ -95,7 +95,7 @@
 | 单元测试 | `cd services/file && go test ./...` | pass（本次执行） | 不覆盖真实 MinIO server。 |
 | 集成测试 | goose apply + PostgreSQL repository tests | missing | 需要真实 DB 或测试容器。 |
 | 契约测试 | handler tests against `/internal/v1/files/**` | partial | 未从 OpenAPI 自动校验。 |
-| 手工 smoke | `FILE_STORAGE_BACKEND=local go run ./cmd/server` 后上传/读取 | not run | 需要补脚本或 README smoke。 |
+| 手工 smoke | `FILE_STORAGE_BACKEND=local go run ./cmd/server` 后上传/读取/删除 | pass（本次执行：healthz、上传、读取、删除、删除后 404） | 仍需补脚本化 smoke 或 README smoke。 |
 
 ## 9. 建议任务
 

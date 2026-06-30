@@ -11,7 +11,7 @@
 5. 提 PR 前，阅读 [测试策略](testing/strategy.md)，选择与改动范围匹配的检查。
 6. 需要实现具体后端服务时，阅读对应服务接口文档。
 7. 新增或调整文档时，先读 [文档维护工作流](collaboration/documentation-workflow.md)，确认内容应落在架构、协作还是服务细则中。
-8. 参与协作、分支、PR 或仓库维护时，阅读协作维护文档。
+8. 创建或认领 GitHub Issue 任务、参与协作、分支、PR 或仓库维护时，阅读协作维护文档。
 
 ## 架构与接口契约
 
@@ -61,6 +61,8 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [任务 Issue 与 Project 流程](collaboration/task-issue-project-workflow.md) | 从任务缺口到 GitHub Issue / Project 的完整发布流程，包括编号、依赖、Project 同步和 View 归属。 |
+| [标准任务书模板](collaboration/task-brief-template.md) | 创建 GitHub Issue / Project 任务时使用的完整任务书结构、编号分类、依赖字段和上传前校对清单。 |
 | [前端协作工作流](collaboration/frontend-workflow.md) | 前端目录、Bun 命令、检查、PR 和 CI 建议。 |
 | [仓库维护设置](collaboration/repository-settings.md) | GitHub label、分支保护、PR Guard、Auto Label 和 Commitlint 设置。 |
 | [文档维护工作流](collaboration/documentation-workflow.md) | `docs/` 内容归属、接口文档更新顺序、文档/代码出入判定和服务文档检查清单。 |

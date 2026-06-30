@@ -62,7 +62,7 @@ check 名称补入 `contexts`。
 [.github/workflows/task-issue-sync.yml](../../.github/workflows/task-issue-sync.yml)
 会在任务 issue 创建、编辑或重新打开时自动执行：
 
-- 识别标题形如 `[S-20260629-01] ...` 或 `[A-01] ...` 且正文写明
+- 识别标题形如 `S-001 ...` 或 `A-001 ...` 且正文写明
   `GitHub Project：Software Teamwork` 的任务 issue。
 - 根据 issue 标题前缀强制同步 `Group`，并根据任务正文的 `优先级`、
   `批次`、`模块`、`Risk`、`依赖任务` 同步 GitHub Project 字段。
@@ -71,7 +71,7 @@ check 名称补入 `contexts`。
   `blocked`。
 
 新任务 issue 默认使用 [.github/ISSUE_TEMPLATE/issue.md](../../.github/ISSUE_TEMPLATE/issue.md)。
-模板标题采用 `[F-YYYYMMDD-01] English task title` 格式，并内置任务前缀和模块枚举，
+模板标题采用 `F-001 中文任务标题` 格式，并内置任务前缀和模块枚举，
 以便 Task Issue Sync 识别和同步 Project 字段。
 
 GitHub user-level Projects v2 通常需要额外 token。维护者应创建一个有 Project

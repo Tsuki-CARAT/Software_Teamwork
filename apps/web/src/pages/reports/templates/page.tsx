@@ -1,6 +1,7 @@
 import { FileText, Trash2, Upload } from 'lucide-react'
 import { useState } from 'react'
 
+import { InlineNotice, StateBlock } from '@/components/common'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,54 +12,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import type { ReportMaterial, ReportTemplate } from '@/features/reports'
+import type { ReportTemplate } from '@/features/reports'
 import {
+  formatReportGatewayError,
   useDeleteTemplate,
   useReportBootstrapQueries,
   useReportStatisticsQueries,
   useTemplateStructure,
   useUpdateTemplateStructure,
 } from '@/features/reports'
-
-const fallbackTemplates: ReportTemplate[] = [
-  {
-    id: 'tpl-local-summer',
-    templateName: '迎峰度夏默认模板',
-    reportType: 'summer_peak_inspection',
-    version: 1,
-    enabled: true,
-    filename: 'summer-peak-template.docx',
-    createdAt: '2026-06-28T10:00:00Z',
-  },
-  {
-    id: 'tpl-local-coal',
-    templateName: '煤库存审计模板',
-    reportType: 'coal_inventory_audit',
-    version: 1,
-    enabled: true,
-    filename: 'coal-inventory-template.docx',
-    createdAt: '2026-06-28T10:00:00Z',
-  },
-]
-
-const fallbackMaterials: ReportMaterial[] = [
-  {
-    id: 'mat-equipment-ledger',
-    materialName: '设备运行台账与缺陷闭环记录',
-    materialType: 'plant_report',
-    category: '运行资料',
-    enabled: true,
-    createdAt: '2026-06-28T10:00:00Z',
-  },
-  {
-    id: 'mat-risk-standard',
-    materialName: '迎峰度夏风险检查标准',
-    materialType: 'technical_doc',
-    category: '技术标准',
-    enabled: true,
-    createdAt: '2026-06-28T10:00:00Z',
-  },
-]
 
 export function ReportTemplatesPage() {
   const [structureTarget, setStructureTarget] = useState<string | null>(null)
@@ -73,12 +35,16 @@ export function ReportTemplatesPage() {
   const updateStructureMutation = useUpdateTemplateStructure(structureTarget ?? '')
   const deleteMutation = useDeleteTemplate()
 
-  const isFallbackTemplates = templateQuery.isError
-  const isFallbackMaterials = materialQuery.isError
-  const templates = isFallbackTemplates ? fallbackTemplates : (templateQuery.data?.items ?? [])
-  const materials = isFallbackMaterials ? fallbackMaterials : (materialQuery.data?.items ?? [])
+  const templates = templateQuery.data?.items ?? []
+  const materials = materialQuery.data?.items ?? []
   const overview = overviewQuery.data
   const daily = dailyQuery.data ?? []
+  const queryErrors = [
+    { error: templateQuery.error, label: '模板列表', visible: templateQuery.isError },
+    { error: materialQuery.error, label: '素材列表', visible: materialQuery.isError },
+    { error: overviewQuery.error, label: '统计概览', visible: overviewQuery.isError },
+    { error: dailyQuery.error, label: '统计趋势', visible: dailyQuery.isError },
+  ].filter((item) => item.visible)
 
   const handleOpenStructure = (templateId: string) => {
     setStructureTarget(templateId)
@@ -113,7 +79,7 @@ export function ReportTemplatesPage() {
         parsed as Parameters<typeof updateStructureMutation.mutate>[0],
         {
           onSuccess: () => setEditMode(false),
-          onError: () => setJsonError('保存失败，请重试'),
+          onError: (error) => setJsonError(formatReportGatewayError(error, '保存失败，请重试')),
         },
       )
     } catch {
@@ -145,40 +111,50 @@ export function ReportTemplatesPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button disabled title="上传素材表单尚未接入当前页面" variant="outline">
             <Upload className="size-4" />
             上传素材
           </Button>
-          <Button>
+          <Button disabled title="上传模板表单尚未接入当前页面">
             <Upload className="size-4" />
             上传模板
           </Button>
         </div>
       </div>
 
-      {(templateQuery.isError || materialQuery.isError || overviewQuery.isError) && (
-        <div className="mb-4 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-          gateway 暂未联通，当前展示本地模板、素材和统计示例。
-        </div>
+      {queryErrors.map((item) => (
+        <InlineNotice
+          className="mb-3"
+          key={item.label}
+          title={`${item.label}加载失败`}
+          variant="error"
+        >
+          {formatReportGatewayError(item.error, `${item.label}加载失败`)}
+        </InlineNotice>
+      ))}
+
+      {(templateQuery.isError || materialQuery.isError) && (
+        <InlineNotice className="mb-4" title="能力边界" variant="warning">
+          页面不会使用本地模板或素材示例兜底；请以 Gateway Document API 返回结果为准。
+        </InlineNotice>
       )}
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <section className="rounded-lg border border-border bg-card p-4 hover:shadow-sm transition-shadow duration-200">
           <p className="text-sm text-muted-foreground">模板数量</p>
-          <p className="mt-2 text-2xl font-semibold">
-            {overview?.templateCount ?? templates.length}
-          </p>
+          <p className="mt-2 text-2xl font-semibold">{overview?.templateCount ?? '-'}</p>
         </section>
         <section className="rounded-lg border border-border bg-card p-4 hover:shadow-sm transition-shadow duration-200">
           <p className="text-sm text-muted-foreground">素材数量</p>
-          <p className="mt-2 text-2xl font-semibold">
-            {overview?.materialCount ?? materials.length}
-          </p>
+          <p className="mt-2 text-2xl font-semibold">{overview?.materialCount ?? '-'}</p>
         </section>
         <section className="rounded-lg border border-border bg-card p-4 hover:shadow-sm transition-shadow duration-200">
           <p className="text-sm text-muted-foreground">近 30 天报告</p>
           <p className="mt-2 text-2xl font-semibold">
-            {overview?.reportCount ?? daily.reduce((total, item) => total + item.createdCount, 0)}
+            {overview?.reportCount ??
+              (dailyQuery.isSuccess
+                ? daily.reduce((total, item) => total + item.createdCount, 0)
+                : '-')}
           </p>
         </section>
       </div>
@@ -192,29 +168,40 @@ export function ReportTemplatesPage() {
             </h2>
           </div>
           <div className="divide-y divide-border">
-            {templates.map((template) => (
-              <div
-                key={template.id}
-                className="flex items-center justify-between gap-4 p-4 hover:bg-muted/20 transition-colors"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{template.templateName}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {template.reportType} · v{template.version} · {template.filename}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={() => handleOpenStructure(template.id)}
-                  >
-                    查看结构
-                  </Button>
-                  <span className="rounded-full bg-muted px-2 py-1 text-xs">
-                    {template.enabled ? '启用' : '停用'}
-                  </span>
-                  {!isFallbackTemplates && (
+            {templateQuery.isLoading ? (
+              <StateBlock size="compact" title="模板加载中" variant="loading" />
+            ) : templateQuery.isError ? (
+              <StateBlock
+                description={formatReportGatewayError(templateQuery.error, '模板列表加载失败')}
+                size="compact"
+                title="模板列表加载失败"
+                variant="error"
+              />
+            ) : templates.length === 0 ? (
+              <StateBlock size="compact" title="暂无报告模板" variant="empty" />
+            ) : (
+              templates.map((template) => (
+                <div
+                  key={template.id}
+                  className="flex items-center justify-between gap-4 p-4 hover:bg-muted/20 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{template.templateName}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {template.reportType} · v{template.version} · {template.filename}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={() => handleOpenStructure(template.id)}
+                    >
+                      查看结构
+                    </Button>
+                    <span className="rounded-full bg-muted px-2 py-1 text-xs">
+                      {template.enabled ? '启用' : '停用'}
+                    </span>
                     <Button
                       variant="ghost"
                       size="icon-xs"
@@ -223,10 +210,10 @@ export function ReportTemplatesPage() {
                     >
                       <Trash2 className="size-3 text-destructive" />
                     </Button>
-                  )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </section>
 
@@ -238,22 +225,35 @@ export function ReportTemplatesPage() {
             </h2>
           </div>
           <div className="divide-y divide-border">
-            {materials.map((material) => (
-              <div
-                key={material.id}
-                className="flex items-center justify-between gap-4 p-4 hover:bg-muted/20 transition-colors"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{material.materialName}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {material.category ?? '-'} · {material.materialType ?? 'material'}
-                  </p>
+            {materialQuery.isLoading ? (
+              <StateBlock size="compact" title="素材加载中" variant="loading" />
+            ) : materialQuery.isError ? (
+              <StateBlock
+                description={formatReportGatewayError(materialQuery.error, '素材列表加载失败')}
+                size="compact"
+                title="素材列表加载失败"
+                variant="error"
+              />
+            ) : materials.length === 0 ? (
+              <StateBlock size="compact" title="暂无报告素材" variant="empty" />
+            ) : (
+              materials.map((material) => (
+                <div
+                  key={material.id}
+                  className="flex items-center justify-between gap-4 p-4 hover:bg-muted/20 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{material.materialName}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {material.category ?? '-'} · {material.materialType ?? 'material'}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-muted px-2 py-1 text-xs">
+                    {material.enabled ? '可引用' : '停用'}
+                  </span>
                 </div>
-                <span className="rounded-full bg-muted px-2 py-1 text-xs">
-                  {material.enabled ? '可引用' : '停用'}
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </section>
       </div>
@@ -283,9 +283,7 @@ export function ReportTemplatesPage() {
 
           {structureQuery.isError && (
             <div className="py-4 text-center text-sm text-destructive">
-              {editMode
-                ? '无法加载模板结构，请重试。'
-                : '该模板暂无结构数据，或未配置 outlineSchema。'}
+              {formatReportGatewayError(structureQuery.error, '模板结构加载失败')}
             </div>
           )}
 

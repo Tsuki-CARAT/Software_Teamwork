@@ -1,4 +1,5 @@
 export * from './report-generation.api'
+export * from './report-generation.errors'
 export * from './report-generation.queries'
 export * from './report-generation.schema'
 export * from './report-generation.types'

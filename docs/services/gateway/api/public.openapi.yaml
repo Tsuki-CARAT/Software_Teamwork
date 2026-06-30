@@ -2136,7 +2136,10 @@ paths:
               $ref: '#/components/schemas/CreateQARetrievalTestRunRequest'
       responses:
         '201':
-          description: QA retrieval test run created.
+          description: >
+            QA retrieval test run created. Knowledge dependency failures are
+            saved and returned as `status: failed` runs with a sanitized
+            `errorMessage`.
           content:
             application/json:
               schema:

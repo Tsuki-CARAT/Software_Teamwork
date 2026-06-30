@@ -4958,7 +4958,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description QA retrieval test run created. */
+            /** @description QA retrieval test run created. Knowledge dependency failures are saved and returned as `status: failed` runs with a sanitized `errorMessage`. */
             201: {
                 headers: {
                     [name: string]: unknown;

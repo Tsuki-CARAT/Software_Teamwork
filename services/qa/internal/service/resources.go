@@ -379,12 +379,6 @@ func (s *ResourceService) CreateRetrievalTestRun(ctx context.Context, userID str
 	if saveErr != nil {
 		return RetrievalTestRun{}, saveErr
 	}
-	if retrieveErr != nil {
-		if appErr, ok := Classify(retrieveErr); ok {
-			return run, appErr
-		}
-		return run, NewError(CodeDependency, "knowledge retrieval failed", retrieveErr)
-	}
 	return run, nil
 }
 

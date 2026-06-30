@@ -254,9 +254,8 @@ func TestCreateRetrievalTestRunSavesKnowledgeFailureSummary(t *testing.T) {
 	}
 
 	run, err := resources.CreateRetrievalTestRun(context.Background(), "user-1", RetrievalTestInput{Question: "query"})
-	appErr, ok := Classify(err)
-	if !ok || appErr.Code != CodeDependency {
-		t.Fatalf("error=%v, want dependency_error", err)
+	if err != nil {
+		t.Fatalf("error=%v, want saved failed run", err)
 	}
 	if !repository.saveCalled || repository.savedRunErr == nil {
 		t.Fatalf("saveCalled=%v runErr=%v", repository.saveCalled, repository.savedRunErr)
@@ -275,9 +274,8 @@ func TestCreateRetrievalTestRunPreservesKnowledgeForbidden(t *testing.T) {
 	}
 
 	run, err := resources.CreateRetrievalTestRun(context.Background(), "user-1", RetrievalTestInput{Question: "query"})
-	appErr, ok := Classify(err)
-	if !ok || appErr.Code != CodeForbidden {
-		t.Fatalf("error=%v, want forbidden", err)
+	if err != nil {
+		t.Fatalf("error=%v, want saved failed run", err)
 	}
 	if run.Status != "failed" || run.ErrorMessage != "knowledge retrieval failed" {
 		t.Fatalf("run=%+v", run)

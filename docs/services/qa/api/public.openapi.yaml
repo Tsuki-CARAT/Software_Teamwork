@@ -324,7 +324,10 @@ paths:
             schema: { $ref: '#/components/schemas/RetrievalTestRequest' }
       responses:
         '201':
-          description: Retrieval test result
+          description: >
+            Retrieval test run snapshot. Knowledge dependency failures are saved
+            and returned as `status: failed` runs with a sanitized
+            `errorMessage`.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RetrievalTestResponse' }

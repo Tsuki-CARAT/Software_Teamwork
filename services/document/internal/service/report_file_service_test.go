@@ -264,6 +264,83 @@ func TestExecuteReportFileCreationUsesSavedSectionsAndStoresFileRef(t *testing.T
 	}
 }
 
+func TestExecuteReportFileCreationFailsWhenReportIsDeleted(t *testing.T) {
+	deletedAt := time.Now().UTC()
+	repo := newFakeReportFileRepository()
+	repo.reports["report-1"] = Report{
+		ID:        "report-1",
+		Status:    ReportStatusDeleted,
+		DeletedAt: &deletedAt,
+		CreatorID: "user-1",
+	}
+	repo.files["rf-1"] = ReportFile{
+		ID: "rf-1", ReportID: "report-1", JobID: "job-1",
+		Filename: "report.docx", Format: ReportFileFormatDOCX, Status: ReportFileStatusPending,
+	}
+	svc := NewReportFileService(repo, &fakeReportFileContentClient{}, nil, NewSimpleDOCXGenerator())
+
+	err := svc.ExecuteReportFileCreation(context.Background(), ReportFileExecutionPayload{JobID: "job-1"})
+	if err == nil {
+		t.Fatal("expected error for deleted report, got nil")
+	}
+	appErr, ok := Classify(err)
+	if !ok || appErr.Code != CodeConflict {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+	// Report file must be marked failed, not succeeded.
+	if got := repo.files["rf-1"].Status; got != ReportFileStatusFailed {
+		t.Fatalf("report file status = %q, want %q", got, ReportFileStatusFailed)
+	}
+}
+
+func TestExecuteReportFileCreationFailsWhenReportHasDeletedAtWithoutStatusDeleted(t *testing.T) {
+	deletedAt := time.Now().UTC()
+	repo := newFakeReportFileRepository()
+	// DeletedAt set but status might not yet be propagated — should still abort.
+	repo.reports["report-1"] = Report{
+		ID:        "report-1",
+		Status:    ReportStatusExporting,
+		DeletedAt: &deletedAt,
+		CreatorID: "user-1",
+	}
+	repo.files["rf-1"] = ReportFile{
+		ID: "rf-1", ReportID: "report-1", JobID: "job-1",
+		Filename: "report.docx", Format: ReportFileFormatDOCX, Status: ReportFileStatusPending,
+	}
+	svc := NewReportFileService(repo, &fakeReportFileContentClient{}, nil, NewSimpleDOCXGenerator())
+
+	err := svc.ExecuteReportFileCreation(context.Background(), ReportFileExecutionPayload{JobID: "job-1"})
+	if err == nil {
+		t.Fatal("expected error when report has DeletedAt set, got nil")
+	}
+	appErr, ok := Classify(err)
+	if !ok || appErr.Code != CodeConflict {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+	if got := repo.files["rf-1"].Status; got != ReportFileStatusFailed {
+		t.Fatalf("report file status = %q, want %q", got, ReportFileStatusFailed)
+	}
+}
+
+func TestCreateReportFileRejectsDeletedReport(t *testing.T) {
+	deletedAt := time.Now().UTC()
+	repo := newFakeReportFileRepository()
+	repo.reports["report-1"] = Report{
+		ID:        "report-1",
+		Status:    ReportStatusDeleted,
+		DeletedAt: &deletedAt,
+		CreatorID: "user-1",
+	}
+	svc := NewReportFileService(repo, &fakeReportFileContentClient{}, nil, nil)
+
+	_, err := svc.CreateReportFile(context.Background(), RequestContext{UserID: "user-1"},
+		CreateReportFileInput{ReportID: "report-1", Format: "docx"})
+	appErr, ok := Classify(err)
+	if !ok || appErr.Code != CodeConflict {
+		t.Fatalf("expected conflict for deleted report, got %v", err)
+	}
+}
+
 func TestSimpleDOCXGeneratorCreatesWordPackage(t *testing.T) {
 	data, err := NewSimpleDOCXGenerator().GenerateDOCX(context.Background(), Report{Name: "Inspection"}, []ReportSection{{Title: "Summary", Content: "all clear"}})
 	if err != nil {

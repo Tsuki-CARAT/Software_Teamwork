@@ -233,6 +233,12 @@ func (s *ReportFileService) ExecuteReportFileCreation(ctx context.Context, paylo
 		_ = s.failReportFile(ctx, reportFile, "report_not_found")
 		return mapRepositoryReadError(err, "report not found")
 	}
+	// Guard: if the report was deleted after the export job was enqueued, abort
+	// and fail the report file rather than generating and uploading the DOCX.
+	if report.Status == ReportStatusDeleted || report.DeletedAt != nil {
+		_ = s.failReportFile(ctx, reportFile, "report_deleted")
+		return NewError(CodeConflict, "report has been deleted", nil)
+	}
 	sections, err := s.repo.ListReportSections(ctx, report.ID)
 	if err != nil {
 		_ = s.failReportFile(ctx, reportFile, "section_load_failed")

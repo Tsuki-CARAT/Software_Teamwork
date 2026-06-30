@@ -196,6 +196,54 @@ func TestJobServiceRetryJobDoesNotPersistRawReason(t *testing.T) {
 	}
 }
 
+func TestRetryJobRejectsDeletedReport(t *testing.T) {
+	ctx := context.Background()
+	deletedAt := time.Now().UTC()
+	repo := &fakeJobRepository{
+		report: Report{ID: "report-1", CreatorID: "user-1", Status: ReportStatusDeleted, DeletedAt: &deletedAt},
+		job: ReportJob{
+			ID:        "job-1",
+			ReportID:  "report-1",
+			JobType:   JobTypeReportFileCreation,
+			RequestID: "req-retry-deleted",
+		},
+	}
+	svc := NewJobService(repo, &fakeTaskEnqueuer{})
+
+	_, err := svc.RetryJob(ctx, RequestContext{UserID: "user-1"}, "job-1", "retry after delete")
+	if err == nil {
+		t.Fatal("expected error retrying job for deleted report, got nil")
+	}
+	appErr, ok := Classify(err)
+	if !ok || appErr.Code != CodeConflict {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
+func TestRetryJobRejectsReportWithDeletedAtSet(t *testing.T) {
+	ctx := context.Background()
+	deletedAt := time.Now().UTC()
+	repo := &fakeJobRepository{
+		// Status may lag behind DeletedAt during soft-delete; both must be guarded.
+		report: Report{ID: "report-1", CreatorID: "user-1", Status: ReportStatusExporting, DeletedAt: &deletedAt},
+		job: ReportJob{
+			ID:       "job-1",
+			ReportID: "report-1",
+			JobType:  JobTypeReportFileCreation,
+		},
+	}
+	svc := NewJobService(repo, &fakeTaskEnqueuer{})
+
+	_, err := svc.RetryJob(ctx, RequestContext{UserID: "user-1"}, "job-1", "")
+	if err == nil {
+		t.Fatal("expected error when report has DeletedAt set, got nil")
+	}
+	appErr, ok := Classify(err)
+	if !ok || appErr.Code != CodeConflict {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
 type fakeJobRepository struct {
 	report        Report
 	job           ReportJob

@@ -838,7 +838,9 @@ func (r *PostgresRepository) UpdateReportFile(ctx context.Context, value service
 				status = 'exported',
 				exported_at = $2,
 				updated_at = $2
-			WHERE id = $3`, reportFileID, exportedAt, updated.ReportID); err != nil {
+			WHERE id = $3
+			  AND deleted_at IS NULL
+			  AND status <> 'deleted'`, reportFileID, exportedAt, updated.ReportID); err != nil {
 			return service.ReportFile{}, fmt.Errorf("update report export metadata: %w", err)
 		}
 		if err := tx.Commit(ctx); err != nil {

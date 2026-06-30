@@ -831,7 +831,7 @@ func (r *PostgresRepository) UpdateReportFile(ctx context.Context, value service
 			return service.ReportFile{}, err
 		}
 		exportedAt := time.Now().UTC()
-		if _, err := tx.Exec(ctx, `
+		tag, err := tx.Exec(ctx, `
 			UPDATE reports
 			SET
 				latest_report_file_id = $1,
@@ -840,8 +840,15 @@ func (r *PostgresRepository) UpdateReportFile(ctx context.Context, value service
 				updated_at = $2
 			WHERE id = $3
 			  AND deleted_at IS NULL
-			  AND status <> 'deleted'`, reportFileID, exportedAt, updated.ReportID); err != nil {
+			  AND status <> 'deleted'`, reportFileID, exportedAt, updated.ReportID)
+		if err != nil {
 			return service.ReportFile{}, fmt.Errorf("update report export metadata: %w", err)
+		}
+		// 0 rows affected means the report was soft-deleted between the service-layer
+		// check and this write-back. Roll back the report_files succeeded update and
+		// return a conflict so the caller can mark the report file as failed.
+		if tag.RowsAffected() == 0 {
+			return service.ReportFile{}, service.NewError(service.CodeConflict, "report has been deleted", nil)
 		}
 		if err := tx.Commit(ctx); err != nil {
 			return service.ReportFile{}, fmt.Errorf("commit report file update transaction: %w", err)

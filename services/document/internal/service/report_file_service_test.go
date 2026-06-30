@@ -12,12 +12,16 @@ import (
 )
 
 type fakeReportFileRepository struct {
-	reports   map[string]Report
-	sections  []ReportSection
-	files     map[string]ReportFile
-	jobs      map[string]ReportJob
-	attempts  map[string]ReportJobAttempt
-	taskIDErr error
+	reports            map[string]Report
+	sections           []ReportSection
+	files              map[string]ReportFile
+	jobs               map[string]ReportJob
+	attempts           map[string]ReportJobAttempt
+	taskIDErr          error
+	// simulateDeleteOnSucceededUpdate, if true, makes UpdateReportFile return a
+	// conflict error when the status is succeeded, simulating a race where the
+	// report is deleted after DOCX generation but before the final write-back.
+	simulateDeleteOnSucceededUpdate bool
 }
 
 func newFakeReportFileRepository() *fakeReportFileRepository {
@@ -133,6 +137,9 @@ func (f *fakeReportFileRepository) GetReportFileByJobID(_ context.Context, jobID
 }
 
 func (f *fakeReportFileRepository) UpdateReportFile(_ context.Context, value ReportFile) (ReportFile, error) {
+	if f.simulateDeleteOnSucceededUpdate && value.Status == ReportFileStatusSucceeded {
+		return ReportFile{}, NewError(CodeConflict, "report has been deleted", nil)
+	}
 	f.files[value.ID] = value
 	return value, nil
 }
@@ -319,6 +326,36 @@ func TestExecuteReportFileCreationFailsWhenReportHasDeletedAtWithoutStatusDelete
 	}
 	if got := repo.files["rf-1"].Status; got != ReportFileStatusFailed {
 		t.Fatalf("report file status = %q, want %q", got, ReportFileStatusFailed)
+	}
+}
+
+func TestExecuteReportFileCreationFailsWhenReportDeletedAfterGeneration(t *testing.T) {
+	// Simulates the race: report is deleted after the service-layer deletion check
+	// passes and DOCX generation completes, but before the final write-back.
+	// The repository returns conflict (0 rows affected in UPDATE reports) and rolls
+	// back the report_files succeeded update. The service must then mark the report
+	// file as failed so it does not remain stuck in running.
+	repo := newFakeReportFileRepository()
+	repo.reports["report-1"] = Report{ID: "report-1", Name: "Race Report", CreatorID: "user-1", Status: ReportStatusExporting}
+	repo.sections = []ReportSection{{Title: "Section", Content: "content"}}
+	repo.files["rf-1"] = ReportFile{
+		ID: "rf-1", ReportID: "report-1", JobID: "job-1",
+		Filename: "Race Report.docx", Format: ReportFileFormatDOCX, Status: ReportFileStatusPending,
+	}
+	repo.simulateDeleteOnSucceededUpdate = true
+	svc := NewReportFileService(repo, &fakeReportFileContentClient{}, nil, NewSimpleDOCXGenerator())
+
+	err := svc.ExecuteReportFileCreation(context.Background(), ReportFileExecutionPayload{JobID: "job-1"})
+	if err == nil {
+		t.Fatal("expected error when report deleted during write-back, got nil")
+	}
+	appErr, ok := Classify(err)
+	if !ok || appErr.Code != CodeConflict {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+	// Report file must be failed, not succeeded or running.
+	if got := repo.files["rf-1"].Status; got != ReportFileStatusFailed {
+		t.Fatalf("report file status = %q after write-back race, want %q", got, ReportFileStatusFailed)
 	}
 }
 

@@ -267,6 +267,13 @@ func (s *ReportFileService) ExecuteReportFileCreation(ctx context.Context, paylo
 	reportFile.Status = ReportFileStatusSucceeded
 	reportFile.Filename = file.Filename
 	if _, err := s.repo.UpdateReportFile(ctx, reportFile); err != nil {
+		// If the report was deleted between our earlier check and this write-back,
+		// the repository returns a conflict and rolls back the succeeded update.
+		// Mark the report file as failed so it does not remain stuck in running.
+		_ = s.failReportFile(ctx, reportFile, "report_deleted_on_writeback")
+		if appErr, ok := Classify(err); ok && appErr.Code == CodeConflict {
+			return err
+		}
 		return dependencyError("mark report file succeeded", err)
 	}
 	return nil

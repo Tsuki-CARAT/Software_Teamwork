@@ -52,11 +52,7 @@ Knowledge Service 的工程选型以 [技术选型基线](../../architecture/tec
 frontend
    |
    v
-gateway /api/v1/knowledge-bases
-gateway /api/v1/knowledge-bases/{knowledgeBaseId}/documents
-gateway /api/v1/documents/{documentId}/content
-gateway /api/v1/documents/{documentId}/chunks
-gateway /api/v1/knowledge-queries
+gateway knowledge resources
    |
    v
 knowledge service
@@ -82,23 +78,18 @@ Gateway 调用 knowledge 服务时应传递：
 
 前端不得设置 `X-User-Id`、`X-User-Roles`、`X-User-Permissions`；这些字段只能由 gateway 在认证后注入。
 
-## 公开接口总览
+## 公开资源范围
 
-| Method | Gateway Path | Auth | Owner | 说明 |
-| --- | --- | --- | --- | --- |
-| `POST` | `/api/v1/knowledge-bases` | 需要 | `knowledge` | 创建知识库。 |
-| `GET` | `/api/v1/knowledge-bases` | 需要 | `knowledge` | 分页查询知识库。 |
-| `GET` | `/api/v1/knowledge-bases/{knowledgeBaseId}` | 需要 | `knowledge` | 查询知识库详情。 |
-| `PATCH` | `/api/v1/knowledge-bases/{knowledgeBaseId}` | 需要 | `knowledge` | 更新知识库元数据、切片策略或检索策略。 |
-| `DELETE` | `/api/v1/knowledge-bases/{knowledgeBaseId}` | 需要 | `knowledge` | 删除知识库业务状态、切片和向量索引。 |
-| `POST` | `/api/v1/knowledge-bases/{knowledgeBaseId}/documents` | 需要 | `knowledge` | 上传原始文件并创建知识库文档资源；底层文件对象由 `knowledge` 在内部复用 `file` 保存。 |
-| `GET` | `/api/v1/knowledge-bases/{knowledgeBaseId}/documents` | 需要 | `knowledge` | 查询知识库内文档处理状态列表。 |
-| `GET` | `/api/v1/documents/{documentId}` | 需要 | `knowledge` | 查询文档处理详情。 |
-| `PATCH` | `/api/v1/documents/{documentId}` | 需要 | `knowledge` | 更新知识库文档元数据，例如标签。 |
-| `DELETE` | `/api/v1/documents/{documentId}` | 需要 | `knowledge` | 删除知识库文档资源，并协调切片、索引和底层 file 引用清理。 |
-| `GET` | `/api/v1/documents/{documentId}/chunks` | 需要 | `knowledge` | 查询文档切片详情。 |
-| `GET` | `/api/v1/documents/{documentId}/content` | 需要 | `knowledge` | 获取知识库原始文件流，路径使用 `documents/{documentId}/content` 子资源。 |
-| `POST` | `/api/v1/knowledge-queries` | 需要 | `knowledge` | 创建一次知识检索查询并返回召回结果。 |
+Knowledge 已进入 Gateway active contract 的公开资源包括：
+
+- `knowledge-bases`：知识库创建、查询、更新和删除。
+- `knowledge-bases/{knowledgeBaseId}/documents`：知识库文档上传和列表。
+- `documents/{documentId}`：Knowledge-owned 文档详情、标签更新和删除。
+- `documents/{documentId}/chunks`：文档切片详情。
+- `documents/{documentId}/content`：知识库原始文件流，底层 bytes 可由 Knowledge 从 File Service 读取。
+- `knowledge-queries`：创建一次知识检索查询并返回召回结果。
+
+逐项 method、path、schema、认证和错误响应以 [`docs/services/gateway/api/public.openapi.yaml`](../gateway/api/public.openapi.yaml) 和 [Gateway Active API Owner Map](../gateway/docs/active-api-owner-map.md) 为准。服务级 [`api/public.openapi.yaml`](api/public.openapi.yaml) 还包含候选扩展资源；未进入 Gateway active paths 的内容不是前端稳定公开契约。
 
 ## 数据结构
 
@@ -128,11 +119,7 @@ uploaded | parsing | chunking | embedding | ready | failed
 
 ## 检索约定
 
-知识检索使用：
-
-```http
-POST /api/v1/knowledge-queries
-```
+知识检索使用 `knowledge-queries` 资源创建语义，精确 method、path 和 schema 以 Gateway OpenAPI 为准。
 
 请求语义：
 
@@ -155,13 +142,7 @@ seeded `document_chunks` 和 fake vector hit 替代真实 worker/Qdrant，只要
 
 ## 与 File Service 的边界
 
-当前公开上传入口：
-
-```http
-POST /api/v1/knowledge-bases/{knowledgeBaseId}/documents
-```
-
-该接口由 `knowledge` 拥有。Knowledge Service 负责接收 gateway 转发的 multipart、创建知识库文档资源、保存内部 file reference、维护处理状态、chunks、embedding、Qdrant 索引和检索。Knowledge 可在服务边界内调用 File Service 的 `/internal/v1/files/**` 基础接口保存和读取底层原始文件对象，并调用 Parser Service 的 `/internal/v1/parsed-documents` 将 raw bytes 转成规范化 parsed content；File Service 不保存 `knowledgeBaseId`、文档处理状态、chunks 或索引状态，Parser Service 不保存业务状态、chunks、embedding 或 Qdrant point。gateway 不能直接解析文件或操作 Qdrant。
+知识库文档上传入口由 `knowledge` 拥有，精确 method、path 和 multipart schema 以 Gateway OpenAPI 为准。Knowledge Service 负责接收 gateway 转发的 multipart、创建知识库文档资源、保存内部 file reference、维护处理状态、chunks、embedding、Qdrant 索引和检索。Knowledge 可在服务边界内调用 File Service 的 `/internal/v1/files/**` 基础接口保存和读取底层原始文件对象，并调用 Parser Service 的 `/internal/v1/parsed-documents` 将 raw bytes 转成规范化 parsed content；File Service 不保存 `knowledgeBaseId`、文档处理状态、chunks 或索引状态，Parser Service 不保存业务状态、chunks、embedding 或 Qdrant point。gateway 不能直接解析文件或操作 Qdrant。
 
 ## 错误码约定
 

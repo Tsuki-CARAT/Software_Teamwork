@@ -476,7 +476,7 @@ func TestAIGatewaySmoke(t *testing.T) {
 - Use stable API response shapes: project-owned JSON APIs use
   `{ data, requestId }` / `{ error }`; AI Gateway model invocation success
   responses use OpenAI-compatible shapes as documented in
-  `docs/services/ai-gateway/api/openapi.yaml`.
+  `docs/services/ai-gateway/api/internal.openapi.yaml`.
 - Add or update tests for changed business logic.
 
 ---

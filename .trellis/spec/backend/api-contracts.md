@@ -28,10 +28,10 @@ first, then update this spec:
 - `docs/architecture/service-boundaries.md`
 - `docs/architecture/frontend-backend-contract.md`
 - `docs/architecture/technology-decisions.md`
-- `docs/services/gateway/api/openapi.yaml`
+- `docs/services/gateway/api/public.openapi.yaml`
 - `docs/services/<service>/README.md`
-- `docs/services/<service>/api/openapi.yaml` or
-  `docs/services/<service>/api/*.openapi.yaml`
+- `docs/services/<service>/api/public.openapi.yaml` and
+  `docs/services/<service>/api/internal.openapi.yaml`
 
 Do not implement or generate frontend/backend clients from Trellis examples that
 contradict the current `docs/` contracts. If code diverges from a confirmed
@@ -54,7 +54,7 @@ parallel-team internal service interfaces.
 Gateway public endpoints are documented in:
 
 ```text
-docs/services/gateway/api/openapi.yaml
+docs/services/gateway/api/public.openapi.yaml
 ```
 
 Public routes use these prefixes:
@@ -161,7 +161,7 @@ prompts, vector payloads, or internal URLs to the frontend.
 
 ### 5. Good/Base/Bad Cases
 
-- Good: add a gateway route to `docs/services/gateway/api/openapi.yaml`, mark
+- Good: add a gateway route to `docs/services/gateway/api/public.openapi.yaml`, mark
   `x-owner-service`, use the standard envelope, and update
   `docs/architecture/service-boundaries.md` if ownership is new.
 - Base: proxy a domain-service route through gateway without changing the
@@ -183,7 +183,7 @@ When implementation exists:
 
 For documentation-only contract changes:
 
-- Run an OpenAPI linter against `docs/services/gateway/api/openapi.yaml`.
+- Run an OpenAPI linter against `docs/services/gateway/api/public.openapi.yaml`.
 - Parse the YAML and verify `$ref` targets resolve.
 - Check route prefix consistency: health routes stay unversioned, public API
   routes use `/api/v1/**`.
@@ -210,7 +210,7 @@ gateway -> normalized KnowledgeQueryResponse or ErrorResponse
 ## Related Documents
 
 - `docs/services/gateway/README.md`
-- `docs/services/gateway/api/openapi.yaml`
+- `docs/services/gateway/api/public.openapi.yaml`
 - `docs/architecture/service-boundaries.md`
 - `docs/architecture/frontend-backend-contract.md`
 
@@ -516,8 +516,8 @@ parser service -> Python/PaddleOCR backend behind the HTTP contract
 
 - Trigger: adding or changing an internal service-to-service HTTP API, including
   model invocation APIs owned by `ai-gateway`.
-- Applies to `docs/services/<service>/api/openapi.yaml` or
-  `docs/services/<service>/api/*.openapi.yaml`,
+- Applies to `docs/services/<service>/api/public.openapi.yaml`,
+  `docs/services/<service>/api/internal.openapi.yaml`,
   `services/<service>/api/openapi.yaml` when implementation exists, service
   interface docs, and matching service-boundary documentation.
 
@@ -661,7 +661,7 @@ qa owns messages, MCP tool calls, citations, and public SSE event shape
 ### 1. Scope / Trigger
 
 - Trigger: implementing or changing AI Gateway model invocation routes, provider adapters, profile purpose resolution, provider invocation summaries, or usage aggregation.
-- Applies to `services/ai-gateway/internal/http`, `services/ai-gateway/internal/service`, `services/ai-gateway/internal/provider`, `services/ai-gateway/internal/repository`, `services/ai-gateway/migrations`, and `docs/services/ai-gateway/api/openapi.yaml`.
+- Applies to `services/ai-gateway/internal/http`, `services/ai-gateway/internal/service`, `services/ai-gateway/internal/provider`, `services/ai-gateway/internal/repository`, `services/ai-gateway/migrations`, and `docs/services/ai-gateway/api/internal.openapi.yaml`.
 
 ### 2. Signatures
 
@@ -917,7 +917,7 @@ retryable file/vector cleanup
 
 - Trigger: a downstream service such as `knowledge`, `qa`, `document`, or an
   aggregation surface has not finalized its frontend/backend contract yet.
-- Applies to `docs/services/gateway/api/openapi.yaml`,
+- Applies to `docs/services/gateway/api/public.openapi.yaml`,
   `docs/services/gateway/README.md`,
   `docs/architecture/service-boundaries.md`, and
   `docs/architecture/frontend-backend-contract.md`.
@@ -927,7 +927,7 @@ retryable file/vector cleanup
 Unfinalized endpoints must not be added as active `paths` operations in:
 
 ```text
-docs/services/gateway/api/openapi.yaml
+docs/services/gateway/api/public.openapi.yaml
 ```
 
 Instead, list them under the OpenAPI root extension:
@@ -976,7 +976,7 @@ placeholder operations are TODO markers only:
 
 For documentation-only contract changes:
 
-- Parse `docs/services/gateway/api/openapi.yaml`.
+- Parse `docs/services/gateway/api/public.openapi.yaml`.
 - Verify every active `/api/v1/**` operation has an allowed finalized owner.
 - Verify only genuinely unfinalized downstream areas are present in
   `x-missing-contracts`.
@@ -1025,7 +1025,7 @@ it separate from the public gateway contract.
 
 Document request and response fields using the same public IDs, timestamps,
 envelopes, and error shapes defined in
-`docs/services/gateway/api/openapi.yaml`.
+`docs/services/gateway/api/public.openapi.yaml`.
 Binary success responses, such as file content, may omit the JSON envelope,
 but error responses must still use the standard error shape.
 
@@ -1043,13 +1043,13 @@ For each documented endpoint, separate:
 - Base: a service document summarizes the gateway OpenAPI without adding
   implementation-only behavior.
 - Bad: a service document declares a new frontend-facing status code or field
-  as stable without updating `docs/services/gateway/api/openapi.yaml`.
+  as stable without updating `docs/services/gateway/api/public.openapi.yaml`.
 
 ### 6. Tests Required
 
 For documentation-only changes:
 
-- Parse `docs/services/gateway/api/openapi.yaml`.
+- Parse `docs/services/gateway/api/public.openapi.yaml`.
 - Verify documented public paths exist in the OpenAPI file.
 - Check Markdown links resolve.
 
@@ -1062,14 +1062,14 @@ status codes, envelopes, request id propagation, and context headers.
 
 ```text
 docs/services/file/README.md declares GET /api/v1/files/{id}/download as stable
-docs/services/gateway/api/openapi.yaml has no matching public path
+docs/services/gateway/api/public.openapi.yaml has no matching public path
 ```
 
 #### Correct
 
 ```text
 docs/services/file/README.md references /api/v1/documents/{documentId}/content
-docs/services/gateway/api/openapi.yaml owns the same public path and owner-service marker
+docs/services/gateway/api/public.openapi.yaml owns the same public path and owner-service marker
 ```
 
 ## Scenario: Internal Domain Service APIs
@@ -1095,7 +1095,7 @@ GET /readyz
 Business routes under `/internal/v1/**` must remain RESTful and resource-oriented.
 They may be close to public gateway paths, but they are not public frontend
 contracts unless the same operation is active in
-`docs/services/gateway/api/openapi.yaml`.
+`docs/services/gateway/api/public.openapi.yaml`.
 
 ### 3. Contracts
 
@@ -1193,7 +1193,7 @@ public GET /api/v1/documents/{documentId} stays knowledge-owned and does not exp
   template-structure, or report-material APIs.
 - Applies to `services/document/internal/http`, `services/document/internal/service`,
   `services/document/internal/repository`, `services/document/internal/platform/fileclient`,
-  and the matching gateway contract in `docs/services/gateway/api/openapi.yaml`.
+  and the matching gateway contract in `docs/services/gateway/api/public.openapi.yaml`.
 
 ### 2. Signatures
 
@@ -1303,7 +1303,7 @@ POST /report-templates -> document calls file /internal/v1/files -> stores file_
 - Applies to `services/document/internal/http`, `services/document/internal/service`,
   `services/document/internal/repository`, `services/document/internal/platform/aigateway`,
   `services/document/internal/worker`, `services/document/migrations`, and the
-  matching gateway contract in `docs/services/gateway/api/openapi.yaml`.
+  matching gateway contract in `docs/services/gateway/api/public.openapi.yaml`.
 
 ### 2. Signatures
 
@@ -1427,7 +1427,7 @@ GET /report-operation-logs -> filter by documented fields and return sanitized s
 - Applies to `services/gateway/`, `services/auth/`,
   `docs/services/auth/README.md`, `docs/services/gateway/README.md`,
   `docs/architecture/frontend-backend-contract.md`, and
-  `docs/services/gateway/api/openapi.yaml`.
+  `docs/services/gateway/api/public.openapi.yaml`.
 
 ### 2. Signatures
 
@@ -1513,7 +1513,7 @@ When implementation exists:
 
 For documentation-only changes:
 
-- Parse `docs/services/gateway/api/openapi.yaml`.
+- Parse `docs/services/gateway/api/public.openapi.yaml`.
 - Verify `SessionResponse` requires `user` and `session`.
 - Verify docs mention `gateway:session:<accessTokenHash>` and Redis TTL.
 
@@ -1543,7 +1543,8 @@ gateway injects cached user, roles, and permissions into downstream headers
   reads, session revocation, security events, or auth-owned migrations.
 - Applies to `services/auth/internal/service`, `services/auth/internal/http`,
   `services/auth/internal/repository`, `services/auth/migrations`,
-  `services/auth/api/openapi.yaml`, and `docs/services/auth/api/openapi.yaml`.
+  `services/auth/api/openapi.yaml`, `docs/services/auth/api/public.openapi.yaml`,
+  and `docs/services/auth/api/internal.openapi.yaml`.
 
 ### 2. Signatures
 

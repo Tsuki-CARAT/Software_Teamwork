@@ -182,9 +182,11 @@
 ## API 与契约版本
 
 服务级机器可读契约在 `docs/services/<service>/api/` 下按调用面拆分：
-`public.openapi.yaml` 只描述经 Gateway 暴露的 `/api/v1/**` 子契约，
-`internal.openapi.yaml` 只描述服务间 `/internal/v1/**` 和健康检查契约。历史
-`openapi.yaml` 文件按服务后续文档整理任务逐步迁移；新建服务或新增调用面应先按
+`public.openapi.yaml` 描述该服务拥有的 public/Gateway-facing 设计面；
+只有进入 `docs/services/gateway/api/public.openapi.yaml` active paths 的内容
+才是前端稳定公开契约，未进入 Gateway active paths 的服务级 public
+内容必须标为 candidate/draft。`internal.openapi.yaml` 只描述服务间
+`/internal/v1/**` 和健康检查契约。历史 `openapi.yaml` 文件按服务后续文档整理任务逐步迁移；新建服务或新增调用面应先按
 public/internal 命名落位。
 
 | 契约 | OpenAPI 版本 | API 文档版本 | 说明 |
@@ -194,8 +196,8 @@ public/internal 命名落位。
 | AI Gateway internal API | `3.0.3` | `0.1.0` | 服务间模型配置和 OpenAI-compatible 调用契约。 |
 | Parser public API | `3.0.3` | `0.1.0` | Parser 无 Gateway 公开 API；以空 `paths` 明确声明。 |
 | Parser internal API | `3.0.3` | `0.1.0` | 服务间文档解析运行时契约，只供 Knowledge ingestion 等后端服务调用。 |
-| QA service API | `3.0.3` | `0.1.0` | QA Agent Host 设计契约。 |
-| Document service API | `3.0.3` | `0.1.0` | 报告生成设计契约。 |
+| QA service public API draft | `3.0.3` | `0.1.0` | QA Agent Host 服务级 public 设计面；稳定前端入口仍以 Gateway OpenAPI 为准。 |
+| Document service public API draft | `3.0.3` | `0.1.0` | 报告生成服务级 public 设计面；稳定前端入口仍以 Gateway OpenAPI 为准。 |
 | Knowledge service internal API | `3.0.3` | `0.1.0` | 服务内 OpenAPI 只覆盖已实现的基础知识库和文档上传/详情能力；更多公开能力以 gateway OpenAPI 为准。 |
 | Knowledge public API draft | `3.0.3` | `0.1.0` | Knowledge 公开资源设计草案；稳定公开入口仍以 gateway OpenAPI 为准。 |
 | File service API | `3.0.3` | `0.2.0` | File 服务是后端内部基础文件能力，不直接作为前端公开 API。 |

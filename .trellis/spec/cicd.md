@@ -441,7 +441,7 @@ run: |
 
 - Trigger: changing the public gateway OpenAPI, gateway active owner map,
   frontend OpenAPI generation command, or the gateway contract verifier.
-- Applies to `docs/services/gateway/api/openapi.yaml`,
+- Applies to `docs/services/gateway/api/public.openapi.yaml`,
   `docs/services/gateway/docs/active-api-owner-map.md`, `apps/web/package.json`,
   `package.json`, `scripts/verify_gateway_active_api.py`, `scripts/tests/**`,
   and `.github/workflows/gateway-contract.yml`.
@@ -477,7 +477,7 @@ The verifier is the CI gate for these executable contracts:
 - `x-missing-contracts.placeholderOperations` must not overlap active OpenAPI
   paths.
 - `apps/web` API type generation must use
-  `../../docs/services/gateway/api/openapi.yaml`.
+  `../../docs/services/gateway/api/public.openapi.yaml`.
 - `docs/services/gateway/docs/active-api-owner-map.md` must match the active
   operations, owner summary, and missing contract placeholders derived from
   OpenAPI.
@@ -518,7 +518,7 @@ python scripts/verify_gateway_active_api.py
 #### Wrong
 
 ```text
-Change docs/services/gateway/api/openapi.yaml
+Change docs/services/gateway/api/public.openapi.yaml
 Skip docs/services/gateway/docs/active-api-owner-map.md
 Open PR without running the verifier
 ```
@@ -526,7 +526,7 @@ Open PR without running the verifier
 #### Correct
 
 ```text
-Change docs/services/gateway/api/openapi.yaml
+Change docs/services/gateway/api/public.openapi.yaml
 Update docs/services/gateway/docs/active-api-owner-map.md
 Run bun run check:gateway-contract
 Let .github/workflows/gateway-contract.yml enforce the same gate in PR

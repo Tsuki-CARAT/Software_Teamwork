@@ -54,12 +54,7 @@ RESTful 路径、统一响应和错误 envelope 以 [前后端集成契约](../.
 frontend / admin / MCP caller
    |
    v
-gateway /api/v1/report-templates
-gateway /api/v1/report-materials
-gateway /api/v1/reports
-gateway /api/v1/report-jobs
-gateway /api/v1/report-files
-gateway /api/v1/report-settings
+gateway report resources
    |
    v
 document service
@@ -84,52 +79,31 @@ Gateway 调用 `document` 服务时应传递：
 
 前端不得设置 `X-User-Id`、`X-User-Roles`、`X-User-Permissions`；这些字段只能由 gateway 在认证后注入。`document` 只消费这些上下文做权限判断、审计、创建人记录和追踪，不负责登录态创建。
 
-## 公开接口总览
+## 公开资源范围
 
-以下路径均相对于 gateway `/api/v1`，稳定机器可读契约以 gateway OpenAPI active paths 为准。
+Document 已进入 Gateway active contract 的公开资源包括：
 
-| Method | Path | Owner | 说明 |
-| --- | --- | --- | --- |
-| `GET` | `/report-types` | `document` | 查询支持的报告类型。 |
-| `GET/POST` | `/report-templates` | `document` | 查询模板列表，上传 DOCX 模板。 |
-| `GET/PATCH/DELETE` | `/report-templates/{reportTemplateId}` | `document` | 查询、更新、删除或停用模板。 |
-| `GET/PATCH` | `/report-templates/{reportTemplateId}/structure` | `document` | 查询或保存模板结构配置。 |
-| `GET/POST` | `/report-materials` | `document` | 查询或上传报告素材。 |
-| `GET/DELETE` | `/report-materials/{materialId}` | `document` | 查询或删除报告素材。 |
-| `GET/POST` | `/reports` | `document` | 查询报告记录，创建报告草稿。 |
-| `GET/PATCH/DELETE` | `/reports/{reportId}` | `document` | 查询、更新或删除报告记录。 |
-| `GET/POST` | `/reports/{reportId}/outlines` | `document` | 查询大纲版本，创建或保存大纲版本。 |
-| `GET/PATCH` | `/reports/{reportId}/outlines/{outlineId}` | `document` | 查询或编辑指定大纲。 |
-| `DELETE` | `/reports/{reportId}/outlines/{outlineId}/sections/{sectionId}` | `document` | 删除大纲章节并由服务重新编号。 |
-| `GET/POST` | `/reports/{reportId}/sections` | `document` | 查询章节内容，创建章节草稿或批量保存章节。 |
-| `GET/PATCH` | `/reports/{reportId}/sections/{sectionId}` | `document` | 查询或更新章节正文、表格和元数据。 |
-| `GET/POST` | `/reports/{reportId}/sections/{sectionId}/versions` | `document` | 查询章节版本或创建新版本，可用于单章重新生成。 |
-| `GET/POST` | `/reports/{reportId}/jobs` | `document` | 查询报告任务列表，创建大纲生成、正文生成或文件创建任务。 |
-| `GET` | `/report-jobs/{jobId}` | `document` | 查询任务状态、进度、结果和错误摘要。 |
-| `GET/POST` | `/report-jobs/{jobId}/attempts` | `document` | 查询任务尝试记录，创建新的任务尝试。 |
-| `GET` | `/reports/{reportId}/events` | `document` | 查询报告生成事件列表，用于轮询进度或审计。 |
-| `GET/POST` | `/report-files` | `document` | 查询报告文件列表，创建生成文件资源。 |
-| `GET` | `/report-files/{reportFileId}` | `document` | 查询报告文件元数据。 |
-| `GET` | `/report-files/{reportFileId}/content` | `document` | 读取生成文件内容，成功时返回文件流。 |
-| `GET` | `/report-statistics/overview` | `document` | 查询报告统计概览。 |
-| `GET` | `/report-statistics/daily` | `document` | 查询每日报告趋势。 |
-| `GET` | `/report-operation-logs` | `document` | 查询报告相关操作日志。 |
-| `GET/PATCH` | `/report-settings` | `document` | 查询或更新报告生成配置。 |
+- `report-types`、`report-templates` 和模板结构配置。
+- `report-materials`。
+- `reports`、报告大纲、章节和章节版本。
+- `report-jobs`、任务尝试和报告事件。
+- `report-files` 和生成文件内容流。
+- `report-statistics`、`report-operation-logs` 和 `report-settings`。
+
+逐项 method、path、schema、认证和错误响应以 [`docs/services/gateway/api/public.openapi.yaml`](../gateway/api/public.openapi.yaml) 和 [Gateway Active API Owner Map](../gateway/docs/active-api-owner-map.md) 为准。服务级 [`api/public.openapi.yaml`](api/public.openapi.yaml) 是 Document-owned public 设计面；前端稳定契约仍以 Gateway OpenAPI active paths 为准。
 
 ## RESTful 建模规则
 
 | 业务动作 | 稳定资源建模 |
 | --- | --- |
-| 生成大纲 | `POST /api/v1/reports/{reportId}/jobs`，`jobType=outline_generation`。 |
-| 重新生成大纲 | `POST /api/v1/reports/{reportId}/jobs`，`jobType=outline_regeneration`。 |
-| 生成正文 | `POST /api/v1/reports/{reportId}/jobs`，`jobType=content_generation`。 |
-| 重新生成正文 | `POST /api/v1/reports/{reportId}/jobs`，`jobType=content_regeneration`。 |
-| 重新生成指定章节 | `POST /api/v1/reports/{reportId}/sections/{sectionId}/versions`。 |
-| 重试失败任务 | `POST /api/v1/report-jobs/{jobId}/attempts`。 |
-| 导出 DOCX | `POST /api/v1/report-files`。 |
-| 获取导出文件内容 | `GET /api/v1/report-files/{reportFileId}/content`。 |
+| 生成或重新生成大纲 | 在报告资源下创建 report job，并用 `jobType` 区分 `outline_generation` 或 `outline_regeneration`。 |
+| 生成或重新生成正文 | 在报告资源下创建 report job，并用 `jobType` 区分 `content_generation` 或 `content_regeneration`。 |
+| 重新生成指定章节 | 在报告章节下创建新的 section version，默认保留用户编辑。 |
+| 重试失败任务 | 在 report job 下创建 attempt 资源。 |
+| 导出 DOCX | 创建 report file 资源，首期格式为 DOCX。 |
+| 获取导出文件内容 | 读取 report file 的 content 子资源。 |
 
-后续如需报告 SSE，只能先补 gateway OpenAPI active path；当前公开能力通过 `GET /api/v1/reports/{reportId}/events` 轮询事件列表。
+后续如需报告 SSE，只能先补 gateway OpenAPI active path；当前公开能力通过报告事件资源轮询事件列表。
 
 ## 通用响应结构
 
@@ -139,32 +113,32 @@ JSON 成功、分页和错误响应遵循 [前后端集成契约](../../architec
 
 ### 创建报告并生成大纲
 
-1. 调用方查询 `GET /api/v1/report-types` 和 `GET /api/v1/report-templates`。
-2. 调用方通过 `POST /api/v1/reports` 创建报告草稿，传入报告类型、模板、主题、专业、业务对象、年份和补充上下文。
-3. 调用方通过 `POST /api/v1/reports/{reportId}/jobs` 创建 `outline_generation` 任务。
+1. 调用方查询 report type 和 report template 资源。
+2. 调用方创建报告草稿资源，传入报告类型、模板、主题、专业、业务对象、年份和补充上下文。
+3. 调用方创建 `outline_generation` report job。
 4. `document` 根据报告类型、模板结构、主题、上下文和材料引用生成大纲版本。
-5. 调用方通过 `GET /api/v1/reports/{reportId}/outlines` 或 `GET /api/v1/reports/{reportId}/outlines/{outlineId}` 获取大纲。
+5. 调用方查询报告大纲列表或指定大纲资源。
 
 ### 编辑大纲和章节
 
-1. 调用方通过 `PATCH /api/v1/reports/{reportId}/outlines/{outlineId}` 修改章节标题、顺序和层级。
-2. 删除大纲章节使用 `DELETE /api/v1/reports/{reportId}/outlines/{outlineId}/sections/{sectionId}`。
+1. 调用方更新报告大纲资源，修改章节标题、顺序和层级。
+2. 删除大纲章节时，操作报告大纲下的 section 子资源。
 3. 服务必须保持章节树合法并重新计算展示编号。
 4. 当前大纲版本是后续正文生成的输入；重新生成时应创建新任务或新章节版本，不隐式覆盖用户编辑。
 
 ### 生成正文和重新生成
 
-1. 调用方通过 `POST /api/v1/reports/{reportId}/jobs` 创建 `content_generation` 或 `content_regeneration` 任务。
+1. 调用方创建 `content_generation` 或 `content_regeneration` report job。
 2. 目标实现中，`document` 逐章节生成正文，保存章节内容、结构化表格、引用快照和任务进度；当前 worker 仍未调用 AI Gateway 生成正文。
 3. 部分章节失败时，已成功章节不得丢失；任务可进入 `partial_succeeded` 或 `failed`，具体枚举以 OpenAPI 为准。
-4. 单章重新生成通过 `POST /api/v1/reports/{reportId}/sections/{sectionId}/versions` 创建新章节版本。`preserveUserEdits` 默认应为 `true`，只有调用方显式传 `false` 才覆盖用户编辑内容。
+4. 单章重新生成通过 section version 资源创建新章节版本。`preserveUserEdits` 默认应为 `true`，只有调用方显式传 `false` 才覆盖用户编辑内容。
 
 ### 创建报告文件
 
-1. 调用方通过 `POST /api/v1/report-files` 创建报告文件资源，首期格式为 DOCX。
+1. 调用方创建报告文件资源，首期格式为 DOCX。
 2. 当前基础实现使用已保存的报告和章节内容，通过内置 `SimpleDOCXGenerator` 生成基础 DOCX，不重新执行 AI 生成；富 DOCX 阶段再接入样式配置和 Pandoc/LibreOffice worker。
 3. 底层文件对象由 `document` 在服务边界内调用 `file` 保存。
-4. 调用方通过 `GET /api/v1/report-files/{reportFileId}` 查询元数据，通过 `GET /api/v1/report-files/{reportFileId}/content` 读取内容。
+4. 调用方查询 report file 元数据，读取 report file content 子资源获取内容。
 
 ## 核心数据模型
 
@@ -210,12 +184,7 @@ outline_generation | outline_regeneration | content_generation | content_regener
 
 ## 报告配置
 
-管理端报告生成配置通过 gateway active path 暴露：
-
-```http
-GET /api/v1/report-settings
-PATCH /api/v1/report-settings
-```
+管理端报告生成配置通过 gateway active 的 report settings 资源暴露，精确 method/path/schema 以 Gateway OpenAPI 为准。
 
 配置范围：
 

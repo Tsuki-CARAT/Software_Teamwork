@@ -144,50 +144,19 @@ AI Gateway 是内部模型服务，只提供 `/internal/v1/**` 给 `qa`、`knowl
 
 ## Knowledge 接口
 
-知识库管理、文档处理状态、切片详情和知识检索已经进入 gateway OpenAPI。前端应只调用 gateway 暴露的以下资源路径，不能直接调用 `services/knowledge`：
+知识库管理、文档处理状态、切片详情、原始文件内容和知识检索已经进入 gateway OpenAPI。前端只能调用 gateway active paths，不能直接调用 `services/knowledge`。逐项 method/path/schema 以 [`docs/services/gateway/api/public.openapi.yaml`](../services/gateway/api/public.openapi.yaml) 和 [Gateway Active API Owner Map](../services/gateway/docs/active-api-owner-map.md) 为准；本文只规定跨前后端协作规则。
 
-| Method | Path | 说明 |
-| --- | --- | --- |
-| `GET/POST` | `/api/v1/knowledge-bases` | 分页查询知识库、创建知识库。 |
-| `GET/PATCH/DELETE` | `/api/v1/knowledge-bases/{knowledgeBaseId}` | 查询、更新、删除知识库。 |
-| `GET` | `/api/v1/knowledge-bases/{knowledgeBaseId}/documents` | 查询知识库内文档处理状态列表。 |
-| `POST` | `/api/v1/knowledge-bases/{knowledgeBaseId}/documents` | 上传原始文件并创建知识库文档资源；底层文件对象由 knowledge 在内部复用 file 保存。 |
-| `GET` | `/api/v1/documents/{documentId}` | 查询文档处理详情。 |
-| `PATCH/DELETE` | `/api/v1/documents/{documentId}` | 更新或删除知识库文档资源，由 knowledge 协调切片、索引和底层 file 引用。 |
-| `GET` | `/api/v1/documents/{documentId}/chunks` | 查询文档切片详情。 |
-| `POST` | `/api/v1/knowledge-queries` | 创建一次知识检索查询并返回召回结果。 |
-
-检索使用 `knowledge-queries` 资源，不使用 `/search`、`/retrieval/search` 或其他动作路径。返回字段、分页结构和错误响应以 [`docs/services/gateway/api/public.openapi.yaml`](../services/gateway/api/public.openapi.yaml) 为准。
+Knowledge 公开资源族包括 `knowledge-bases`、知识库下的 `documents`、独立 `documents` 子资源、`documents/{documentId}/chunks`、`documents/{documentId}/content` 和 `knowledge-queries`。检索使用 `knowledge-queries` 资源，不使用 `/search`、`/retrieval/search` 或其他动作路径。返回字段、分页结构和错误响应以 Gateway OpenAPI 为准。
 
 ## QA 接口
 
-智能问答会话、消息、回答运行、引用、配置、检索体验测试和统计已经进入 gateway OpenAPI。前端应只调用 gateway 暴露的以下资源路径，不能直接调用 `services/qa` 或 AI Gateway：
+智能问答会话、消息、回答运行、引用、配置、检索体验测试和统计已经进入 gateway OpenAPI。前端只能调用 gateway active paths，不能直接调用 `services/qa` 或 AI Gateway。逐项 method/path/schema 以 Gateway OpenAPI 和 owner map 为准。
 
-| Method | Path | 说明 |
-| --- | --- | --- |
-| `GET/POST` | `/api/v1/qa-sessions` | 查询当前用户会话、创建会话。 |
-| `GET/PATCH/DELETE` | `/api/v1/qa-sessions/{sessionId}` | 查询、更新、软删除会话。 |
-| `GET/POST` | `/api/v1/qa-sessions/{sessionId}/messages` | 查询消息；创建用户消息并触发非流式或流式回答。 |
-| `GET` | `/api/v1/qa-sessions/{sessionId}/events` | 按 `responseRunId` 查询短期保存的 SSE 事件。 |
-| `GET/PATCH` | `/api/v1/response-runs/{responseRunId}` | 查询回答运行状态或取消运行。 |
-| `GET` | `/api/v1/response-runs/{responseRunId}/tool-calls` | 查询脱敏后的工具调用摘要。 |
-| `GET/POST` | `/api/v1/messages/{messageId}/citations`、`/api/v1/citations/{citationId}`、`/api/v1/citation-lookups` | 查询回答引用列表、引用详情和批量引用详情。 |
-| `GET/POST` | `/api/v1/qa-config-versions/current`、`/api/v1/qa-config-versions`、`/api/v1/llm-config-versions/current`、`/api/v1/llm-config-versions`、`/api/v1/llm-connection-tests` | 查询或创建问答/LLM 配置版本，测试 AI Gateway profile 连接。 |
-| `GET/POST` | `/api/v1/retrieval-test-runs`、`/api/v1/retrieval-test-runs/{testRunId}` | 创建或查询检索体验测试。 |
-| `GET` | `/api/v1/qa-metrics/**` | 查询问答统计、趋势、热门问题和意图分布。 |
-
-前端只展示 QA 返回的 `thinking` / `reasoning.step` 安全摘要和 tool-call summary，不展示或缓存完整 prompt、私有 chain-of-thought、MCP 原始参数/结果、内部 URL、provider 原始错误或存储 object key。
+QA 公开资源族包括 `qa-sessions`、会话下的 `messages` 和 `events`、`response-runs`、消息引用和引用 lookup、QA/LLM 配置版本、连接测试、检索体验测试和 `qa-metrics`。前端只展示 QA 返回的 `thinking` / `reasoning.step` 安全摘要和 tool-call summary，不展示或缓存完整 prompt、私有 chain-of-thought、MCP 原始参数/结果、内部 URL、provider 原始错误或存储 object key。
 
 ## Admin Runtime Configuration 接口
 
-模型配置管理由 public `gateway` 暴露给前端，实际 provider 配置、API key 写入状态和模型 profile 校验仍由 `ai-gateway` 拥有。文档解析器配置由 `knowledge` 拥有，gateway 只提供统一公开入口、管理员鉴权和响应归一化。
-
-| Method | Path | Owner | 说明 |
-| --- | --- | --- | --- |
-| `GET/POST` | `/api/v1/admin/model-profiles` | `ai-gateway` | 查询或创建 chat、embedding、rerank 模型 profile。 |
-| `GET/PATCH/DELETE` | `/api/v1/admin/model-profiles/{profileId}` | `ai-gateway` | 查询、更新、删除或停用模型 profile。 |
-| `GET/POST` | `/api/v1/admin/parser-configs` | `knowledge` | 查询或创建文档解析器配置。 |
-| `GET/PATCH/DELETE` | `/api/v1/admin/parser-configs/{parserConfigId}` | `knowledge` | 查询、更新、删除或停用文档解析器配置。 |
+模型配置管理由 public `gateway` 暴露给前端，实际 provider 配置、API key 写入状态和模型 profile 校验仍由 `ai-gateway` 拥有。文档解析器配置由 `knowledge` 拥有，gateway 只提供统一公开入口、管理员鉴权和响应归一化。当前 active 管理资源族是 `admin/model-profiles` 和 `admin/parser-configs`；逐项 method/path/schema 以 Gateway OpenAPI 为准。
 
 `apiKey` 是 write-only 字段，只允许在创建或更新模型 profile 时发送；任何响应、日志、错误文案和前端缓存都不得包含明文 key。前端只能依赖 `apiKeyConfigured` 判断是否已配置密钥。模型调用能力仍由后端领域服务通过 AI Gateway 内部调用完成，前端不得用这些 admin 配置接口发起 chat、embedding 或 rerank 请求。
 

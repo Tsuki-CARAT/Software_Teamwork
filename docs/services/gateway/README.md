@@ -78,44 +78,17 @@ Gateway 后续实现必须遵循 [技术选型基线](../../architecture/technol
 [Gateway Active API Owner Map](docs/active-api-owner-map.md)。该清单从
 [`api/public.openapi.yaml`](api/public.openapi.yaml) 审计生成；若两者冲突，以 OpenAPI 为准并同步更新清单。
 
-当前已确定路径分组：
+当前 active API 的完整逐项清单只在 Gateway OpenAPI 和 owner map
+维护；本文只保留 owner 级资源分组，避免多处复制 path 明细：
 
-| Gateway path | 初始 owner | 说明 |
-| --- | --- | --- |
-| `/healthz` | `gateway` | 进程存活检查。 |
-| `/readyz` | `gateway` | 就绪检查。 |
-| `/api/v1/users` | `auth` | 创建用户。 |
-| `/api/v1/sessions` | `auth` | 创建登录会话。 |
-| `/api/v1/sessions/current` | `auth` | 删除当前登录会话。 |
-| `/api/v1/users/me` | `auth` | 获取当前用户。 |
-| `/api/v1/knowledge-bases` | `knowledge` | 创建知识库、分页查询知识库。 |
-| `/api/v1/knowledge-bases/{knowledgeBaseId}` | `knowledge` | 查询、更新、删除知识库。 |
-| `POST /api/v1/knowledge-bases/{knowledgeBaseId}/documents` | `knowledge` | 知识库文档上传入口。Knowledge 创建文档资源、保存知识库归属和处理状态，并在内部复用 file 保存底层原文件对象。 |
-| `GET /api/v1/knowledge-bases/{knowledgeBaseId}/documents` | `knowledge` | 查询知识库内文档列表和处理状态。 |
-| `GET /api/v1/documents/{documentId}` | `knowledge` | 查询文档处理详情。 |
-| `PATCH/DELETE /api/v1/documents/{documentId}` | `knowledge` | 更新或删除知识库文档资源，并由 Knowledge 协调切片、索引和底层 file 引用。 |
-| `/api/v1/documents/{documentId}/chunks` | `knowledge` | 查询文档切片详情。 |
-| `/api/v1/documents/{documentId}/content` | `knowledge` | 获取知识库原始文件内容；底层 bytes 可由 Knowledge 从 file 服务读取。 |
-| `/api/v1/knowledge-queries` | `knowledge` | 创建一次知识检索查询，返回召回结果和 trace。 |
-| `/api/v1/report-types` | `document` | 查询报告类型。 |
-| `/api/v1/report-templates`、`/api/v1/report-templates/{reportTemplateId}`、`/api/v1/report-templates/{reportTemplateId}/structure` | `document` | 报告模板上传、查询、更新、删除和结构配置。 |
-| `/api/v1/report-materials`、`/api/v1/report-materials/{materialId}` | `document` | 报告素材上传、查询和删除。素材是 document-owned 独立资源，底层文件对象复用 file 服务。 |
-| `/api/v1/reports`、`/api/v1/reports/{reportId}` | `document` | 报告草稿、记录、详情、基础信息更新和删除。 |
-| `/api/v1/reports/{reportId}/outlines`、`/api/v1/reports/{reportId}/outlines/{outlineId}`、`/api/v1/reports/{reportId}/outlines/{outlineId}/sections/{sectionId}` | `document` | 报告大纲版本查询、保存、编辑和章节删除。 |
-| `/api/v1/reports/{reportId}/sections`、`/api/v1/reports/{reportId}/sections/{sectionId}`、`/api/v1/reports/{reportId}/sections/{sectionId}/versions` | `document` | 报告章节查询、编辑和章节版本创建。 |
-| `/api/v1/reports/{reportId}/jobs`、`/api/v1/report-jobs/{jobId}`、`/api/v1/report-jobs/{jobId}/attempts` | `document` | 报告生成、重新生成、文件创建等长任务资源及任务尝试记录。 |
-| `/api/v1/reports/{reportId}/events` | `document` | 报告生成事件列表，用于轮询进度或审计。 |
-| `/api/v1/report-files`、`/api/v1/report-files/{reportFileId}`、`/api/v1/report-files/{reportFileId}/content` | `document` | 报告文件创建、元数据查询和生成文件内容读取。生成文件是 document-owned 业务资源，底层对象存取复用 file 服务。 |
-| `/api/v1/report-statistics/overview`、`/api/v1/report-statistics/daily` | `document` | 报告统计概览和每日趋势。 |
-| `/api/v1/report-operation-logs` | `document` | 报告相关操作日志查询。 |
-| `/api/v1/report-settings` | `document` | 管理端报告生成配置，包含 AI Gateway profile 引用、默认模板和文件生成默认值。 |
-| `/api/v1/admin/model-profiles`、`/api/v1/admin/model-profiles/{profileId}` | `ai-gateway` | 管理端运行时模型配置入口，覆盖 chat、embedding、rerank profile；Gateway 做管理员鉴权、响应归一化和密钥脱敏转发，不保存 API key。 |
-| `/api/v1/admin/parser-configs`、`/api/v1/admin/parser-configs/{parserConfigId}` | `knowledge` | 管理端文档解析器配置入口，覆盖解析后端选择、并发数和默认参数；Knowledge 拥有解析行为。 |
-| `/api/v1/qa-sessions`、`/api/v1/qa-sessions/{sessionId}`、`/api/v1/qa-sessions/{sessionId}/messages`、`/api/v1/qa-sessions/{sessionId}/events` | `qa` | 智能问答会话、消息、非流式/流式回答和短期 SSE 事件回放。 |
-| `/api/v1/response-runs/{responseRunId}`、`/api/v1/response-runs/{responseRunId}/tool-calls` | `qa` | 回答运行状态、取消和脱敏工具调用摘要。 |
-| `/api/v1/messages/{messageId}/citations`、`/api/v1/citations/{citationId}`、`/api/v1/citation-lookups` | `qa` | 回答引用快照、引用详情和批量引用详情查询。 |
-| `/api/v1/qa-config-versions/current`、`/api/v1/qa-config-versions`、`/api/v1/llm-config-versions/current`、`/api/v1/llm-config-versions`、`/api/v1/llm-connection-tests` | `qa` | 问答运行配置、AI Gateway profile 引用和连接测试；provider base URL 与 API key 仍由 AI Gateway 管理。 |
-| `/api/v1/retrieval-test-runs`、`/api/v1/retrieval-test-runs/{testRunId}`、`/api/v1/qa-metrics/overview`、`/api/v1/qa-metrics/trend`、`/api/v1/qa-metrics/top-queries`、`/api/v1/qa-metrics/intent-distribution` | `qa` | 检索体验测试和问答统计。 |
+| Owner | Gateway 公开资源范围 |
+| --- | --- |
+| `gateway` | 健康检查和就绪检查。 |
+| `auth` | 用户、会话和当前用户身份。 |
+| `knowledge` | 知识库、知识库文档、文档详情、文档切片、原始文件内容、知识查询和管理员解析器配置。 |
+| `document` | 报告类型、模板、素材、报告记录、大纲、章节、任务、事件、生成文件、统计、操作日志和报告设置。 |
+| `qa` | QA 会话、消息、回答运行、脱敏工具调用摘要、引用、配置版本、连接测试、检索体验测试和 QA 指标。 |
+| `ai-gateway` | 管理端模型 profile 配置；Gateway 只做管理员鉴权、响应归一化和密钥脱敏转发，不保存 API key。 |
 
 仍暂缺的下游接口：
 
@@ -182,81 +155,27 @@ Gateway 调用下游服务时应传递：
 
 下游服务仍需在自己的边界做权限校验，不能只依赖前端传参。
 
-## Gateway User / Session 接口
+## Gateway User / Session 行为
 
-Gateway 对前端暴露 auth 相关公开接口，具体 schema 以 [`docs/services/gateway/api/public.openapi.yaml`](api/public.openapi.yaml) 为准。
+Gateway 对前端暴露 auth 拥有的用户与会话资源，精确 method、path、认证要求、schema 和错误码只在 [`api/public.openapi.yaml`](api/public.openapi.yaml) 与 [active API owner map](docs/active-api-owner-map.md) 维护。
 
-| Method | Path | Auth | Gateway 行为 | Auth service 行为 |
-| --- | --- | --- | --- | --- |
-| `POST` | `/api/v1/users` | 不需要 | 转发用户创建请求，成功后写入 Redis 会话缓存并返回统一 envelope。 | 创建用户、计算角色权限、签发会话身份。 |
-| `POST` | `/api/v1/sessions` | 不需要 | 转发会话创建请求，成功后写入 Redis 会话缓存并返回统一 envelope。 | 校验凭证、计算角色权限、签发会话身份。 |
-| `DELETE` | `/api/v1/sessions/current` | 需要 | 从 Redis 定位当前会话，调用 auth 删除会话，删除 Redis 缓存。 | 删除会话或令牌，记录安全事件。 |
-| `GET` | `/api/v1/users/me` | 需要 | 从 Redis 会话缓存读取当前用户并返回 `UserResponse`。 | 拥有用户和权限源数据；默认不参与每次 `/me` 查询。 |
+Gateway 负责转发用户创建和会话创建请求，成功后把 auth 返回的会话身份写入 Redis 会话缓存；当前用户查询优先从 Redis 会话缓存读取；登出时定位当前会话，调用 auth 删除会话或令牌，并删除 Redis 缓存。
 
-用户或会话创建成功响应包含：
+Auth service 负责创建用户、校验凭证、维护角色权限、签发会话身份和记录安全事件。Gateway 必须只把 `data.session.accessToken` 返回给前端，不得把 Redis key、token hash、内部 auth URL 或 session secret 暴露给前端。
 
-```json
-{
-  "data": {
-    "user": {
-      "id": "usr_123",
-      "username": "alice",
-      "roles": ["admin"],
-      "permissions": ["knowledge:read", "document:upload"]
-    },
-    "session": {
-      "sessionId": "sess_123",
-      "accessToken": "tok_8Ywq7T2n4pQ9mR3xV6sL",
-      "tokenType": "Bearer",
-      "expiresAt": "2026-06-28T12:00:00Z"
-    }
-  },
-  "requestId": "req_123"
-}
-```
+## Gateway Knowledge 行为
 
-Gateway 必须只把 `data.session.accessToken` 返回给前端，不得把 Redis key、token hash、内部 auth URL 或 session secret 暴露给前端。
+Gateway 对前端暴露 knowledge 拥有的知识库、知识库文档、文档内容、文档切片和检索查询资源，精确接口清单以 [`api/public.openapi.yaml`](api/public.openapi.yaml) 与 [active API owner map](docs/active-api-owner-map.md) 为准。Gateway 只负责鉴权上下文传递、路由和响应归一化，不执行解析、切片、embedding、Qdrant 检索或重排序。
 
-## Gateway Knowledge 接口
-
-Gateway 对前端暴露 knowledge 相关公开接口，具体 schema 以 [`docs/services/gateway/api/public.openapi.yaml`](api/public.openapi.yaml) 为准。Gateway 只负责鉴权上下文传递、路由和响应归一化，不执行解析、切片、embedding、Qdrant 检索或重排序。
-
-| Method | Path | Auth | Gateway 行为 | Knowledge service 行为 |
-| --- | --- | --- | --- | --- |
-| `POST` | `/api/v1/knowledge-bases` | 需要 | 转发知识库创建请求并返回统一 envelope。 | 创建知识库元数据、保存切片和检索策略。 |
-| `GET` | `/api/v1/knowledge-bases` | 需要 | 转发分页查询参数并返回统一分页 envelope。 | 返回用户可访问的知识库列表和统计字段。 |
-| `GET` | `/api/v1/knowledge-bases/{knowledgeBaseId}` | 需要 | 转发知识库详情查询。 | 返回知识库元数据、文档数、切片数和策略配置。 |
-| `PATCH` | `/api/v1/knowledge-bases/{knowledgeBaseId}` | 需要 | 转发局部更新请求。 | 更新知识库元数据、分段策略或检索策略；必要时触发后续重处理流程。 |
-| `DELETE` | `/api/v1/knowledge-bases/{knowledgeBaseId}` | 需要 | 转发删除请求。 | 删除知识库业务状态、切片和向量索引，或按实现策略标记删除并异步清理。 |
-| `GET` | `/api/v1/knowledge-bases/{knowledgeBaseId}/documents` | 需要 | 转发分页和状态过滤参数。 | 返回知识库内文档处理状态列表。 |
-| `GET` | `/api/v1/documents/{documentId}` | 需要 | 转发文档详情查询。 | 返回文档处理状态、错误摘要、切片数量和解析信息。 |
-| `GET` | `/api/v1/documents/{documentId}/chunks` | 需要 | 转发分页参数。 | 返回文档切片、章节路径、embedding 元数据和 Qdrant point ID。 |
-| `POST` | `/api/v1/knowledge-queries` | 需要 | 转发检索请求并返回统一 envelope。 | 执行向量召回、过滤、可选重排序预留，并返回命中文档、分数、摘要和 trace。 |
-
-检索被建模为 `knowledge-queries` 资源创建，因此公开路径使用 `POST /api/v1/knowledge-queries`，不使用 `/search` 或 `/retrieval/search`。
-
-知识库文档公开资源统一由 `knowledge` 拥有：`POST /api/v1/knowledge-bases/{knowledgeBaseId}/documents` 创建文档资源并保存底层 file reference，`GET /api/v1/knowledge-bases/{knowledgeBaseId}/documents` 返回处理状态列表，`PATCH/DELETE /api/v1/documents/{documentId}` 更新或删除知识库文档资源，`GET /api/v1/documents/{documentId}/content` 使用 `documents/{documentId}/content` 子资源返回原文件流。Gateway 不直接解析文件、操作 MinIO 或操作 Qdrant。
+检索被建模为 `knowledge-queries` 资源创建，不使用 `/search` 或 `/retrieval/search`。知识库文档公开资源统一由 `knowledge` 拥有：创建文档资源时保存底层 file reference，列表和详情返回处理状态，chunk 和 content 子资源返回切片或原文件流。Gateway 不直接解析文件、操作 MinIO 或操作 Qdrant。
 
 报告素材、模板和导出文件不得复用知识库文档上传路径建模。它们的公开资源由 `document` 拥有，`document` 在内部通过 file 服务保存、读取或删除底层文件对象；Gateway 只做入口、认证上下文传递和响应归一化。
 
-## Gateway QA 接口
+## Gateway QA 行为
 
-Gateway 对前端暴露智能问答相关公开接口，具体 schema 以 [`docs/services/gateway/api/public.openapi.yaml`](api/public.openapi.yaml) 为准。Gateway 只负责认证上下文、统一 envelope、SSE 转发和错误归一化；`qa` 服务拥有会话、消息、回答运行、Agent/ReAct 循环、MCP 工具编排、引用快照、配置版本、检索体验测试和问答统计。
+Gateway 对前端暴露 `qa` 拥有的会话、消息、回答运行、工具调用摘要、引用、配置版本、检索体验测试和统计资源，精确接口清单以 [`api/public.openapi.yaml`](api/public.openapi.yaml) 与 [active API owner map](docs/active-api-owner-map.md) 为准。
 
-| Method | Path | Auth | Gateway 行为 | QA service 行为 |
-| --- | --- | --- | --- | --- |
-| `GET/POST` | `/api/v1/qa-sessions` | 需要 | 转发当前用户会话查询或创建请求。 | 保存和查询 QA 会话。 |
-| `GET/PATCH/DELETE` | `/api/v1/qa-sessions/{sessionId}` | 需要 | 转发会话详情、标题/状态更新和软删除请求。 | 校验会话归属并维护会话生命周期。 |
-| `GET/POST` | `/api/v1/qa-sessions/{sessionId}/messages` | 需要 | 转发消息列表查询；当请求 `Accept: text/event-stream` 时转发 SSE 流。 | 创建用户消息，执行 Agent Run，保存助手消息、处理步骤、引用和事件。 |
-| `GET` | `/api/v1/qa-sessions/{sessionId}/events` | 需要 | 转发短期事件回放查询。 | 返回指定 `responseRunId` 的已保存 SSE 事件。 |
-| `GET/PATCH` | `/api/v1/response-runs/{responseRunId}` | 需要 | 转发运行状态查询和取消请求。 | 维护回答运行状态并尽力取消 LLM/MCP 下游请求。 |
-| `GET` | `/api/v1/response-runs/{responseRunId}/tool-calls` | 需要 | 转发工具调用摘要查询。 | 返回脱敏后的工具调用摘要，不返回 MCP 原始参数或结果。 |
-| `GET/POST` | `/api/v1/messages/{messageId}/citations`、`/api/v1/citations/{citationId}`、`/api/v1/citation-lookups` | 需要 | 转发引用列表、详情和批量详情查询。 | 返回回答生成时保存的引用快照和可展示来源信息。 |
-| `GET/POST` | `/api/v1/qa-config-versions/current`、`/api/v1/qa-config-versions`、`/api/v1/llm-config-versions/current`、`/api/v1/llm-config-versions`、`/api/v1/llm-connection-tests` | 需要 | 转发配置读取、创建和连接测试。 | 保存 QA 配置版本和 AI Gateway profile 引用，不保存 provider API key。 |
-| `GET/POST` | `/api/v1/retrieval-test-runs`、`/api/v1/retrieval-test-runs/{testRunId}` | 需要 | 转发检索体验测试创建和查询。 | 调用 knowledge 检索能力并保存测试结果快照。 |
-| `GET` | `/api/v1/qa-metrics/**` | 需要 | 转发问答统计查询。 | 基于 response runs、messages 和 citations 聚合统计。 |
-
-QA SSE 事件类型包括 `message.created`、`agent.iteration.started`、`reasoning.step`、`tool.started`、`tool.completed`、`tool.failed`、`answer.delta`、`citation.delta`、`answer.completed`、`error` 和可选 `heartbeat`。SSE 事件、工具摘要和错误响应不得包含完整工具参数、MCP 原始响应、内部 URL、原始文档全文、prompt、provider 原始错误或存储 object key。
+Gateway 只负责认证上下文、统一 envelope、SSE 转发和错误归一化；`qa` 服务拥有会话、消息、回答运行、Agent/ReAct 循环、MCP 工具编排、引用快照、配置版本、检索体验测试和问答统计。SSE 事件语义见 [QA 服务文档](../qa/README.md) 与 [前后端集成契约](../../architecture/frontend-backend-contract.md)。SSE 事件、工具摘要和错误响应不得包含完整工具参数、MCP 原始响应、内部 URL、原始文档全文、prompt、provider 原始错误或存储 object key。
 
 ## 响应约定
 

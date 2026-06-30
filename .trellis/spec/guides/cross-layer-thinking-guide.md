@@ -27,9 +27,9 @@ cross-service ownership rule, read the relevant source document:
 - Service ownership: `docs/architecture/service-boundaries.md`
 - Gateway/frontend contract: `docs/architecture/frontend-backend-contract.md`
 - Technology choices: `docs/architecture/technology-decisions.md`
-- Public gateway API: `docs/services/gateway/api/openapi.yaml`
-- Internal service APIs: `docs/services/<service>/api/openapi.yaml` or
-  `docs/services/<service>/api/*.openapi.yaml`
+- Public gateway API: `docs/services/gateway/api/public.openapi.yaml`
+- Service APIs: `docs/services/<service>/api/public.openapi.yaml` and
+  `docs/services/<service>/api/internal.openapi.yaml`
 - Service-specific behavior: `docs/services/<service>/README.md`
 - Current implementation facts and docs/code divergence:
   `docs/services/<service>/docs/implementation.md`

@@ -13,9 +13,9 @@
 ## API Types
 
 - Store generated clients/types under `apps/web/src/api/generated/`.
-- Generate gateway types from `docs/services/gateway/api/openapi.yaml` with
+- Generate gateway types from `docs/services/gateway/api/public.openapi.yaml` with
   `openapi-typescript@7.13.0`.
-- Do not generate frontend clients from `docs/services/ai-gateway/api/openapi.yaml`
+- Do not generate frontend clients from `docs/services/ai-gateway/api/internal.openapi.yaml`
   or any internal `/internal/v1/**` service contract.
 - Do not manually edit generated files.
 - Wrap generated calls in feature-level functions when UI needs domain naming,
@@ -115,7 +115,7 @@ type UploadItemState =
 ### 2. Signatures
 
 - Type generation command: `bun run --cwd apps/web api:generate`.
-- Generation source: `docs/services/gateway/api/openapi.yaml`.
+- Generation source: `docs/services/gateway/api/public.openapi.yaml`.
 - Generated output: `apps/web/src/api/generated/gateway.ts`.
 - Transport helpers must remain hand-written outside `api/generated/`:
   - `requestJson<T>(path, options): Promise<T>` unwraps `{ data, requestId }`.

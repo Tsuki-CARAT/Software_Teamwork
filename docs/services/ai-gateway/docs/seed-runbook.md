@@ -151,12 +151,7 @@ cd services/ai-gateway
 go test ./...
 ```
 
-如果只需要验证 provider adapter 回归样本，可运行更窄的命令：
-
-```bash
-cd services/ai-gateway
-go test ./internal/http -run 'Test(ChatSmoke|ChatStreamSmoke|EmbeddingSmoke|RerankSmoke)' -count=1
-```
+如果只需要验证 provider adapter 回归样本，使用 [Provider Adapter 文档](provider-adapters.md#回归样本入口) 中维护的窄化测试命令。
 
 ### 4.1 受控 fake provider seed profile
 

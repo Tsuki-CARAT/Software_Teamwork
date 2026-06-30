@@ -27,16 +27,9 @@ RESTful 路径、统一响应和错误 envelope 以 [前后端集成契约](../.
 
 ## 与 Gateway 契约一致性
 
-本 auth 文档已按 gateway 文档核对，公开 API 不新增或改名任何前端可调用路径：
+本 auth 文档只说明 `users`、`sessions`、`sessions/current` 和 `users/me` 资源的身份域语义，不新增或改名任何前端可调用路径。精确 method、path、认证要求、schema、错误 envelope 和 active 状态只在 [Gateway OpenAPI](../gateway/api/public.openapi.yaml) 与 [active API owner map](../gateway/docs/active-api-owner-map.md) 维护。
 
-| Method | Gateway public path | Gateway OpenAPI 状态 | 本文档结论 |
-| --- | --- | --- | --- |
-| `POST` | `/api/v1/users` | active，`x-owner-service: auth`，无认证 | 一致。 |
-| `POST` | `/api/v1/sessions` | active，`x-owner-service: auth`，无认证 | 一致。 |
-| `DELETE` | `/api/v1/sessions/current` | active，`x-owner-service: auth`，需要 `bearerAuth` | 一致。 |
-| `GET` | `/api/v1/users/me` | active，`x-owner-service: auth`，需要 `bearerAuth` | 一致。 |
-
-响应 envelope、错误 envelope、`CreateUserRequest`、`CreateSessionRequest`、`UserSummary`、`SessionSummary`、`SessionResponse` 和 `UserResponse` 均与 gateway OpenAPI 的 schema 对齐。本文提到但 gateway OpenAPI 尚未声明的状态码只作为实现建议，不能被前端当作稳定契约依赖。
+响应 envelope、错误 envelope、`CreateUserRequest`、`CreateSessionRequest`、`UserSummary`、`SessionSummary`、`SessionResponse` 和 `UserResponse` 需要与 gateway OpenAPI 的 schema 对齐。本文提到但 gateway OpenAPI 尚未声明的状态码只作为实现建议，不能被前端当作稳定契约依赖。
 
 ## 职责边界
 
@@ -57,10 +50,7 @@ RESTful 路径、统一响应和错误 envelope 以 [前后端集成契约](../.
 frontend / admin / backend caller
    |
    v
-gateway /api/v1/users
-gateway /api/v1/sessions
-gateway /api/v1/sessions/current
-gateway /api/v1/users/me
+gateway user/session resources
    |
    v
 auth service /internal/v1/**
@@ -94,16 +84,16 @@ Auth 实现必须遵循 [技术选型基线](../../architecture/technology-decis
 
 Token hash 采用版本化不可逆派生值，建议格式为 `hmac-sha256:v1:<hex>`，密钥由 auth 和 gateway 通过部署 secret 注入。原始 access token 只允许在创建用户或创建会话的成功响应中返回一次，不能写入数据库、Redis 可读字段、日志、指标 label、错误响应或链路追踪。
 
-## 公开 API 总览
+## 公开资源范围
 
-公开路径均相对于 gateway，不是 auth 服务内部地址。
+Auth 拥有前端可见的用户与会话资源语义，公开入口仍统一由 gateway 暴露。本文只记录这些资源的行为边界：
 
-| Method | Path | Auth | Owner | 说明 |
-| --- | --- | --- | --- | --- |
-| `POST` | `/api/v1/users` | 不需要 | `auth` | 创建用户并返回新会话。 |
-| `POST` | `/api/v1/sessions` | 不需要 | `auth` | 使用用户名和密码创建会话。 |
-| `DELETE` | `/api/v1/sessions/current` | 需要 | `auth` | 删除当前登录会话。 |
-| `GET` | `/api/v1/users/me` | 需要 | `auth` | 获取当前用户资料。 |
+- `users`：创建用户并返回新会话。
+- `sessions`：使用用户名和密码创建会话。
+- `sessions/current`：删除当前登录会话。
+- `users/me`：获取当前用户资料。
+
+公开路径均相对于 gateway，不是 auth 服务内部地址；精确 method、path、认证要求和 schema 以 [Gateway OpenAPI](../gateway/api/public.openapi.yaml) 为准。
 
 认证机制使用 `bearerAuth`：
 
@@ -115,248 +105,33 @@ Authorization: Bearer <accessToken>
 
 ## 通用响应
 
-Auth 公开接口通过 gateway 使用统一 envelope；格式、分页、错误响应和前端处理规则见 [前后端集成契约](../../architecture/frontend-backend-contract.md)。本文只记录 auth 资源的业务 schema 和错误场景。
+Auth 公开接口通过 gateway 使用统一 envelope；格式、分页、错误响应和前端处理规则见 [前后端集成契约](../../architecture/frontend-backend-contract.md)。本文只记录 auth 资源的字段语义和错误场景。
 
-## 数据结构
+## 公开字段语义
 
-### CreateUserRequest
+公开 request/response schema 只在 Gateway OpenAPI 维护。本文只记录 auth 字段的业务含义和安全边界：
 
-```json
-{
-  "username": "alice",
-  "password": "password"
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `username` | `string` | 是 | 登录用户名。 |
-| `password` | `string(password)` | 是 | 用户密码。请求、响应、日志和链路追踪中不得记录明文密码。 |
-
-### CreateSessionRequest
-
-```json
-{
-  "username": "alice",
-  "password": "password"
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `username` | `string` | 是 | 登录用户名。 |
-| `password` | `string(password)` | 是 | 用户密码。请求、响应、日志和链路追踪中不得记录明文密码。 |
-
-### UserSummary
-
-```json
-{
-  "id": "usr_123",
-  "username": "alice",
-  "roles": ["admin"],
-  "permissions": ["knowledge:read", "document:upload"]
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `string` | 是 | 用户公开 ID。 |
-| `username` | `string` | 是 | 用户名。 |
-| `roles` | `string[]` | 是 | 用户角色列表。 |
-| `permissions` | `string[]` | 是 | 用户权限字符串列表，用于 gateway 写入 `X-User-Permissions`。 |
-
-### SessionSummary
-
-```json
-{
-  "sessionId": "sess_123",
-  "accessToken": "atk_v1_7Qb4mK9xZ2nH8pL5rT1cV6yS3wE0aD",
-  "tokenType": "Bearer",
-  "expiresAt": "2026-06-28T12:00:00Z"
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `sessionId` | `string` | 是 | Auth 服务签发的会话 ID。 |
-| `accessToken` | `string` | 是 | 前端后续请求使用的 opaque Bearer 凭据，不是 JWT。Gateway 只能使用其不可逆 hash 写入 Redis key 或缓存字段，不能记录原文。 |
-| `tokenType` | `string` | 是 | 当前固定为 `Bearer`。 |
-| `expiresAt` | `string(date-time)` | 是 | 会话过期时间。Gateway Redis TTL 必须不晚于该时间。 |
-
-### SessionResponse
-
-```json
-{
-  "data": {
-    "user": {
-      "id": "usr_123",
-      "username": "alice",
-      "roles": ["admin"],
-      "permissions": ["knowledge:read", "document:upload"]
-    },
-    "session": {
-      "sessionId": "sess_123",
-      "accessToken": "atk_v1_7Qb4mK9xZ2nH8pL5rT1cV6yS3wE0aD",
-      "tokenType": "Bearer",
-      "expiresAt": "2026-06-28T12:00:00Z"
-    }
-  },
-  "requestId": "req_123"
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `data.user` | `UserSummary` | 是 | 当前认证用户。 |
-| `data.session` | `SessionSummary` | 是 | 当前登录会话。Gateway 必须用它写入 Redis 会话缓存。 |
-| `requestId` | `string` | 是 | 请求追踪 ID。 |
-
-### UserResponse
-
-```json
-{
-  "data": {
-    "id": "usr_123",
-    "username": "alice",
-    "roles": ["admin"],
-    "permissions": ["knowledge:read", "document:upload"]
-  },
-  "requestId": "req_123"
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `data` | `UserSummary` | 是 | 当前用户资料。 |
-| `requestId` | `string` | 是 | 请求追踪 ID。 |
-
-## 公开 Endpoint 详情
-
-### POST /api/v1/users
-
-创建用户资源并返回新会话。该接口不要求认证。
-
-```http
-POST /api/v1/users
-Content-Type: application/json
-X-Request-Id: req_123
-```
-
-```json
-{
-  "username": "alice",
-  "password": "password"
-}
-```
-
-成功响应：
-
-| Status | Body |
+| 字段或结构 | Auth 语义 |
 | --- | --- |
-| `201 Created` | `SessionResponse` |
+| `username` | 登录用户名；不得通过错误响应泄露账号是否存在。 |
+| `password` | 只在创建用户或创建会话请求中出现；请求、响应、日志和链路追踪中不得记录明文密码。 |
+| `UserSummary` | 当前认证用户的公开 ID、用户名、角色和权限摘要；gateway 使用角色和权限构造下游认证上下文。 |
+| `SessionSummary` | Auth 签发的会话摘要，包括会话 ID、opaque Bearer token、token 类型和过期时间。 |
+| `accessToken` | 只允许在创建用户或创建会话成功响应中返回一次；gateway 只能使用不可逆 hash 写入 Redis key 或缓存字段，不能记录原文。 |
+| `SessionResponse` | 创建用户或创建会话成功后返回给 gateway 的用户与会话组合；gateway 必须用它写入 Redis 会话缓存。 |
+| `UserResponse` | 当前用户资料；默认由 gateway 从 Redis 会话缓存读取，必要时可回源 auth。 |
 
-Gateway 当前 OpenAPI 已声明的错误：
+## 公开资源行为
 
-| Status | Code | 场景 |
-| --- | --- | --- |
-| `400` | `validation_error` | 请求体缺失、字段类型错误、用户名或密码不满足规则。 |
+公开 method、path、schema、认证和错误响应以 [`docs/services/gateway/api/public.openapi.yaml`](../gateway/api/public.openapi.yaml) 和 [Gateway Active API Owner Map](../gateway/docs/active-api-owner-map.md) 为准。本文只记录 Auth-owned 资源的行为语义。
 
-实现可预留但前端暂不得依赖的错误：
-
-| Status | Code | 场景 |
-| --- | --- | --- |
-| `409` | `conflict` | 用户名已存在等状态冲突。 |
-| `429` | `rate_limited` | 用户创建频率限制。 |
-
-如需把 `409` 或 `429` 作为稳定公开契约，必须先同步更新 gateway OpenAPI。
-
-### POST /api/v1/sessions
-
-创建会话资源。该接口不要求认证。
-
-```http
-POST /api/v1/sessions
-Content-Type: application/json
-X-Request-Id: req_123
-```
-
-```json
-{
-  "username": "alice",
-  "password": "password"
-}
-```
-
-成功响应：
-
-| Status | Body |
-| --- | --- |
-| `200 OK` | `SessionResponse` |
-
-会话创建成功后，gateway 必须把 `data.user` 与 `data.session` 一起写入 Redis，并只将 `data.session.accessToken` 返回给前端作为后续 Bearer 凭据。
-
-Gateway 当前 OpenAPI 已声明的错误：
-
-| Status | Code | 场景 |
-| --- | --- | --- |
-| `400` | `validation_error` | 请求体缺失、字段类型错误、用户名或密码为空。 |
-| `401` | `unauthorized` | 用户名或密码错误、账号不可用、凭证无效。 |
-
-实现可预留但前端暂不得依赖的错误：
-
-| Status | Code | 场景 |
-| --- | --- | --- |
-| `429` | `rate_limited` | 会话创建失败频率限制。 |
-
-会话创建失败响应不得区分“用户名不存在”和“密码错误”，避免泄露账号枚举信息。
-
-### DELETE /api/v1/sessions/current
-
-删除当前会话单例资源。该接口要求认证。
-
-```http
-DELETE /api/v1/sessions/current
-Authorization: Bearer <accessToken>
-X-Request-Id: req_123
-```
-
-成功响应：
-
-| Status | Body |
-| --- | --- |
-| `204 No Content` | 无响应体。 |
-
-Gateway 当前 OpenAPI 已声明的错误：
-
-| Status | Code | 场景 |
-| --- | --- | --- |
-| `401` | `unauthorized` | 缺少认证凭据、token 无效或登录态已失效。 |
+用户创建或会话创建成功后，gateway 必须把 `data.user` 与 `data.session` 一起写入 Redis，并只将 `data.session.accessToken` 返回给前端作为后续 Bearer 凭据。会话创建失败响应不得区分“用户名不存在”和“密码错误”，避免泄露账号枚举信息。
 
 Gateway 应从 Redis 定位当前会话，调用 auth 内部会话删除接口，然后删除 Redis 中的对应会话缓存。Auth 不使用 JWT denylist；会话撤销以 `auth_sessions` 的 token hash、状态、撤销时间和撤销原因为准。首期 access token 不引入 refresh token，过期后由前端重新创建会话。
 
-### GET /api/v1/users/me
+默认当前用户读取路径是 gateway 从 Redis 会话缓存读取当前用户并返回 `UserResponse`。Auth 仍是用户、角色和权限源数据；当缓存修复、权限变更或安全事件需要回源时，gateway 可以调用 auth 内部会话或用户资源。
 
-获取当前用户单例资源。该接口要求认证。
-
-```http
-GET /api/v1/users/me
-Authorization: Bearer <accessToken>
-X-Request-Id: req_123
-```
-
-成功响应：
-
-| Status | Body |
-| --- | --- |
-| `200 OK` | `UserResponse` |
-
-Gateway 当前 OpenAPI 已声明的错误：
-
-| Status | Code | 场景 |
-| --- | --- | --- |
-| `401` | `unauthorized` | 缺少认证凭据、token 无效或登录态已失效。 |
-
-默认实现路径是 gateway 从 Redis 会话缓存读取当前用户并返回 `UserResponse`。Auth 仍是用户、角色和权限源数据；当缓存修复、权限变更或安全事件需要回源时，gateway 可以调用 auth 内部会话或用户资源。
+如需把 `409 conflict`、`429 rate_limited` 或其他 auth 特有公开错误作为前端稳定契约，必须先同步更新 Gateway OpenAPI。本文中的错误场景说明不能替代 Gateway OpenAPI 的稳定响应声明。
 
 ## 会话缓存协作模型
 

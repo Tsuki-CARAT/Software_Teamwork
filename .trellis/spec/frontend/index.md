@@ -86,9 +86,12 @@ Frontend and backend should converge early on:
   token returned by gateway auth/session responses. Frontend must not parse the
   token as JWT.
 - API documentation: backend publishes OpenAPI; frontend uses generated types/clients.
-- Type generation source: `docs/services/gateway/api/openapi.yaml` only.
-  `docs/services/ai-gateway/api/openapi.yaml` is an internal backend contract
-  and must not generate browser clients.
+- Type generation source: `docs/services/gateway/api/public.openapi.yaml` only.
+  Service-level `docs/services/<service>/api/public.openapi.yaml` files may
+  include owner draft/candidate design context; they are not browser-stable
+  unless the operation is also active in the Gateway OpenAPI. Internal
+  contracts such as `docs/services/ai-gateway/api/internal.openapi.yaml` must
+  not generate browser clients.
 - Type generation command: `bun run --cwd apps/web api:generate`; it writes
   `apps/web/src/api/generated/gateway.ts`.
 - Pagination shape: list payloads return `data` as the item array plus a

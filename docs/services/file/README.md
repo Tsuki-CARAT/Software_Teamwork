@@ -49,11 +49,7 @@ File Service 必须遵循 [技术选型基线](../../architecture/technology-dec
 frontend
    |
    v
-gateway /api/v1/knowledge-bases/{knowledgeBaseId}/documents
-gateway /api/v1/documents/{documentId}/content
-gateway /api/v1/report-templates
-gateway /api/v1/report-materials
-gateway /api/v1/report-files/{reportFileId}/content
+gateway owner-service file-backed resources
    |
    v
 owner service
@@ -73,22 +69,14 @@ file service /internal/v1/files/**
 
 报告模板、素材和导出文件公开资源由 `document` 拥有。`document` 保存 `reportTemplateId`、`materialId`、`reportFileId`、业务状态和 file reference，并通过内部 client 调用 `file` 完成对象写入、读取和删除。前端仍只看到 report 资源 ID 和 content 子资源，不接触 file 内部 ID、bucket、object key 或 MinIO URL。
 
-## 公开接口总览
+## 公开能力复用边界
 
-`file` 服务不直接拥有前端公开 API。以下 gateway path 会复用 file 的基础能力，但 owner service 不是 `file`：
+`file` 服务不直接拥有前端公开 API。Gateway active path、owner service 和认证要求只在 [Gateway OpenAPI](../gateway/api/public.openapi.yaml) 与 [active API owner map](../gateway/docs/active-api-owner-map.md) 维护；本文只说明哪些业务资源会在内部复用 `file` 的基础能力。
 
-| Method | Gateway Path | Owner | 说明 |
-| --- | --- | --- | --- |
-| `POST` | `/api/v1/knowledge-bases/{knowledgeBaseId}/documents` | `knowledge` | 上传原始文件并创建知识库文档资源；`knowledge` 保存知识库归属和处理状态，并在内部调用 `file` 保存底层文件对象。 |
-| `GET` | `/api/v1/knowledge-bases/{knowledgeBaseId}/documents` | `knowledge` | 查询知识库内文档列表和处理状态。 |
-| `GET` | `/api/v1/documents/{documentId}` | `knowledge` | 查询知识库文档详情和处理状态。 |
-| `PATCH` | `/api/v1/documents/{documentId}` | `knowledge` | 更新知识库文档元数据，例如标签；不得修改 file 基础对象存储信息。 |
-| `DELETE` | `/api/v1/documents/{documentId}` | `knowledge` | 删除知识库文档资源，并由 `knowledge` 协调 chunks、索引和底层 file 引用清理。 |
-| `GET` | `/api/v1/documents/{documentId}/chunks` | `knowledge` | 查询文档切片。 |
-| `GET` | `/api/v1/documents/{documentId}/content` | `knowledge` | 获取知识库原始文件流；gateway 仍只暴露 `documents/{documentId}/content` 子资源。 |
-| `GET/POST/DELETE` | `/api/v1/report-templates/**` | `document` | 报告模板业务资源；底层模板文件通过 `document` 内部复用 `file`。 |
-| `GET/POST/DELETE` | `/api/v1/report-materials/**` | `document` | 报告素材业务资源；底层素材文件通过 `document` 内部复用 `file`。 |
-| `GET/POST/DELETE` | `/api/v1/report-files/**` | `document` | 报告导出文件业务资源；`/content` 子资源读取生成文件内容，底层生成文件通过 `document` 内部复用 `file`。 |
+- `knowledge` 拥有知识库文档、文档详情、文档标签、文档切片和文档内容资源；上传、读取原始文件流和删除底层对象时，在服务边界内调用 `file`。
+- `document` 拥有报告模板、报告素材、报告导出文件和文件内容资源；模板文件、素材文件和生成文件的对象写入、读取和删除在内部复用 `file`。
+
+前端仍只看到 owner service 的业务资源 ID 和 content 子资源，不接触 file 内部 ID、bucket、object key、签名 URL 或 MinIO 地址。
 
 ## 通用响应结构
 

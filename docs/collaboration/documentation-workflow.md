@@ -10,7 +10,7 @@
 | 技术栈、数据库、迁移、日志、队列、测试和观测基线 | `docs/architecture/technology-decisions.md` | 只记录本服务的特殊约束或明确偏离原因，不重复完整技术栈表。 |
 | RESTful 路径、OpenAPI、统一响应、分页、错误、SSE、上传和 request id | `docs/architecture/frontend-backend-contract.md` | 只列本服务资源路径、业务语义、状态枚举和服务特有错误场景。 |
 | 分支、PR、提交、CI 和维护者设置 | `CONTRIBUTING.md`、`docs/collaboration/*.md` | 服务文档不得定义仓库级流程。需要补充时更新协作文档。 |
-| 机器可读 API 契约 | `docs/services/<service>/api/public.openapi.yaml` 和 `docs/services/<service>/api/internal.openapi.yaml` | Markdown 只解释业务语义，不替代 OpenAPI schema。 |
+| 机器可读 API 契约 | `docs/services/<service>/api/public.openapi.yaml` 和 `docs/services/<service>/api/internal.openapi.yaml` | Markdown 只解释业务语义，不替代 OpenAPI schema；服务级 `public` 中未进入 Gateway active paths 的内容必须标为 candidate/draft。 |
 | 服务内数据模型、业务流程 | `docs/services/<service>/README.md` 和 `docs/services/<service>/docs/data-models.md` 等细节文档 | 保留服务特有内容，避免复制跨服务规则。 |
 | 当前实现状态、代码与契约出入、临时后端、最近检查记录 | `docs/services/<service>/docs/implementation.md` | README 只链接 implementation 文档，不重复列实现缺口、代码状态或检查结论。 |
 
@@ -39,7 +39,7 @@
 1. 先确认归属服务和边界，必要时更新 `docs/architecture/service-boundaries.md`。
 2. 更新 `docs/services/gateway/api/public.openapi.yaml`，公开字段、状态码和错误码以 OpenAPI 为准。
 3. 如果改动影响通用调用规则，更新 `docs/architecture/frontend-backend-contract.md`。
-4. 更新对应服务文档，只补充服务业务语义、状态枚举、工作流和实现注意事项。
+4. 更新对应服务文档，只补充服务业务语义、状态枚举、工作流和实现注意事项。不要在 README 中复制完整 active operation 表；逐项清单由 Gateway OpenAPI 和 owner map 维护。
 5. 如果涉及协作、CI、分支或提交要求，更新 `docs/collaboration/` 或 `CONTRIBUTING.md`。
 
 新增或修改内部服务接口时：

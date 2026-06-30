@@ -541,3 +541,99 @@ asynq task executes -> Redis stores final job status -> API reads Redis as truth
 ```text
 API creates report_job -> asynq task id is stored for correlation -> worker updates report_jobs/report_job_attempts/report_events in PostgreSQL
 ```
+
+## Scenario: Document Initial Report Defaults Seed
+
+### 1. Scope / Trigger
+
+- Trigger: adding or changing Document Service report type seeds, default
+  report templates, singleton `report_settings`, or first-slice local
+  development defaults.
+- Applies to `services/document/migrations`,
+  `services/document/internal/repository`, and `services/document/README.md`.
+
+### 2. Signatures
+
+- Migration files:
+  - `services/document/migrations/0003_seed_initial_report_defaults.sql` or a
+    later ordered migration for seed changes.
+- Database rows:
+  - `report_types.code` values `summer_peak_inspection` and
+    `coal_inventory_audit`.
+  - `report_templates.id` deterministic seed UUIDs when placeholder templates
+    are required.
+  - `report_settings.id = 'default'`.
+- Settings JSON fields:
+  - `llm_json.provider = ai-gateway`.
+  - `default_templates_json` maps `reportType -> reportTemplateId`.
+  - `file_json.defaultFormat = docx`.
+  - `file_json.defaultNumberingMode = global` unless a user value already
+    exists.
+  - `file_json.defaultStyleProfileId` may reference a non-secret style profile
+    identifier.
+
+### 3. Contracts
+
+- Seed migrations must be idempotent. Use `INSERT ... ON CONFLICT DO NOTHING`
+  for stable rows.
+- Seed migrations must not overwrite user modifications. For JSON settings,
+  merge seed defaults on the left and existing JSON on the right so existing
+  keys win, for example `seed_json || existing_json`.
+- Placeholder templates are allowed when formal DOCX templates are missing, but
+  they must be explicitly marked with `needs_decision` metadata and a runnable
+  import path. They must not pretend to be formal business templates.
+- Default settings must not contain provider API keys, provider base URLs,
+  object storage details, `file_ref`, object keys, prompts, or internal file
+  service identifiers.
+- Placeholder template rows should keep `file_ref` null until the File Service
+  owns a real uploaded template object.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required handling |
+| --- | --- |
+| Report type already exists | Keep the existing row; do not update name, enabled state, or defaults. |
+| Placeholder template already exists | Keep the existing row by primary key. |
+| `report_settings` row is missing | Insert the safe singleton default. |
+| `report_settings` row exists with user values | Add only missing keys; preserve existing values. |
+| Formal template file is not available | Store clear `needs_decision` metadata and no `file_ref`. |
+| Seed content includes secrets or internal file references | Reject in review and add/adjust migration tests. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: a follow-up migration seeds missing report types, inserts placeholder
+  template metadata with deterministic IDs, and merges settings so user values
+  win.
+- Base: the first slice can use placeholder templates with no `file_ref` while
+  keeping `defaultTemplates` runnable for local development.
+- Bad: updating existing report type names on every seed run, hard-coding fake
+  production template file references, or storing provider keys in
+  `report_settings`.
+
+### 6. Tests Required
+
+- Migration string tests asserting the seed includes report type codes,
+  deterministic template IDs, `needs_decision` metadata, import path, and no
+  sensitive markers such as API keys or `file_ref`.
+- Repository integration tests, gated by `DOCUMENT_TEST_DATABASE_URL`, that
+  apply migrations, verify the two enabled report types and default settings,
+  re-run the seed migration, and assert no duplicate rows or user-value
+  overwrites.
+- Service-local checks from `services/document`: `go test ./...`,
+  `go build ./cmd/server`, and `git diff --check`.
+- Goose migration apply against a real PostgreSQL database when a local or CI
+  database is available.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```text
+seed rerun -> UPDATE report_types SET enabled = true, default_templates_json = stock_defaults
+```
+
+#### Correct
+
+```text
+seed rerun -> INSERT stable rows ON CONFLICT DO NOTHING -> merge missing settings with existing values taking precedence
+```

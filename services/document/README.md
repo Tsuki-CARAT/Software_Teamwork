@@ -144,6 +144,25 @@ execution coordination.
 The second migration creates the singleton report settings row and adds indexes
 used by active report, statistics, job status, and operation-log queries.
 
+The third migration seeds the first-slice report defaults. It inserts the two
+report types if they are missing, adds enabled placeholder template metadata for
+local development, and fills missing `report_settings` keys for:
+
+- `defaultTemplates.summer_peak_inspection`
+- `defaultTemplates.coal_inventory_audit`
+- `file.defaultFormat=docx`
+- `file.defaultNumberingMode=global`
+- `file.defaultStyleProfileId=first-slice-default-docx`
+
+The placeholder templates intentionally have no stored file reference. Their
+description and structure/style JSON mark the formal DOCX template dependency as
+`needs_decision` and point back to
+`services/document/migrations/0003_seed_initial_report_defaults.sql` as the
+runnable import path. Re-running the seed keeps existing report type rows,
+template rows, and user-provided settings values. The default settings do not
+store provider API keys, provider URLs, object storage details, or internal
+file references.
+
 ## SQLC
 
 SQL queries live under `internal/repository/queries/`, and generated code lives

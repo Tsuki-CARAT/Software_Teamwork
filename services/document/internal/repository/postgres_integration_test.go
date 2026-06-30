@@ -352,20 +352,25 @@ func applyMigration(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	}
 	sort.Strings(files)
 	for _, file := range files {
-		sqlBytes, err := os.ReadFile(file)
-		if err != nil {
-			t.Fatalf("read migration %s: %v", file, err)
+		applyMigrationFile(t, ctx, pool, file)
+	}
+}
+
+func applyMigrationFile(t *testing.T, ctx context.Context, pool *pgxpool.Pool, file string) {
+	t.Helper()
+	sqlBytes, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("read migration %s: %v", file, err)
+	}
+	parts := strings.Split(string(sqlBytes), "-- +goose Down")
+	up := strings.TrimPrefix(parts[0], "-- +goose Up")
+	for _, stmt := range strings.Split(up, ";") {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" || strings.HasPrefix(stmt, "--") {
+			continue
 		}
-		parts := strings.Split(string(sqlBytes), "-- +goose Down")
-		up := strings.TrimPrefix(parts[0], "-- +goose Up")
-		for _, stmt := range strings.Split(up, ";") {
-			stmt = strings.TrimSpace(stmt)
-			if stmt == "" || strings.HasPrefix(stmt, "--") {
-				continue
-			}
-			if _, err := pool.Exec(ctx, stmt); err != nil {
-				t.Fatalf("apply migration %s statement %q: %v", file, stmt, err)
-			}
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			t.Fatalf("apply migration %s statement %q: %v", file, stmt, err)
 		}
 	}
 }

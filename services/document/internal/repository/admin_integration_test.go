@@ -158,3 +158,133 @@ func TestPostgresRepositoryAdminSettingsLogsAndStats(t *testing.T) {
 		t.Fatalf("daily stats should not be empty")
 	}
 }
+
+func TestInitialReportDefaultSeedIsIdempotentAndPreservesUserChanges(t *testing.T) {
+	databaseURL := os.Getenv("DOCUMENT_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DOCUMENT_TEST_DATABASE_URL is not set")
+	}
+
+	ctx := context.Background()
+	pool := newTestPool(t, ctx, databaseURL)
+	defer pool.Close()
+	applyMigration(t, ctx, pool)
+
+	repo := NewPostgresRepository(pool)
+	reportTypes, err := repo.ListReportTypes(ctx)
+	if err != nil {
+		t.Fatalf("ListReportTypes() error = %v", err)
+	}
+	typesByCode := map[string]service.ReportType{}
+	for _, reportType := range reportTypes {
+		typesByCode[reportType.Code] = reportType
+	}
+	for code, name := range map[string]string{
+		"summer_peak_inspection": "迎峰度夏检查报告",
+		"coal_inventory_audit":   "煤库存审计报告",
+	} {
+		if got := typesByCode[code]; got.Code != code || got.Name != name || !got.Enabled {
+			t.Fatalf("seeded report type %q = %+v, want enabled %q", code, got, name)
+		}
+	}
+
+	settings, err := repo.GetReportSettings(ctx)
+	if err != nil {
+		t.Fatalf("GetReportSettings() error = %v", err)
+	}
+	const summerTemplateID = "11111111-1111-4111-8111-111111111101"
+	const coalTemplateID = "11111111-1111-4111-8111-111111111102"
+	if settings.DefaultTemplates["summer_peak_inspection"] != summerTemplateID ||
+		settings.DefaultTemplates["coal_inventory_audit"] != coalTemplateID {
+		t.Fatalf("default template settings = %+v", settings.DefaultTemplates)
+	}
+	if settings.File.DefaultFormat != "docx" ||
+		settings.File.DefaultNumberingMode != "global" ||
+		settings.File.DefaultStyleProfileID != "first-slice-default-docx" {
+		t.Fatalf("file defaults = %+v", settings.File)
+	}
+
+	var placeholderCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM report_templates
+		WHERE id::text IN ($1, $2)
+		  AND file_ref IS NULL
+		  AND structure_json ->> 'templateStatus' = 'needs_decision'`,
+		summerTemplateID,
+		coalTemplateID,
+	).Scan(&placeholderCount); err != nil {
+		t.Fatalf("count placeholder templates: %v", err)
+	}
+	if placeholderCount != 2 {
+		t.Fatalf("placeholder template count = %d, want 2", placeholderCount)
+	}
+
+	const customSummerTemplateID = "22222222-2222-4222-8222-222222222201"
+	if _, err := pool.Exec(ctx, `
+		UPDATE report_settings
+		SET
+			default_templates_json = default_templates_json || $1::jsonb,
+			file_json = file_json || $2::jsonb
+		WHERE id = 'default'`,
+		`{"summer_peak_inspection":"`+customSummerTemplateID+`"}`,
+		`{"defaultNumberingMode":"by_chapter","defaultStyleProfileId":"custom-style"}`,
+	); err != nil {
+		t.Fatalf("customize report settings: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE report_types
+		SET name = 'User Summer Report', enabled = false
+		WHERE code = 'summer_peak_inspection'`); err != nil {
+		t.Fatalf("customize report type: %v", err)
+	}
+
+	applyMigrationFile(t, ctx, pool, "../../migrations/0003_seed_initial_report_defaults.sql")
+
+	var reportTypeCount, reportTemplateCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM report_types
+		WHERE code IN ('summer_peak_inspection', 'coal_inventory_audit')`).Scan(&reportTypeCount); err != nil {
+		t.Fatalf("count report types: %v", err)
+	}
+	if reportTypeCount != 2 {
+		t.Fatalf("report type count after rerun = %d, want 2", reportTypeCount)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM report_templates
+		WHERE id::text IN ($1, $2)`,
+		summerTemplateID,
+		coalTemplateID,
+	).Scan(&reportTemplateCount); err != nil {
+		t.Fatalf("count report templates: %v", err)
+	}
+	if reportTemplateCount != 2 {
+		t.Fatalf("report template count after rerun = %d, want 2", reportTemplateCount)
+	}
+
+	settings, err = repo.GetReportSettings(ctx)
+	if err != nil {
+		t.Fatalf("GetReportSettings() after rerun error = %v", err)
+	}
+	if settings.DefaultTemplates["summer_peak_inspection"] != customSummerTemplateID ||
+		settings.DefaultTemplates["coal_inventory_audit"] != coalTemplateID {
+		t.Fatalf("default templates after rerun = %+v", settings.DefaultTemplates)
+	}
+	if settings.File.DefaultNumberingMode != "by_chapter" || settings.File.DefaultStyleProfileID != "custom-style" {
+		t.Fatalf("file defaults after rerun = %+v", settings.File)
+	}
+
+	var summerName string
+	var summerEnabled bool
+	if err := pool.QueryRow(ctx, `
+		SELECT name, enabled
+		FROM report_types
+		WHERE code = 'summer_peak_inspection'`).Scan(&summerName, &summerEnabled); err != nil {
+		t.Fatalf("load customized summer report type: %v", err)
+	}
+	if summerName != "User Summer Report" || summerEnabled {
+		t.Fatalf("summer report type after rerun = %q/%v, want user value/false", summerName, summerEnabled)
+	}
+}

@@ -53,8 +53,8 @@
 
 | 领域 | 当前仓库事实 | 目标基线 / 后续动作 |
 | --- | --- | --- |
-| PostgreSQL client | Auth、Knowledge、QA、Document、AI Gateway 均使用 `pgx/v5@v5.7.6`。 | 新增 PostgreSQL 服务沿用 `pgx/v5@v5.7.6`，不得重新引入 `pgx/v4` 或第三种 major 版本。 |
-| Redis client | Gateway 直接使用 `go-redis/v9@v9.21.0`；Knowledge 通过 asynq 间接使用 `go-redis/v9@v9.14.1`。 | 后续统一 Redis client 版本策略，并同步 `go.mod` 和本文。 |
+| PostgreSQL client | Auth、Knowledge、QA、Document、File、AI Gateway 均已升级至 `pgx/v5@v5.9.2`（S-025 安全升级）。 | 新增 PostgreSQL 服务沿用 `pgx/v5@v5.9.2`，不得重新引入 `pgx/v4` 或第三种 major 版本。 |
+| Redis client | Gateway 直接使用 `go-redis/v9@v9.21.0`；Knowledge 和 Document 通过 asynq v0.26.0 间接引入 `go-redis/v9@v9.14.1`。两条路径用途不同（缓存 vs 队列间接依赖），不强制要求统一版本；新增直接 Redis 依赖应沿用 `v9.21.0`。 | 已决策：维持现有双路径，不主动提升 asynq 的间接依赖版本；如需升级 asynq，需同步评估 go-redis 版本变化。 |
 | asynq | Knowledge 和 Document 已接入 `asynq v0.26.0`；队列目标基线已确认。 | 技术表和三选一记录统一标为已固定；新增异步任务复用该版本或显式决策升级。 |
 | File object store | Runtime 已有 memory/local/MinIO object store；根目录本地 Compose 已固定 MinIO server/mc 镜像并初始化本地 bucket。 | File 仍是 MinIO 对象存储边界；SDK 和本地 server/client 镜像版本需保持同步记录。 |
 | 前端 OpenAPI 类型生成 | `openapi-typescript@7.13.0` 已进入 `apps/web/package.json` 和 `bun.lock`。 | API type drift check 持续约束 generated diff；升级版本需同步本文。 |
@@ -89,12 +89,12 @@
 | 后端语言 | Go | `go 1.25` | 已固定 | 项目 Go 服务基线固定为 1.25；已落地服务 module 和 Dockerfile 应保持一致。 |
 | 后端 HTTP 路由 | Go `net/http` / `http.ServeMux` | Go `1.25` 标准库 | 已固定 | 不默认引入 `gin`/`chi`。 |
 | 后端日志 | Go `log/slog` | Go `1.25` 标准库 | 已固定 | 生产默认 JSON 结构化日志。 |
-| PostgreSQL 访问 | `pgx` + `sqlc` 形态 | `pgx/v5@v5.7.6`；sqlc 生成版本按服务记录 | 部分已固定 | 已落地 PostgreSQL 服务统一使用 `pgx/v5`。Knowledge/QA 生成包为 `sqlc v1.29.0`，Auth/Document 当前生成包为 `sqlc v1.31.1`；全仓 sqlc CLI 版本和生成策略仍待统一。 |
+| PostgreSQL 访问 | `pgx` + `sqlc` 形态 | `pgx/v5@v5.9.2`；sqlc CLI 推荐版本 `v1.31.1` | 已固定 | 已落地 PostgreSQL 服务统一使用 `pgx/v5@v5.9.2`。全仓 sqlc CLI 推荐版本统一为 `v1.31.1`；重生成任何服务的查询包时须使用 `go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate`。 |
 | ORM | 不使用 ORM | N/A | 已固定 | 禁止默认引入 GORM/ent 等 ORM。 |
 | 数据库迁移 | `goose` | `v3.27.1` | 已固定 | 使用 `pressly/goose` CLI 或库执行服务内 migration；该版本要求 Go 1.25+。 |
 | 关系数据库 | PostgreSQL | `postgres:16-alpine` | 已固定 | 当前本地 Compose 固定在 16 Alpine。 |
 | Redis 队列 | `asynq` over Redis | `asynq v0.26.0`；Redis `7-alpine` | 已固定 | Knowledge 和 Document 已接入 asynq client/worker；后续异步服务按需复用该队列基线。 |
-| Redis 缓存/会话 | `go-redis` | `go-redis/v9 v9.21.0`、`v9.14.1` 间接依赖 | 部分已固定 | Gateway 直接使用 `github.com/redis/go-redis/v9@v9.21.0`；Knowledge 通过 asynq 间接固定 `v9.14.1`。后续需统一版本策略。 |
+| Redis 缓存/会话 | `go-redis` | `go-redis/v9 v9.21.0`（直接）；`v9.14.1`（asynq 间接） | 已决策 | Gateway 直接使用 `github.com/redis/go-redis/v9@v9.21.0`；Knowledge/Document 通过 asynq v0.26.0 间接固定 `v9.14.1`。两条路径用途不同，不强制统一版本（S-033）；新增直接 Redis 依赖沿用 `v9.21.0`；asynq 升级时需评估其 go-redis 传递版本。 |
 | 向量数据库 | Qdrant | `qdrant/qdrant:v1.18.2` | 已固定 | 根目录本地 Compose 已固定 Qdrant 镜像；Knowledge schema 已保留 Qdrant point 字段，runtime adapter 尚未落地。 |
 | Qdrant 客户端 | 手写 HTTP client | Go 标准 HTTP client | 已选型，待落地 | 当前代码尚未实现 Qdrant client；落地时先不引入官方 client。 |
 | 对象存储 | MinIO 边界；当前 memory/local/MinIO object store | `minio/minio:RELEASE.2025-09-07T16-13-09Z`；`minio/mc:RELEASE.2025-08-13T08-35-41Z` | 已固定 | File service runtime 已有 MinIO adapter；根目录本地 Compose 使用固定 MinIO server/client 镜像。 |
@@ -159,8 +159,8 @@
 | 组件 | 当前版本 | 来源 | 备注 |
 | --- | --- | --- | --- |
 | Go toolchain | `1.25` | 技术选型基线 | Go 服务统一使用 1.25；`services/*/go.mod` 和 Go build Dockerfile 应保持一致。 |
-| `github.com/jackc/pgx/v5` | `v5.7.6` | `services/auth/go.mod`、`services/knowledge/go.mod`、`services/qa/go.mod`、`services/document/go.mod`、`services/ai-gateway/go.mod` | 已落地 PostgreSQL 服务当前使用。 |
-| `sqlc` generated packages | `v1.29.0`、`v1.31.1` | Generated headers under `services/*/internal/repository/sqlc/*.go` | Knowledge/QA 当前由 `sqlc v1.29.0` 生成；Auth/Document 当前由 `sqlc v1.31.1` 生成。变更某服务 SQL 后，按该服务 README 或 issue 要求使用 pinned 版本重新生成。 |
+| `github.com/jackc/pgx/v5` | `v5.9.2` | `services/auth/go.mod`、`services/knowledge/go.mod`、`services/qa/go.mod`、`services/document/go.mod`、`services/file/go.mod`、`services/ai-gateway/go.mod` | S-025 安全升级后全仓统一为 v5.9.2。 |
+| `sqlc` CLI 推荐版本 | `v1.31.1` | `go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate` | 全仓统一推荐版本（S-033）。Auth/Document 已用 v1.31.1 生成；Knowledge/QA 存量生成包来自 v1.29.0，下次变更 SQL 时须用 v1.31.1 重新生成并提交。服务 README 已更新为 pinned 命令。 |
 | `github.com/pressly/goose/v3` | `v3.27.1` | 技术选型基线 | 迁移工具版本固定；可用 CLI 或库方式接入。 |
 | PostgreSQL | `16-alpine` | `services/qa/docker-compose.yml`、`services/qa/docker-compose.db.yml`、`services/document/docker-compose.yml` | 本地开发数据库。 |
 | Redis | `7-alpine` | `services/qa/docker-compose.yml` | 本地队列、缓存、短期协调依赖。 |
@@ -211,7 +211,7 @@ public/internal 命名落位。
 
 | 领域 | 备选 1 | 备选 2 | 备选 3 | 当前决定 | 版本状态 |
 | --- | --- | --- | --- | --- | --- |
-| 数据库访问 | `pgx` + 手写 SQL | `pgx` + `sqlc` | GORM/ent ORM | `pgx` + `sqlc` | `pgx/v5@v5.7.6` 已固定；Knowledge/QA 使用 `sqlc v1.29.0`，Auth/Document 使用 `sqlc v1.31.1`，全仓 sqlc CLI 版本仍需后续统一 |
+| 数据库访问 | `pgx` + 手写 SQL | `pgx` + `sqlc` | GORM/ent ORM | `pgx` + `sqlc` | `pgx/v5@v5.9.2` 已固定（S-025 升级）；sqlc CLI 推荐版本 `v1.31.1` 已固定（S-033）；存量 Knowledge/QA 生成包来自 v1.29.0，下次改 SQL 时用推荐版本重生成 |
 | 数据库迁移 | `goose` | `golang-migrate` | Atlas | `goose` | `goose@v3.27.1` 已固定 |
 | 日志 | `slog` | `zap` | `zerolog` | `slog` | Go `1.25` 标准库 |
 | HTTP 路由 | 标准库 `ServeMux` | `chi` | `gin` | 标准库 `ServeMux` | Go `1.25` 标准库 |
@@ -240,8 +240,8 @@ services/<service>/
 - 事务由 service/use-case 层发起；repository 接收 `pgx.Tx` 或抽象后的 querier。
 - 查询必须显式列名，不使用 `SELECT *`。
 - 用户输入只能通过参数绑定传入 SQL。
-- 当前仓库已落地 PostgreSQL 服务统一使用 `pgx/v5@v5.7.6`。新增服务默认沿用该版本；如需升级或偏离，必须同步更新服务文档和本文。
-- 当前已生成的 sqlc 包仍存在 `v1.29.0` 和 `v1.31.1` 两个版本；新增或重生成某服务查询包时，必须在对应服务 README 或 issue 中固定命令并同步本文。变更 Knowledge SQL 后按 `services/knowledge/README.md` 中的 pinned `go run` 命令重新生成。
+- 当前仓库已落地 PostgreSQL 服务统一使用 `pgx/v5@v5.9.2`（S-025 安全升级）。新增服务默认沿用该版本；如需升级或偏离，必须同步更新服务文档和本文。
+- 全仓 sqlc CLI 推荐版本统一为 `v1.31.1`（S-033）。新增或重生成任意服务的查询包时，须使用 `go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate`，不得使用裸 `sqlc generate`（无版本固定）。各服务 README 已更新为 pinned 命令。Knowledge 和 QA 的存量生成包来自 v1.29.0；下次变更这两个服务的 SQL 文件时，必须用 v1.31.1 重新生成并提交。
 
 ### goose 迁移
 
@@ -267,7 +267,7 @@ services/<service>/
 
 - 业务状态、任务最终状态、失败摘要和重试次数以 PostgreSQL 为权威；asynq 只负责排队、调度和执行。
 - handler 不直接执行长任务，只创建业务 job 记录并投递 asynq task。
-- 当前 Redis 本地版本为 `redis:7-alpine`；Knowledge 和 Document 已固定 `asynq v0.26.0`，并通过 asynq 依赖 `go-redis/v9 v9.14.1`。Gateway 直接使用 `go-redis/v9@v9.21.0`；后续应单独统一 Redis client 版本策略。
+- 当前 Redis 本地版本为 `redis:7-alpine`；Knowledge 和 Document 已固定 `asynq v0.26.0`，并通过 asynq 间接依赖 `go-redis/v9 v9.14.1`。Gateway 直接使用 `go-redis/v9@v9.21.0`。两条路径用途不同（Gateway Redis 缓存 vs asynq 队列传递依赖），不强制统一版本（S-033 已决策）；新增直接 Redis 依赖沿用 `v9.21.0`。
 
 ### 日志、指标和追踪
 

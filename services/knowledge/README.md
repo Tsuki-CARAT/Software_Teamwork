@@ -173,5 +173,5 @@ stack and real dependency configuration.
 Regenerate the query package from `sqlc.yaml` after changing SQL files:
 
 ```bash
-go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
+go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 ```

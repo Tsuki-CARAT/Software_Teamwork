@@ -170,8 +170,8 @@ file references.
 SQL queries live under `internal/repository/queries/`, and generated code lives
 under `internal/repository/sqlc/`.
 
-```powershell
-sqlc generate
+```bash
+go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 ```
 
 ## Tests

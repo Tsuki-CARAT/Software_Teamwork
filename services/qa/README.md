@@ -321,7 +321,7 @@ Invoke-RestMethod http://localhost:8080/readyz
 Regenerate sqlc code after changing query files:
 
 ```bash
-sqlc generate
+go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 ```
 
 Generated query code lives in `internal/repository/sqlc/`; SQL sources live in

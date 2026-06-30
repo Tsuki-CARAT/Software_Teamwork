@@ -646,3 +646,36 @@ Rebased F-016 branch onto upstream/develop@82e3c37, refreshed Trellis record has
 ### Next Steps
 
 - None - task complete
+
+
+## Session 19: F-016 stream payload review follow-up
+
+**Date**: 2026-06-30
+**Task**: F-016 stream payload review follow-up
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Handled latest Codex review by accepting backend QA tool/reasoning payload shapes, writing assistantMessageId, and marking malformed non-fatal streams failed instead of pretending replay restored state.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9fb0955` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

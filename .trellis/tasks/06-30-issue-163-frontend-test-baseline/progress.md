@@ -22,6 +22,7 @@
 - Fetched latest `upstream/develop` again after remote advanced from `88a7420` to `8f294ec`, rebased `Frontend/test/frontend-test-baseline`, and reapplied the implementation without conflicts.
 - Synced Playwright smoke assertions with the latest upstream login page, which now exposes the page title through the `电力行业知识助手` SVG image label and uses spaced `登 录` button text.
 - Completed Trellis spec-update review: no `.trellis/spec/` change was made because the frontend test stack was already documented as the target baseline, user instructions said not to modify public/remote docs for this alignment task, and task-specific version/environment notes are captured here.
+- Resolved the local Playwright Chromium dependency gap without sudo by downloading the Debian packages reported by `playwright install-deps --dry-run`, extracting them to `~/.local/playwright-deps`, and extending the local `bun`/`bunx` wrappers with the required `LD_LIBRARY_PATH`, `XKB_CONFIG_ROOT`, and `FONTCONFIG_PATH`.
 
 ## Verification
 
@@ -30,9 +31,9 @@
 - `bun run --cwd apps/web check` -> passed after ignoring Playwright output directories in `.prettierignore`.
 - `bun run --cwd apps/web build` -> passed with upstream frontend bundle warnings for ineffective dynamic import and large chunks.
 - `git diff --check` -> passed.
-- `bun run --cwd apps/web test:e2e` -> attempted after Playwright browser download and again after rebasing to latest upstream; blocked before page assertions by missing local Chromium system libraries, starting with `libatk-1.0.so.0`.
-- `bunx playwright install-deps chromium --dry-run` -> confirmed missing local packages: `at-spi2-common`, `fonts-freefont-ttf`, `fonts-ipafont-gothic`, `fonts-liberation`, `fonts-noto-color-emoji`, `fonts-tlwg-loma-otf`, `fonts-unifont`, `fonts-wqy-zenhei`, `libasound2-data`, `libasound2t64`, `libatk-bridge2.0-0t64`, `libatk1.0-0t64`, `libatspi2.0-0t64`, `libunwind8`, `libxdamage1`, `libxfont2`, `libxkbcommon0`, `x11-xkb-utils`, `xfonts-scalable`, `xkb-data`, `xserver-common`, and `xvfb`.
-- CI is expected to cover this environment gap through `bunx playwright install --with-deps chromium`; local `sudo -n true` requires a password, so the system packages were not installed in this session.
+- `bunx playwright install-deps chromium --dry-run` -> initially confirmed missing local packages: `at-spi2-common`, `fonts-freefont-ttf`, `fonts-ipafont-gothic`, `fonts-liberation`, `fonts-noto-color-emoji`, `fonts-tlwg-loma-otf`, `fonts-unifont`, `fonts-wqy-zenhei`, `libasound2-data`, `libasound2t64`, `libatk-bridge2.0-0t64`, `libatk1.0-0t64`, `libatspi2.0-0t64`, `libunwind8`, `libxdamage1`, `libxfont2`, `libxkbcommon0`, `x11-xkb-utils`, `xfonts-scalable`, `xkb-data`, `xserver-common`, and `xvfb`.
+- `bun run --cwd apps/web test:e2e` -> passed after the local user-space Chromium dependency extraction and the exact login button assertion fix: 2 Playwright smoke tests passed.
+- CI still installs Playwright Chromium with system dependencies through `bunx playwright install --with-deps chromium`.
 
 ## Completion Checklist
 

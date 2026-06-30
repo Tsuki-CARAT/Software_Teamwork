@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Validate frontend stack and integration constraints."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Validate required commands, testing expectations, and forbidden patterns."}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Validate test file placement against apps/web boundaries."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Validate API client tests against gateway transport and generated type rules."}
+{"file": "docs/collaboration/frontend-workflow.md", "reason": "Validate Bun command and CI workflow expectations."}
+{"file": "docs/architecture/technology-decisions.md", "reason": "Validate fixed dependency versions and CI baseline alignment."}
+{"file": "docs/testing/strategy.md", "reason": "Validate test strategy and PR verification reporting."}
+{"file": ".trellis/tasks/06-30-issue-163-frontend-test-baseline/progress.md", "reason": "Validate task progress and completion notes."}

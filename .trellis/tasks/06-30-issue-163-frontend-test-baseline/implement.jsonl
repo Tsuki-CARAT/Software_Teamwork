@@ -1,0 +1,11 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend stack, product areas, and backend integration contract for the test baseline."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Required frontend checks, package manager rules, and testing expectations."}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "apps/web layout and module boundary rules for test file placement."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component testing should preserve app UI and accessibility conventions."}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Hook and streaming testing should match frontend data-flow rules."}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Route/auth/store tests need to follow state ownership rules."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "API client and runtime data tests must preserve generated-type and transport contracts."}
+{"file": "docs/collaboration/frontend-workflow.md", "reason": "Frontend branch, Bun command, PR, and CI expectations."}
+{"file": "docs/architecture/technology-decisions.md", "reason": "Current fixed versions and target baseline for Vitest/RTL/Playwright."}
+{"file": "docs/testing/strategy.md", "reason": "Current test coverage, missing frontend baseline, and verification matrix."}
+{"file": ".trellis/tasks/06-30-issue-163-frontend-test-baseline/progress.md", "reason": "Task-specific current baseline and progress notes."}

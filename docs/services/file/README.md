@@ -17,8 +17,8 @@ RESTful 路径、统一响应和错误 envelope 以 [前后端集成契约](../.
 File Service 必须遵循 [技术选型基线](../../architecture/technology-decisions.md)。本服务只补充文件域特有约束：
 
 - 上传大小限制必须在 HTTP 层和 multipart 解析层同时生效。
-- 目标对象存储使用官方 MinIO Go SDK；当前 runtime 只有 memory/local `ObjectStore` adapter，MinIO adapter 尚未落地。`file` 服务封装 bucket、object key、etag、version id 和对象 URL，owner service 与前端都不得直接依赖这些内部字段。
-- 当前 `cmd/server` 的 metadata runtime 仍使用 memory repository；PostgreSQL migration/repository 文件存在但尚未接入运行时。具体状态以 [实现说明](docs/implementation.md) 为准。
+- 目标对象存储使用官方 MinIO Go SDK；当前 runtime 已有 memory/local/MinIO `ObjectStore` adapter，但本地 MinIO server/mc 初始化尚未提供。`file` 服务封装 bucket、object key、etag、version id 和对象 URL，owner service 与前端都不得直接依赖这些内部字段。
+- 当前 `cmd/server` 在 `FILE_DATABASE_URL` 为空时使用 memory metadata repository；配置 `FILE_DATABASE_URL` 时接入 PostgreSQL repository，并要求 `FILE_INTERNAL_SERVICE_TOKEN` 或 `INTERNAL_SERVICE_TOKEN`。具体状态以 [实现说明](docs/implementation.md) 为准。
 - 对象物理清理可由 `asynq` worker 执行，任务类型使用 `file:object:purge`。PostgreSQL 中的文件状态、失败摘要、重试次数和最终结果仍是权威来源。
 - handler 测试重点覆盖 envelope、错误码、request id、multipart 边界和内容流响应；repository 测试覆盖 migration 后的 SQL 行为。
 - File Service 不使用 ORM，不把 MinIO SDK 泄露到 handler 或 owner service client，不把缓存或队列作为基础文件元数据的事实来源。
@@ -101,7 +101,7 @@ JSON 成功、分页和错误响应遵循 [前后端集成契约](../../architec
 | Method | File Service Path | 说明 |
 | --- | --- | --- |
 | `GET` | `/healthz` | file 进程存活检查。 |
-| `GET` | `/readyz` | file 就绪检查。生产 PostgreSQL/MinIO 适配器落地后需覆盖关键依赖。 |
+| `GET` | `/readyz` | file 就绪检查。返回 metadata/storage backend、service token 配置状态和 PostgreSQL dependency 状态。 |
 | `POST` | `/internal/v1/files` | 创建基础文件对象，接收 multipart 文件流并返回内部 `fileId` 和基础元数据。 |
 | `GET` | `/internal/v1/files/{fileId}` | 查询基础文件元数据。 |
 | `DELETE` | `/internal/v1/files/{fileId}` | 删除或标记删除基础文件对象。 |
@@ -174,6 +174,8 @@ JSON 成功、分页和错误响应遵循 [前后端集成契约](../../architec
 ## 权限与上下文要求
 
 `file` 服务是内部基础服务，必须只接受 gateway 或后端 owner service 的可信调用。前端不得设置 `X-User-Id`、`X-User-Roles`、`X-User-Permissions`；这些字段只能由 gateway 在认证后注入，并由 owner service 透传或转换为服务间调用上下文。
+
+配置 `FILE_DATABASE_URL` 后，`/internal/v1/files/**` 基础文件对象接口必须校验 `X-Service-Token`。有效 token 来自 `FILE_INTERNAL_SERVICE_TOKEN`，未设置时可回退到共享 `INTERNAL_SERVICE_TOKEN`。认证失败返回统一 `401 unauthorized` 错误 envelope，不返回内部配置、token、数据库连接串或存储引用。
 
 业务资源可见性由 owner service 判断：知识库文档由 `knowledge` 定义，报告素材、模板和报告文件由 `document` 定义，`file` 不复制这些业务权限规则。`file` 只校验调用方服务身份、request id、基础文件操作权限和必要的服务边界约束。
 

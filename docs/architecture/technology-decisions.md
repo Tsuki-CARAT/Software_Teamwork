@@ -37,7 +37,7 @@
 | `apps/web` | 已落地前端应用，使用 Bun workspace、Vite、React、TypeScript、Tailwind 和 ESLint Flat Config。 | 根 `package.json`、`apps/web/package.json`、`bun.lock` |
 | `services/gateway` | 已落地 Go gateway、auth public routes、Redis session cache、active proxy route matrix 和边缘中间件；部分 active Knowledge routes 仍返回 `not_implemented`。 | `services/gateway/go.mod`、`services/gateway/internal/http/routes.go`、`docs/services/gateway/docs/implementation.md` |
 | `services/auth` | 已落地 Go auth 服务、PostgreSQL repository、用户/会话内部 API、argon2id、token hash 和 migration。 | `services/auth/go.mod`、`services/auth/migrations/`、`docs/services/auth/docs/implementation.md` |
-| `services/file` | 已落地 Go file 服务、基础 `/internal/v1/files/**` API、memory/local/MinIO object store、file_objects migration 和部分 PostgreSQL repository；runtime 仍使用 memory metadata repository。 | `services/file/go.mod`、`services/file/migrations/`、`docs/services/file/docs/implementation.md` |
+| `services/file` | 已落地 Go file 服务、基础 `/internal/v1/files/**` API、memory/local/MinIO object store、file_objects migration、PostgreSQL metadata runtime 和 service-token 校验；`FILE_DATABASE_URL` 为空时仍保留 memory metadata 模式。 | `services/file/go.mod`、`services/file/migrations/`、`docs/services/file/docs/implementation.md` |
 | `services/knowledge` | 已落地 Go knowledge 服务、PostgreSQL repository、知识库 CRUD、文档上传 handoff 和 asynq 入队；入库 worker、Qdrant、embedding、retrieval 尚未落地。 | `services/knowledge/go.mod`、`services/knowledge/migrations/`、`docs/services/knowledge/docs/implementation.md` |
 | `services/qa` | 已落地 Go QA 服务、PostgreSQL repository、会话/消息/SSE、配置、引用、工具/MCP/model client 基础；默认走 AI Gateway chat，真实 Knowledge retrieval 和跨服务 smoke 仍待补齐。 | `services/qa/go.mod`、`services/qa/migrations/`、`docs/services/qa/docs/implementation.md` |
 | `services/document` | 已落地 Go document 服务、PostgreSQL repository、模板/材料/报告/大纲/章节 API、report jobs/attempts/events 和 asynq worker 状态机；report files、statistics、settings 和真实 AI/Pandoc/DOCX 生成仍未落地。 | `services/document/go.mod`、`services/document/migrations/`、`docs/services/document/docs/implementation.md` |
@@ -52,7 +52,7 @@
 
 | 领域 | 当前仓库事实 | 目标基线 / 后续动作 |
 | --- | --- | --- |
-| PostgreSQL client | Auth 仍使用 `pgx/v4@v4.18.3`；Knowledge、QA、Document、AI Gateway 使用 `pgx/v5@v5.7.6`。 | 目标基线统一为 `pgx/v5@v5.7.6`；新增服务不得引入 `pgx/v4`，Auth 需迁移到 v5。 |
+| PostgreSQL client | Auth 仍使用 `pgx/v4@v4.18.3`；File、Knowledge、QA、Document、AI Gateway 使用 `pgx/v5@v5.7.6`。 | 目标基线统一为 `pgx/v5@v5.7.6`；新增服务不得引入 `pgx/v4`，Auth 需迁移到 v5。 |
 | Redis client | Gateway 直接使用 `go-redis/v9@v9.21.0`；Knowledge 通过 asynq 间接使用 `go-redis/v9@v9.14.1`。 | 后续统一 Redis client 版本策略，并同步 `go.mod` 和本文。 |
 | asynq | Knowledge 和 Document 已接入 `asynq v0.26.0`；队列目标基线已确认。 | 技术表和三选一记录统一标为已固定；新增异步任务复用该版本或显式决策升级。 |
 | File object store | Runtime 已有 memory/local/MinIO object store；MinIO server/mc 本地初始化尚未落地。 | File 仍是 MinIO 对象存储边界；SDK 已固定，server/client 镜像版本在 Compose 或部署落地时固定。 |
@@ -150,14 +150,14 @@
 | 组件 | 当前版本 | 来源 | 备注 |
 | --- | --- | --- | --- |
 | Go toolchain | `1.25` | 技术选型基线 | Go 服务统一使用 1.25；`services/*/go.mod` 和 Go build Dockerfile 应保持一致。 |
-| `github.com/jackc/pgx/v5` | `v5.7.6` | `services/knowledge/go.mod`、`services/qa/go.mod`、`services/document/go.mod`、`services/ai-gateway/go.mod` | PostgreSQL client 目标基线；新增服务必须使用。 |
+| `github.com/jackc/pgx/v5` | `v5.7.6` | `services/file/go.mod`、`services/knowledge/go.mod`、`services/qa/go.mod`、`services/document/go.mod`、`services/ai-gateway/go.mod` | PostgreSQL client 目标基线；新增服务必须使用。 |
 | `github.com/jackc/pgx/v4` | `v4.18.3` | `services/auth/go.mod` | 仅记录 Auth 当前待迁移事实；不得作为新增服务基线。 |
 | `github.com/pressly/goose/v3` | `v3.27.1` | 技术选型基线 | 迁移工具版本固定；可用 CLI 或库方式接入。 |
 | PostgreSQL | `16-alpine` | `services/qa/docker-compose.yml`、`services/qa/docker-compose.db.yml`、`services/document/docker-compose.yml` | 本地开发数据库。 |
 | Redis | `7-alpine` | `services/qa/docker-compose.yml` | 本地队列、缓存、短期协调依赖。 |
 | Qdrant | 待固定 | 尚无 Compose/runtime adapter | Knowledge 需要时补版本和运行配置。 |
-| MinIO server | 待固定 | 尚无 Compose/runtime adapter | File MinIO adapter 落地时补版本。 |
-| MinIO client (`mc`) | 待固定 | 尚无 Compose/runtime adapter | 本地 bucket 初始化方案待补。 |
+| MinIO server | 待固定 | 尚无 Compose/部署版本锁定 | File MinIO adapter 已落地；补本地或部署依赖时固定版本。 |
+| MinIO client (`mc`) | 待固定 | 尚无 Compose/部署版本锁定 | 本地 bucket 初始化方案待补。 |
 | QA service image | 本地构建 | `services/qa/docker-compose.yml` | QA 本地 Compose 串联 auth/gateway/QA 数据库。 |
 | Document service image | 本地构建 | `services/document/docker-compose.yml` | Document 本地 Compose 串联 PostgreSQL、migration 和服务。 |
 

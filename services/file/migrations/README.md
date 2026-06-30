@@ -1,8 +1,6 @@
 # File Service Migrations
 
-No production PostgreSQL repository is implemented in this MVP.
-
-When PostgreSQL metadata persistence is added, create forward-only migrations here. The expected first table should store base file metadata only:
+File metadata persistence uses forward-only goose migrations in this directory. The first table stores base file metadata only:
 
 - internal file id
 - display filename
@@ -10,7 +8,8 @@ When PostgreSQL metadata persistence is added, create forward-only migrations he
 - size bytes
 - checksum
 - server-generated object key
-- created and deleted timestamps
+- created, deleted, delete-requested, purged, and updated timestamps
+- sanitized cleanup failure code/message
 
 Do not store raw file contents in PostgreSQL and do not expose object keys through API responses.
 

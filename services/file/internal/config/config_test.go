@@ -8,6 +8,7 @@ import (
 )
 
 func TestLoadAcceptsLocalStorageBackend(t *testing.T) {
+	clearFileEnv(t)
 	t.Setenv("FILE_STORAGE_BACKEND", "local")
 	t.Setenv("FILE_LOCAL_STORAGE_DIR", t.TempDir())
 
@@ -21,6 +22,7 @@ func TestLoadAcceptsLocalStorageBackend(t *testing.T) {
 }
 
 func TestLoadAcceptsMinIOStorageBackend(t *testing.T) {
+	clearFileEnv(t)
 	t.Setenv("FILE_STORAGE_BACKEND", "minio")
 	t.Setenv("FILE_MINIO_ENDPOINT", "minio:9000")
 	t.Setenv("FILE_MINIO_ACCESS_KEY", "file-access")
@@ -46,6 +48,7 @@ func TestLoadAcceptsMinIOStorageBackend(t *testing.T) {
 }
 
 func TestLoadRejectsMinIOMissingRequiredConfig(t *testing.T) {
+	clearFileEnv(t)
 	t.Setenv("FILE_STORAGE_BACKEND", "minio")
 	t.Setenv("FILE_MINIO_ENDPOINT", "minio:9000")
 	t.Setenv("FILE_MINIO_ACCESS_KEY", "file-access")
@@ -61,9 +64,70 @@ func TestLoadRejectsMinIOMissingRequiredConfig(t *testing.T) {
 }
 
 func TestLoadRejectsUnsupportedStorageBackend(t *testing.T) {
+	clearFileEnv(t)
 	t.Setenv("FILE_STORAGE_BACKEND", "unsupported")
 
 	if _, err := config.Load(); err == nil {
 		t.Fatal("Load() error = nil, want error")
+	}
+}
+
+func TestLoadRequiresServiceTokenWhenDatabaseURLSet(t *testing.T) {
+	clearFileEnv(t)
+	t.Setenv("FILE_DATABASE_URL", "postgres://file:file@localhost:5432/file?sslmode=disable")
+
+	if _, err := config.Load(); err == nil || !strings.Contains(err.Error(), "FILE_INTERNAL_SERVICE_TOKEN") {
+		t.Fatalf("Load() error = %v, want service token requirement", err)
+	}
+}
+
+func TestLoadAcceptsFileServiceTokenWithDatabaseURL(t *testing.T) {
+	clearFileEnv(t)
+	t.Setenv("FILE_DATABASE_URL", "postgres://file:file@localhost:5432/file?sslmode=disable")
+	t.Setenv("FILE_INTERNAL_SERVICE_TOKEN", " file-token ")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.DatabaseURL == "" || cfg.InternalServiceToken != "file-token" {
+		t.Fatalf("config = %+v", cfg)
+	}
+}
+
+func TestLoadAcceptsSharedServiceTokenFallback(t *testing.T) {
+	clearFileEnv(t)
+	t.Setenv("FILE_DATABASE_URL", "postgres://file:file@localhost:5432/file?sslmode=disable")
+	t.Setenv("INTERNAL_SERVICE_TOKEN", " shared-token ")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.InternalServiceToken != "shared-token" {
+		t.Fatalf("InternalServiceToken = %q", cfg.InternalServiceToken)
+	}
+}
+
+func clearFileEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"FILE_HTTP_ADDR",
+		"FILE_MAX_UPLOAD_BYTES",
+		"FILE_STORAGE_BACKEND",
+		"FILE_LOCAL_STORAGE_DIR",
+		"FILE_MINIO_ENDPOINT",
+		"FILE_MINIO_ACCESS_KEY",
+		"FILE_MINIO_SECRET_KEY",
+		"FILE_MINIO_BUCKET",
+		"FILE_MINIO_USE_SSL",
+		"FILE_MINIO_REGION",
+		"FILE_MINIO_TIMEOUT",
+		"FILE_DATABASE_URL",
+		"FILE_INTERNAL_SERVICE_TOKEN",
+		"INTERNAL_SERVICE_TOKEN",
+		"FILE_SHUTDOWN_TIMEOUT",
+	} {
+		t.Setenv(key, "")
 	}
 }

@@ -27,7 +27,6 @@ Implemented now:
 Out of scope for this MVP:
 
 - Local MinIO server / `mc` setup
-- Production PostgreSQL repository adapter; `sqlc.yaml`, first query file, and a `goose` migration are present as the contract scaffold
 - Async object cleanup worker
 - Knowledge ingestion handoff and knowledge document state
 - Report template, report material, and generated report file business state
@@ -39,6 +38,17 @@ Out of scope for this MVP:
 go test ./...
 go build ./cmd/server
 $env:FILE_HTTP_ADDR=':8082'; go run ./cmd/server
+```
+
+By default, metadata uses the in-memory repository for tests and local development.
+To run with durable PostgreSQL metadata, apply the migration, set `FILE_DATABASE_URL`,
+and configure a service token:
+
+```powershell
+cd services/file
+$env:FILE_DATABASE_URL = "postgres://file:file@localhost:5432/file?sslmode=disable"
+$env:FILE_INTERNAL_SERVICE_TOKEN = "local-file-service-token"
+go run ./cmd/server
 ```
 
 Business endpoints require gateway context headers for local testing:
@@ -53,6 +63,10 @@ X-User-Permissions: document:upload,document:read,document:update,document:delet
 The service enforces the permission header for business routes. Missing user
 context returns `401 unauthorized`; missing operation permission returns
 `403 forbidden`.
+
+When `FILE_INTERNAL_SERVICE_TOKEN` or `INTERNAL_SERVICE_TOKEN` is configured,
+base file routes under `/internal/v1/files/**` also require `X-Service-Token`.
+Invalid or missing service tokens return `401 unauthorized`.
 
 ## Configuration
 
@@ -69,6 +83,9 @@ context returns `401 unauthorized`; missing operation permission returns
 | `FILE_MINIO_USE_SSL` | `false` | Whether the MinIO endpoint uses TLS. |
 | `FILE_MINIO_REGION` | empty | Optional MinIO/S3 region. |
 | `FILE_MINIO_TIMEOUT` | `10s` | Per-request MinIO client timeout. |
+| `FILE_DATABASE_URL` | empty | Enables PostgreSQL metadata repository when set; empty keeps memory metadata mode. |
+| `FILE_INTERNAL_SERVICE_TOKEN` | empty | Required when `FILE_DATABASE_URL` is set. Validates `X-Service-Token` for `/internal/v1/files/**`. |
+| `INTERNAL_SERVICE_TOKEN` | empty | Shared fallback token when `FILE_INTERNAL_SERVICE_TOKEN` is empty. |
 | `FILE_SHUTDOWN_TIMEOUT` | `10s` | Graceful shutdown timeout. |
 
 ## Storage Port
@@ -79,17 +96,25 @@ Storage adapters do not expose object keys, bucket names, storage paths, interna
 
 ## Metadata Port
 
-File metadata is behind the service repository port. The current memory repository supports handler tests and local smoke testing. A future PostgreSQL implementation should live under `internal/repository` and add real migrations under `migrations/`. It must store only base file metadata such as file id, display filename, content type, size, checksum, storage reference, created timestamp, and deleted timestamp. Knowledge-base IDs, report IDs, template IDs, material IDs, business tags, processing status, and ACLs belong to their owner services.
+File metadata is behind the service repository port. The runtime uses the memory repository when `FILE_DATABASE_URL` is empty and switches to the PostgreSQL repository when `FILE_DATABASE_URL` is configured. PostgreSQL stores only base file metadata such as file id, display filename, content type, size, checksum, storage reference, created timestamp, delete request timestamp, purge timestamp, and safe failure summary. Knowledge-base IDs, report IDs, template IDs, material IDs, business tags, processing status, and ACLs belong to their owner services.
 
 
 ## Migrations
 
-The contract migration under `migrations/` is applied with the project-pinned `goose@v3.27.1` command. The PostgreSQL repository adapter is still out of scope for this service slice, but CI validates that the migration remains applyable against an empty PostgreSQL database.
+The contract migration under `migrations/` is applied with the project-pinned `goose@v3.27.1` command:
 
 ```powershell
 cd services/file
 $env:FILE_DATABASE_URL = "postgres://file:file@localhost:5432/file?sslmode=disable"
 go run github.com/pressly/goose/v3/cmd/goose@v3.27.1 -dir migrations postgres "$env:FILE_DATABASE_URL" up
+```
+
+Repository smoke tests are env-gated and use an isolated schema:
+
+```powershell
+cd services/file
+$env:FILE_TEST_DATABASE_URL = "postgres://file:file@localhost:5432/file?sslmode=disable"
+go test ./internal/repository
 ```
 ## Multipart Upload Shape
 

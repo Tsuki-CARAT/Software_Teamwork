@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -18,17 +20,32 @@ import (
 )
 
 const defaultMaxUploadBytes = int64(32 << 20)
+const defaultReadinessTimeout = 2 * time.Second
+
+type ReadyChecker interface {
+	CheckReady(ctx context.Context) error
+}
 
 type Config struct {
-	MaxUploadBytes int64
-	Logger         *slog.Logger
+	MaxUploadBytes   int64
+	Logger           *slog.Logger
+	ServiceToken     string
+	MetadataBackend  string
+	StorageBackend   string
+	ReadinessChecker ReadyChecker
+	ReadinessTimeout time.Duration
 }
 
 type Server struct {
-	documents      *service.Service
-	maxUploadBytes int64
-	logger         *slog.Logger
-	mux            *http.ServeMux
+	documents        *service.Service
+	maxUploadBytes   int64
+	logger           *slog.Logger
+	serviceToken     string
+	metadataBackend  string
+	storageBackend   string
+	readinessChecker ReadyChecker
+	readinessTimeout time.Duration
+	mux              *http.ServeMux
 }
 
 func NewServer(documents *service.Service, cfg Config) *Server {
@@ -38,11 +55,25 @@ func NewServer(documents *service.Service, cfg Config) *Server {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
+	if strings.TrimSpace(cfg.MetadataBackend) == "" {
+		cfg.MetadataBackend = "memory"
+	}
+	if strings.TrimSpace(cfg.StorageBackend) == "" {
+		cfg.StorageBackend = "memory"
+	}
+	if cfg.ReadinessTimeout <= 0 {
+		cfg.ReadinessTimeout = defaultReadinessTimeout
+	}
 	s := &Server{
-		documents:      documents,
-		maxUploadBytes: cfg.MaxUploadBytes,
-		logger:         cfg.Logger,
-		mux:            http.NewServeMux(),
+		documents:        documents,
+		maxUploadBytes:   cfg.MaxUploadBytes,
+		logger:           cfg.Logger,
+		serviceToken:     strings.TrimSpace(cfg.ServiceToken),
+		metadataBackend:  strings.TrimSpace(cfg.MetadataBackend),
+		storageBackend:   strings.TrimSpace(cfg.StorageBackend),
+		readinessChecker: cfg.ReadinessChecker,
+		readinessTimeout: cfg.ReadinessTimeout,
+		mux:              http.NewServeMux(),
 	}
 	s.routes()
 	return s
@@ -73,6 +104,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r = r.WithContext(ctx)
 	w.Header().Set("X-Request-Id", requestID)
 
+	if s.requiresServiceToken(r) && !secureTokenEqual(r.Header.Get("X-Service-Token"), s.serviceToken) {
+		writeAppError(w, r, service.NewError(service.CodeUnauthorized, "service authentication required", nil))
+		return
+	}
+
 	recorder := &statusRecorder{ResponseWriter: w}
 	start := time.Now()
 	defer func() {
@@ -97,7 +133,38 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"service": "file", "status": "ready"}, requestIDFromContext(r.Context()))
+	status := http.StatusOK
+	ready := readinessResponse{
+		Service:                "file",
+		Status:                 "ready",
+		MetadataBackend:        s.metadataBackend,
+		StorageBackend:         s.storageBackend,
+		ServiceTokenConfigured: s.serviceToken != "",
+		Dependencies: []dependencyStatus{
+			{Name: "postgres", Status: "not_configured"},
+		},
+	}
+
+	if s.metadataBackend == "postgres" {
+		ready.Dependencies[0].Status = "ready"
+		if s.readinessChecker == nil {
+			status = http.StatusServiceUnavailable
+			ready.Status = "not_ready"
+			ready.Dependencies[0].Status = "unavailable"
+			ready.Dependencies[0].Message = "postgres readiness check is not configured"
+		} else {
+			ctx, cancel := context.WithTimeout(r.Context(), s.readinessTimeout)
+			defer cancel()
+			if err := s.readinessChecker.CheckReady(ctx); err != nil {
+				status = http.StatusServiceUnavailable
+				ready.Status = "not_ready"
+				ready.Dependencies[0].Status = "unavailable"
+				ready.Dependencies[0].Message = "postgres is unavailable"
+			}
+		}
+	}
+
+	writeJSON(w, status, ready, requestIDFromContext(r.Context()))
 }
 
 func (s *Server) handleCreateFile(w http.ResponseWriter, r *http.Request) {
@@ -315,6 +382,14 @@ func (s *Server) internalContext(w http.ResponseWriter, r *http.Request) (servic
 	return reqCtx, true
 }
 
+func (s *Server) requiresServiceToken(r *http.Request) bool {
+	if s.serviceToken == "" {
+		return false
+	}
+	path := strings.TrimSpace(r.URL.Path)
+	return path == "/internal/v1/files" || strings.HasPrefix(path, "/internal/v1/files/")
+}
+
 func requestContextFromHeaders(r *http.Request) service.RequestContext {
 	return service.RequestContext{
 		RequestID:      requestIDFromContext(r.Context()),
@@ -379,6 +454,30 @@ func newRequestID() string {
 		return "req_" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	}
 	return "req_" + hex.EncodeToString(bytes)
+}
+
+func secureTokenEqual(left string, right string) bool {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if len(left) != len(right) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(left), []byte(right)) == 1
+}
+
+type readinessResponse struct {
+	Service                string             `json:"service"`
+	Status                 string             `json:"status"`
+	MetadataBackend        string             `json:"metadataBackend"`
+	StorageBackend         string             `json:"storageBackend"`
+	ServiceTokenConfigured bool               `json:"serviceTokenConfigured"`
+	Dependencies           []dependencyStatus `json:"dependencies"`
+}
+
+type dependencyStatus struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
 }
 
 type statusRecorder struct {

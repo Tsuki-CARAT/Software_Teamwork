@@ -2,9 +2,11 @@ package httpapi_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -13,6 +15,7 @@ import (
 	"net/textproto"
 	"strings"
 	"testing"
+	"time"
 
 	filehttp "github.com/Sakayori-Iroha-168/Software_Teamwork/services/file/internal/http"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/file/internal/platform/storage"
@@ -216,6 +219,129 @@ func TestFileCreateRequiresInternalCaller(t *testing.T) {
 	}
 }
 
+func TestFileRoutesRequireConfiguredServiceToken(t *testing.T) {
+	server := newTokenHTTPTestServer(t, "expected-token")
+
+	missing := newMultipartUploadRequest(t, "/internal/v1/files", "policy.pdf", "application/pdf", "content", nil, "")
+	missing.Header.Set("X-Caller-Service", "knowledge")
+	missing.Header.Del("X-Service-Token")
+	missingRes := httptest.NewRecorder()
+	server.ServeHTTP(missingRes, missing)
+	if missingRes.Code != http.StatusUnauthorized {
+		t.Fatalf("missing token status = %d, body = %s", missingRes.Code, missingRes.Body.String())
+	}
+	if strings.Contains(missingRes.Body.String(), "expected-token") {
+		t.Fatalf("error response leaked service token: %s", missingRes.Body.String())
+	}
+
+	wrong := newMultipartUploadRequest(t, "/internal/v1/files", "policy.pdf", "application/pdf", "content", nil, "")
+	wrong.Header.Set("X-Caller-Service", "knowledge")
+	wrong.Header.Set("X-Service-Token", "wrong-token")
+	wrongRes := httptest.NewRecorder()
+	server.ServeHTTP(wrongRes, wrong)
+	if wrongRes.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong token status = %d, body = %s", wrongRes.Code, wrongRes.Body.String())
+	}
+
+	valid := newMultipartUploadRequest(t, "/internal/v1/files", "policy.pdf", "application/pdf", "content", nil, "")
+	valid.Header.Set("X-Caller-Service", "knowledge")
+	valid.Header.Set("X-Service-Token", "expected-token")
+	validRes := httptest.NewRecorder()
+	server.ServeHTTP(validRes, valid)
+	if validRes.Code != http.StatusCreated {
+		t.Fatalf("valid token status = %d, body = %s", validRes.Code, validRes.Body.String())
+	}
+}
+
+func TestConfiguredServiceTokenDoesNotBlockCompatibilityDocumentRoutes(t *testing.T) {
+	server := newTokenHTTPTestServer(t, "expected-token")
+	req := newMultipartUploadRequest(t, "/internal/v1/knowledge-bases/kb_123/documents", "policy.pdf", "application/pdf", "content", nil, "")
+	req.Header.Del("X-Service-Token")
+	res := httptest.NewRecorder()
+
+	server.ServeHTTP(res, req)
+
+	if res.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
+	}
+}
+
+func TestReadyReportsMemoryMode(t *testing.T) {
+	server := newHTTPTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	req.Header.Set("X-Request-Id", "req_ready")
+	res := httptest.NewRecorder()
+
+	server.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
+	}
+	var body readyResponseBody
+	decodeJSON(t, res.Body, &body)
+	if body.RequestID != "req_ready" || body.Data.Status != "ready" || body.Data.MetadataBackend != "memory" {
+		t.Fatalf("ready body = %+v", body)
+	}
+	if len(body.Data.Dependencies) != 1 || body.Data.Dependencies[0].Name != "postgres" || body.Data.Dependencies[0].Status != "not_configured" {
+		t.Fatalf("dependencies = %+v", body.Data.Dependencies)
+	}
+}
+
+func TestReadyReportsPostgresDependencyFailure(t *testing.T) {
+	server := newReadyHTTPTestServer(t, filehttp.Config{
+		MetadataBackend:  "postgres",
+		StorageBackend:   "local",
+		ReadinessChecker: errReadyChecker{err: errors.New("db down")},
+		ReadinessTimeout: time.Second,
+	})
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	req.Header.Set("X-Request-Id", "req_ready")
+	res := httptest.NewRecorder()
+
+	server.ServeHTTP(res, req)
+
+	if res.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
+	}
+	var body readyResponseBody
+	decodeJSON(t, res.Body, &body)
+	if body.Data.Status != "not_ready" || body.Data.MetadataBackend != "postgres" || body.Data.StorageBackend != "local" {
+		t.Fatalf("ready body = %+v", body)
+	}
+	if len(body.Data.Dependencies) != 1 || body.Data.Dependencies[0].Status != "unavailable" {
+		t.Fatalf("dependencies = %+v", body.Data.Dependencies)
+	}
+	if strings.Contains(res.Body.String(), "db down") {
+		t.Fatalf("ready response leaked dependency error: %s", res.Body.String())
+	}
+}
+
+func TestReadyReportsPostgresDependencySuccess(t *testing.T) {
+	server := newReadyHTTPTestServer(t, filehttp.Config{
+		ServiceToken:     "token",
+		MetadataBackend:  "postgres",
+		StorageBackend:   "local",
+		ReadinessChecker: okReadyChecker{},
+		ReadinessTimeout: time.Second,
+	})
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	res := httptest.NewRecorder()
+
+	server.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
+	}
+	var body readyResponseBody
+	decodeJSON(t, res.Body, &body)
+	if body.Data.Status != "ready" || !body.Data.ServiceTokenConfigured {
+		t.Fatalf("ready body = %+v", body)
+	}
+	if len(body.Data.Dependencies) != 1 || body.Data.Dependencies[0].Status != "ready" {
+		t.Fatalf("dependencies = %+v", body.Data.Dependencies)
+	}
+}
+
 func TestUploadGetPatchAndContent(t *testing.T) {
 	server := newHTTPTestServer(t)
 
@@ -380,6 +506,22 @@ func newLimitedHTTPTestServer(t *testing.T, maxUploadBytes int64) http.Handler {
 	return filehttp.NewServer(documents, filehttp.Config{MaxUploadBytes: maxUploadBytes})
 }
 
+func newTokenHTTPTestServer(t *testing.T, token string) http.Handler {
+	t.Helper()
+	return newReadyHTTPTestServer(t, filehttp.Config{MaxUploadBytes: 1024 * 1024, ServiceToken: token})
+}
+
+func newReadyHTTPTestServer(t *testing.T, cfg filehttp.Config) http.Handler {
+	t.Helper()
+	repo := repository.NewMemoryRepository()
+	store := storage.NewMemoryStore()
+	documents := service.New(repo, store)
+	if cfg.MaxUploadBytes == 0 {
+		cfg.MaxUploadBytes = 1024 * 1024
+	}
+	return filehttp.NewServer(documents, cfg)
+}
+
 func newMultipartUploadRequest(t *testing.T, target string, filename string, contentType string, content string, tags []string, checksum string) *http.Request {
 	t.Helper()
 	var body bytes.Buffer
@@ -522,4 +664,34 @@ type errorResponseBody struct {
 		RequestID string            `json:"requestId"`
 		Fields    map[string]string `json:"fields"`
 	} `json:"error"`
+}
+
+type readyResponseBody struct {
+	Data struct {
+		Service                string `json:"service"`
+		Status                 string `json:"status"`
+		MetadataBackend        string `json:"metadataBackend"`
+		StorageBackend         string `json:"storageBackend"`
+		ServiceTokenConfigured bool   `json:"serviceTokenConfigured"`
+		Dependencies           []struct {
+			Name    string `json:"name"`
+			Status  string `json:"status"`
+			Message string `json:"message"`
+		} `json:"dependencies"`
+	} `json:"data"`
+	RequestID string `json:"requestId"`
+}
+
+type okReadyChecker struct{}
+
+func (okReadyChecker) CheckReady(ctx context.Context) error {
+	return nil
+}
+
+type errReadyChecker struct {
+	err error
+}
+
+func (c errReadyChecker) CheckReady(ctx context.Context) error {
+	return c.err
 }

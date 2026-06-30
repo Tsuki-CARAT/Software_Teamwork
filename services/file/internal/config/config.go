@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -17,18 +18,20 @@ const (
 )
 
 type Config struct {
-	HTTPAddr        string
-	MaxUploadBytes  int64
-	StorageBackend  string
-	LocalStorageDir string
-	MinIOEndpoint   string
-	MinIOAccessKey  string
-	MinIOSecretKey  string
-	MinIOBucket     string
-	MinIOUseSSL     bool
-	MinIORegion     string
-	MinIOTimeout    time.Duration
-	ShutdownTimeout time.Duration
+	HTTPAddr             string
+	MaxUploadBytes       int64
+	StorageBackend       string
+	LocalStorageDir      string
+	MinIOEndpoint        string
+	MinIOAccessKey       string
+	MinIOSecretKey       string
+	MinIOBucket          string
+	MinIOUseSSL          bool
+	MinIORegion          string
+	MinIOTimeout         time.Duration
+	DatabaseURL          string
+	InternalServiceToken string
+	ShutdownTimeout      time.Duration
 }
 
 func Load() (Config, error) {
@@ -41,6 +44,11 @@ func Load() (Config, error) {
 		MinIOSecretKey:  stringValue("FILE_MINIO_SECRET_KEY", ""),
 		MinIOBucket:     stringValue("FILE_MINIO_BUCKET", ""),
 		MinIORegion:     stringValue("FILE_MINIO_REGION", ""),
+		DatabaseURL:     strings.TrimSpace(os.Getenv("FILE_DATABASE_URL")),
+		InternalServiceToken: firstValue(
+			os.Getenv("FILE_INTERNAL_SERVICE_TOKEN"),
+			os.Getenv("INTERNAL_SERVICE_TOKEN"),
+		),
 		MaxUploadBytes:  DefaultMaxUploadBytes,
 		MinIOTimeout:    DefaultMinIOTimeout,
 		ShutdownTimeout: DefaultShutdownTimeout,
@@ -105,6 +113,10 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("FILE_STORAGE_BACKEND=%q is not implemented; supported values: memory, local, minio", cfg.StorageBackend)
 	}
 
+	if cfg.DatabaseURL != "" && strings.TrimSpace(cfg.InternalServiceToken) == "" {
+		return Config{}, fmt.Errorf("FILE_INTERNAL_SERVICE_TOKEN or INTERNAL_SERVICE_TOKEN is required when FILE_DATABASE_URL is set")
+	}
+
 	return cfg, nil
 }
 
@@ -124,4 +136,13 @@ func joinNames(names []string) string {
 		result += ", " + name
 	}
 	return result
+}
+
+func firstValue(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

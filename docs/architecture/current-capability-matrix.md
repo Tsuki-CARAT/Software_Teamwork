@@ -31,7 +31,7 @@
 | --- | --- | --- | --- | --- | --- |
 | Auth 用户、会话和权限上下文 | 已实现 | `services/auth/` Go service、PostgreSQL migration、argon2id、session token hash、服务间 token。 | Gateway auth public routes；Auth service OpenAPI。 | 与完整本地 E2E、种子数据和管理端权限配置仍需联调。 | #109、#122、#125 |
 | Gateway active route proxy 和 session cache | 部分实现 | `services/gateway/` active proxy matrix、Redis session cache、Auth routes。 | Gateway OpenAPI 是前端权威契约。 | 部分 Knowledge active routes 仍是阶段性 501；跨服务 smoke 未自动化。 | #153、#199、#125 |
-| File 基础文件对象 | 部分实现 | `services/file/` 内部 `/internal/v1/files/**`、memory/local object store、file metadata migration。 | File service 内部 API；业务服务不得暴露 object key。 | runtime metadata repository 和 MinIO adapter 未完全闭环；真实对象存储集成缺失。 | #154 |
+| File 基础文件对象 | 部分实现 | `services/file/` 内部 `/internal/v1/files/**`、memory/local/MinIO object store、file metadata migration、PostgreSQL metadata runtime 和 service-token 校验。 | File service 内部 API；业务服务不得暴露 object key。 | MinIO server/mc 本地初始化、真实对象存储 smoke 和跨服务 smoke 未自动化。 | #154、#235 |
 | Knowledge 知识库 CRUD 和上传 handoff | 部分实现 | Knowledge PostgreSQL repository、知识库 CRUD、文档上传、File handoff、asynq ingestion 入队。 | Gateway Knowledge active paths；Knowledge service OpenAPI。 | ingestion worker、解析、embedding、Qdrant、retrieval、rerank 闭环未落地。 | #152、#200 |
 | QA 会话、消息、配置、引用和统计资源 | 部分实现 | `services/qa/` 会话/消息 API、SSE 事件、config versions、citations、retrieval test/metrics 资源、AI Gateway chat client、B-03 非流式 ResponseRun / Agent Loop MVP（本分支）。 | Gateway QA active paths；QA service OpenAPI。 | 真实 Knowledge retrieval、RAG 引用闭环、权限一致性和跨服务 smoke 待收口。 | #157、#89、#217、#219、#210 |
 | QA MCP/local tool 基础 | 部分实现 | `services/qa/internal/platform/mcpclient`、local tools、安全摘要。 | QA README 和数据模型。 | MCP SDK/sidecar 版本、工具白名单运维和完整审计仍待决策。 | #151、#105 |

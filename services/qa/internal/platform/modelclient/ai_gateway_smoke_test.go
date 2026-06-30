@@ -58,7 +58,7 @@ func TestAIGatewaySmoke(t *testing.T) {
 	})
 
 	t.Run("missing_profile", func(t *testing.T) {
-		client := newSmokeClient(t, cfg, cfg.AIGatewayToken, cfg.AIGatewayProfileID+"-missing")
+		client := newSmokeClient(t, cfg, cfg.AIGatewayToken, requestID+"-missing-profile")
 		_, err := client.Complete(ctx, []agent.Message{{Role: agent.RoleUser, Content: prompt}}, nil)
 		assertSmokeDependencyError(t, err, "missing profile")
 	})

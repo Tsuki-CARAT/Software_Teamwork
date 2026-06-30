@@ -145,7 +145,8 @@ export function formatQAStreamError(error: StreamErrorLike): string {
 
 export function createSafeToolStep(kind: ToolEventKind, payload: unknown): ToolStepView {
   const data = isRecord(payload) ? payload : {}
-  const toolName = getString(data, 'toolName') ?? '工具调用'
+  const rawToolName = getString(data, 'toolName') ?? getString(data, 'tool')
+  const toolName = rawToolName && !isBlockedSummaryValue(rawToolName) ? rawToolName : '工具调用'
   const toolCallId = getString(data, 'toolCallId')
   const latencyMs = getNumber(data, 'latencyMs')
   const summary =
@@ -184,8 +185,8 @@ export function createSafeToolStep(kind: ToolEventKind, payload: unknown): ToolS
 }
 
 export function getSafeReasoningStep(payload: unknown): QAThinkingStep | undefined {
-  if (!isRecord(payload) || !isRecord(payload.step)) return undefined
-  const step = payload.step
+  if (!isRecord(payload)) return undefined
+  const step = isRecord(payload.step) ? payload.step : payload
   const type = getString(step, 'type')
   const status = getString(step, 'status')
 

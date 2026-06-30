@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { replayEvents, streamChat } from '@/api/chat'
+import { streamChat } from '@/api/chat'
 import { ChatInput, ChatMessages, ChatSidebar } from '@/components/chat'
 import {
   createSafeToolStep,
@@ -82,7 +82,6 @@ export function ChatPage() {
   const deleteSessionMut = useDeleteSession()
   const renameSessionMut = useRenameSession()
   const abortRef = useRef<(() => void) | null>(null)
-  const responseRunIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!sessionsData?.items) return
@@ -290,11 +289,12 @@ export function ChatPage() {
           if (!verifySeq(data.seq)) return
           setStreaming(false)
           abortRef.current = null
-          const runId = typeof data.responseRunId === 'string' ? data.responseRunId : undefined
-          if (runId) responseRunIdRef.current = runId
+          const assistantMessageId =
+            typeof data.assistantMessageId === 'string' ? data.assistantMessageId : undefined
           patchAssistant({
             citations: [...citations],
             content,
+            ...(assistantMessageId ? { id: assistantMessageId } : {}),
             status: 'completed',
             thinking: [...steps],
           })
@@ -339,19 +339,25 @@ export function ChatPage() {
             return
           }
 
-          const runId = responseRunIdRef.current
-          if (runId) {
-            void replayEvents(sessionId, runId).catch((caughtError) => {
-              setError(formatQAError(caughtError, '恢复 QA 流式事件'))
-            })
-          }
+          setStreaming(false)
+          abortRef.current = null
+          setLastFailedMsg(trimmed)
+          patchAssistant({
+            citations: [...citations],
+            content,
+            status: 'failed',
+            thinking: [...steps],
+          })
         },
         onMessageCreated(data) {
           if (!verifySeq(data.seq)) return
-          const messageId = typeof data.messageId === 'string' ? data.messageId : undefined
-          const runId = typeof data.responseRunId === 'string' ? data.responseRunId : undefined
+          const messageId =
+            typeof data.assistantMessageId === 'string'
+              ? data.assistantMessageId
+              : typeof data.messageId === 'string'
+                ? data.messageId
+                : undefined
           if (messageId) patchAssistant({ id: messageId })
-          if (runId) responseRunIdRef.current = runId
         },
         onReasoningStep(data) {
           if (!verifySeq(data.seq)) return

@@ -82,6 +82,36 @@ describe('QA capability helpers', () => {
     expect(view.step.detail).not.toContain('provider raw error body')
   })
 
+  it('accepts current backend tool and flat reasoning event fields', () => {
+    const toolView = createSafeToolStep('started', {
+      argumentsSummary: { queryCount: 2 },
+      tool: 'search_knowledge',
+      toolCallId: 'tool-2',
+    })
+
+    expect(toolView.toolCallId).toBe('tool-2')
+    expect(toolView.step).toMatchObject({
+      label: expect.stringContaining('search_knowledge'),
+      status: 'running',
+      type: 'tool_call',
+    })
+    expect(toolView.step.detail).toContain('queryCount: 2')
+
+    expect(
+      getSafeReasoningStep({
+        detail: 'using retrieved citation snapshots',
+        label: '整理引用',
+        status: 'done',
+        type: 'citation',
+      }),
+    ).toMatchObject({
+      detail: 'using retrieved citation snapshots',
+      label: '整理引用',
+      status: 'done',
+      type: 'citation',
+    })
+  })
+
   it('accepts only structured reasoning and citation payloads', () => {
     expect(
       getSafeReasoningStep({

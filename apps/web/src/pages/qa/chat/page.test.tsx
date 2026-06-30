@@ -123,13 +123,78 @@ describe('ChatPage stream sequencing', () => {
     await emit('answer.delta', { content: 'second' }, 3)
     await waitFor(() => expect(getLastAssistantMessage().content).toBe('first second'))
 
-    await emit('answer.completed', { responseRunId: 'run-1' }, 4)
+    await emit(
+      'answer.completed',
+      { assistantMessageId: 'assistant-backend-1', responseRunId: 'run-1' },
+      4,
+    )
     await waitFor(() => expect(useChatStore.getState().streaming).toBe(false))
 
     expect(input).not.toBeDisabled()
     expect(getLastAssistantMessage()).toMatchObject({
       content: 'first second',
+      id: 'assistant-backend-1',
       status: 'completed',
+    })
+  })
+
+  it('marks the stream failed after a non-fatal malformed SSE event', async () => {
+    const encoder = new TextEncoder()
+    let streamController: ReadableStreamDefaultController<Uint8Array> | undefined
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init)
+      const url = new URL(request.url)
+
+      if (request.method === 'GET' && url.pathname.endsWith('/qa-sessions')) {
+        return pageResponse([createSession()])
+      }
+      if (request.method === 'GET' && url.pathname.endsWith('/qa-sessions/session-1/messages')) {
+        return pageResponse([])
+      }
+      if (request.method === 'POST' && url.pathname.endsWith('/qa-sessions/session-1/messages')) {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            streamController = controller
+          },
+        })
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream' },
+          status: 200,
+        })
+      }
+
+      return jsonResponse({ data: {}, requestId: 'req-default' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderWithProviders(<ChatPage />)
+
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'question' } })
+    fireEvent.keyDown(input, { code: 'Enter', key: 'Enter' })
+
+    await waitFor(() => expect(streamController).toBeDefined())
+    await waitFor(() => expect(input).toBeDisabled())
+
+    await act(async () => {
+      streamController?.enqueue(
+        encoder.encode('event: answer.delta\nid: 1\ndata: {"content":"partial"}\n\n'),
+      )
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+    await waitFor(() => expect(getLastAssistantMessage().content).toBe('partial'))
+
+    await act(async () => {
+      streamController?.enqueue(encoder.encode('event: answer.delta\nid: 2\ndata: {\n\n'))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    await waitFor(() => expect(useChatStore.getState().streaming).toBe(false))
+    expect(input).not.toBeDisabled()
+    expect(useChatStore.getState().lastFailedMsg).toBe('question')
+    expect(getLastAssistantMessage()).toMatchObject({
+      content: 'partial',
+      status: 'failed',
     })
   })
 })

@@ -42,7 +42,7 @@
 | 文档列表和详情 | `services/knowledge/internal/http/server.go` | `services/knowledge/api/openapi.yaml` | `TestDocumentListAndDetailExcludeDeletedKnowledgeBase` | 只覆盖文档元数据/状态。 |
 | 文档上传 handoff | `services/knowledge/internal/platform/fileclient/client.go`、`internal/service/service.go` | `docs/services/knowledge/README.md`、`docs/services/file/README.md` | `TestUploadDocumentCreatesDocumentJobAndQueuesIngestion` | multipart 上传后调用 File `/internal/v1/files`，保存 `file_ref`，创建 processing job。 |
 | asynq 入队 | `services/knowledge/internal/platform/queue` | `docs/architecture/technology-decisions.md` | service tests with fake queue | 只投递 ingestion task；worker 未落地。 |
-| PostgreSQL migration/repository | `services/knowledge/migrations/0001_create_knowledge_core_tables.sql`、`internal/repository/postgres.go` | `docs/services/knowledge/docs/data-models.md` | `go test ./...` | runtime 使用 PostgreSQL。 |
+| PostgreSQL migration/repository | `services/knowledge/migrations/0001_create_knowledge_core_tables.sql`、`internal/repository/postgres.go` | `docs/services/knowledge/docs/data-models.md` | `go test ./...`；CI 用 `KNOWLEDGE_TEST_DATABASE_URL` 跑 repository lifecycle integration test | runtime 使用 PostgreSQL。 |
 
 ## 4. 未实现
 
@@ -81,7 +81,7 @@
 | --- | --- | --- |
 | 启动命令 | `cd services/knowledge && go run ./cmd/server` | 需要 PostgreSQL、File Service 和 Redis。 |
 | 环境变量 | `DATABASE_URL`、`FILE_SERVICE_BASE_URL`、`KNOWLEDGE_REDIS_ADDR` 必填；另有 HTTP/version/env/max upload/service token/shutdown | 缺 Qdrant、embedding/rerank、parser 配置 runtime env。 |
-| PostgreSQL / migration | `migrations/0001_create_knowledge_core_tables.sql`，runtime `pgx/v5` | 需要 migration apply CI/集成测试证据。 |
+| PostgreSQL / migration | `migrations/0001_create_knowledge_core_tables.sql`，runtime `pgx/v5` | goose apply CI 已覆盖 migration；repository lifecycle 由 `KNOWLEDGE_TEST_DATABASE_URL` 集成测试覆盖。 |
 | Redis / queue | 使用 `asynq` client 投递 ingestion | worker 未实现。 |
 | Object storage / vector store / AI provider | 通过 File Service 保存 raw file | Qdrant adapter 尚未落地；Knowledge 尚未接入 AI Gateway embedding/rerank 调用。 |
 
@@ -90,7 +90,8 @@
 | 验证项 | 命令或步骤 | 当前结果 | 缺口 |
 | --- | --- | --- | --- |
 | 单元测试 | `cd services/knowledge && go test ./...` | pass（本次执行） | 主要使用 memory/fake 依赖。 |
-| 集成测试 | PostgreSQL + File + Redis end-to-end upload | missing | 需要真实依赖联调。 |
+| Repository 集成测试 | `KNOWLEDGE_TEST_DATABASE_URL=... go test ./internal/repository -count=1` | CI 覆盖 repository lifecycle；无 env 时本地跳过 | 只覆盖 PostgreSQL repository，不覆盖 File/Redis/Qdrant。 |
+| 端到端上传联调 | PostgreSQL + File + Redis end-to-end upload | missing | 需要真实依赖联调。 |
 | 契约测试 | gateway route matrix + Knowledge handler tests | partial | active path 中多个仍 501。 |
 | 手工 smoke | 启动 PostgreSQL、File、Redis 后上传文档 | not run | 需要可复现脚本或 Compose。 |
 

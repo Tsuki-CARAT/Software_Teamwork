@@ -1,1 +1,12 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":"CONTRIBUTING.md","reason":"Confirmed branch, commit, fork, and PR workflow expectations before implementation."}
+{"file":"docs/collaboration/frontend-workflow.md","reason":"Confirmed frontend collaboration and PR flow for work from EIR fork to upstream develop."}
+{"file":"docs/architecture/frontend-backend-contract.md","reason":"Confirmed browser code must use Gateway APIs rather than internal service URLs."}
+{"file":"docs/architecture/current-capability-matrix.md","reason":"Mapped Knowledge Gateway active paths and not-ready dependency states."}
+{"file":"docs/services/gateway/docs/active-api-owner-map.md","reason":"Verified Gateway ownership and active Knowledge endpoint expectations."}
+{"file":"docs/services/knowledge/docs/implementation.md","reason":"Checked Knowledge service readiness and dependency-error behavior for frontend capability states."}
+{"file":".trellis/spec/frontend/index.md","reason":"Loaded frontend package guidelines before editing apps/web code."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Aligned implementation with typed API client and capability error presentation conventions."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Confirmed frontend quality gate expectations for check, build, and focused tests."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Aligned requestId and structured error display with backend error envelope conventions."}
+{"file":".trellis/spec/backend/api-contracts.md","reason":"Confirmed Gateway contract expectations and no direct internal service calls."}
+{"file":".trellis/tasks/archive/2026-06/06-30-f-015-knowledge-capability-gating/research/capability-gating.md","reason":"Recorded implementation research for Knowledge capability gating and endpoint behavior."}

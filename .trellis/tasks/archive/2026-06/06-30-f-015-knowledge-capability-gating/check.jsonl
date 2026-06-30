@@ -1,1 +1,5 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Quality gate applied: focused unit tests, apps/web check, apps/web build, and git diff whitespace check."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verified Gateway capability error handling uses typed ApiError data and requestId-aware copy."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verified frontend copy preserves requestId when present and explicitly states when Gateway omits it."}
+{"file":"docs/architecture/frontend-backend-contract.md","reason":"Checked browser-side implementation continues to use Gateway APIs only."}
+{"file":".trellis/tasks/archive/2026-06/06-30-f-015-knowledge-capability-gating/prd.md","reason":"Updated progress and verification with PR review follow-up, latest pushed head, and CI status."}

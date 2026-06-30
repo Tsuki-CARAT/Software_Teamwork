@@ -15,8 +15,8 @@
   "branch": "Frontend/feat/knowledge-capability-gating",
   "base_branch": "develop",
   "worktree_path": null,
-  "commit": null,
-  "pr_url": null,
+  "commit": "c85a1de",
+  "pr_url": "https://github.com/Sakayori-Iroha-168/Software_Teamwork/pull/291",
   "subtasks": [],
   "children": [],
   "parent": null,
@@ -24,6 +24,9 @@
   "notes": "GitHub issue #281 / F-015. Frontend must distinguish ready, not implemented, permission denied, and dependency failures for Knowledge gateway active paths.",
   "meta": {
     "github_issue": "https://github.com/Sakayori-Iroha-168/Software_Teamwork/issues/281",
-    "suggested_branch": "Frontend/feat/knowledge-capability-gating"
+    "suggested_branch": "Frontend/feat/knowledge-capability-gating",
+    "verified_upstream_develop": "2864395550ddafd39f8e24cf4abb38318ca3ec5a",
+    "review_fix_commit": "c85a1de",
+    "review_followup": "Document list load errors now use getGatewayCapabilityIssue(error, '文档列表') for 501/not_implemented, 502/dependency_error, and 403/forbidden states."
   }
 }

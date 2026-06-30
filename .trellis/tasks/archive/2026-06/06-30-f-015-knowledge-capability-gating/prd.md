@@ -66,6 +66,9 @@ Add a small frontend helper for Gateway capability errors that classifies `ApiEr
 - 2026-06-30: Implemented `getGatewayCapabilityIssue` / `formatGatewayCapabilityError`, added classifier tests, and wired Knowledge base management, documents, chunks, search, and parser-config pages to requestId-aware capability states.
 - 2026-06-30: Removed the unauthenticated direct download anchor fallback for document content; downloads now use the typed Gateway client only.
 - 2026-06-30: Updated `.trellis/spec/frontend/type-safety.md` with the Gateway capability error presentation convention.
+- 2026-06-30: Addressed PR review finding by routing the document list `useDocuments` error state through `getGatewayCapabilityIssue(error, '文档列表')`, so `501` / `not_implemented`, `502` / `dependency_error`, and `403` / `forbidden` show the same classified title, description, requestId detail, and variant as other Knowledge pages.
+- 2026-06-30: Rebasing and push state checked after the review fix: branch `Frontend/feat/knowledge-capability-gating` is based on `upstream/develop` `2864395`, and PR #291 is updated from the EIR fork branch.
+- 2026-06-30: Synchronized archived task metadata and progress records with the PR review follow-up while keeping volatile PR head/CI state for the final handoff report.
 
 ## Verification
 
@@ -73,3 +76,5 @@ Add a small frontend helper for Gateway capability errors that classifies `ApiEr
 - `bun run --cwd apps/web check` — passed.
 - `bun run --cwd apps/web build` — passed; Vite reported the existing large chunk warning.
 - `git diff --check` — passed.
+- Post-review rebase verification repeated on 2026-06-30: targeted unit tests, `check`, `build`, and `git diff --check` all passed; Vite large chunk warning remains.
+- GitHub Actions are checked after each push and reported in the final handoff; local verification above is the task quality gate.

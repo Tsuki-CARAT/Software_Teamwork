@@ -6,7 +6,9 @@
 
 - Build dense, utilitarian management interfaces. Avoid marketing-style hero sections and decorative card-heavy layouts for operational tools.
 - Prefer predictable tables, forms, sidebars, drawers, dialogs, tabs, and detail pages over custom interaction patterns.
-- Use shadcn/ui and Radix primitives first. Create custom primitives only when the existing primitives cannot model the interaction.
+- Use Base UI and Radix primitives through the existing `base-nova` shadcn
+  registry setup first. Create custom primitives only when the existing
+  primitives cannot model the interaction.
 - Use lucide-react icons in icon buttons and menu items when available.
 - Keep page components as composition shells. Put reusable behavior in domain feature components or hooks.
 
@@ -15,7 +17,8 @@
 - Route page: loads route params/search state, composes features, handles route-level loading/error states.
 - Feature component: implements product workflows such as upload panels, chat windows, report outline editors.
 - Shared component: generic table, upload, markdown, editor, chart, empty state, and confirm dialog primitives.
-- UI primitive: shadcn/ui components with minimal local styling.
+- UI primitive: generated or local UI primitives backed by Base UI/Radix with
+  minimal local styling.
 
 ## Props
 
@@ -82,7 +85,7 @@ type DocumentStatusBadgeProps = {
 
 ## Styling
 
-- Use Tailwind utility classes and shadcn theme variables.
+- Use Tailwind utility classes and the existing shadcn theme variables.
 - Do not hard-code one-off colors when a theme token exists.
 - Keep cards for repeated list/detail items, modal bodies, and framed tools. Do not wrap full page sections in nested cards.
 - Use stable dimensions for tables, icon buttons, toolbar controls, chat messages, and report outline rows to avoid layout shifts.
@@ -96,7 +99,7 @@ type DocumentStatusBadgeProps = {
 
 ## Forbidden Patterns
 
-- Duplicating shadcn/ui primitives into feature folders.
+- Duplicating UI primitives into feature folders.
 - Storing server data inside Zustand when TanStack Query should own it.
 - Building ad hoc tables instead of using the shared table pattern for management lists.
 - Rendering untrusted HTML directly from AI responses or uploaded content.

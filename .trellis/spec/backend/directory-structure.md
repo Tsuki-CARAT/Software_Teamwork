@@ -30,13 +30,16 @@ services/
 ├── qa/
 ├── knowledge/
 ├── document/
-└── ai-gateway/
+├── ai-gateway/
+└── parser/
 deploy/
 └── docker-compose.yml
 ```
 
 Use the same service-local layout for every Go service unless a service has a
-clear reason to omit a directory.
+clear reason to omit a directory. `services/parser/` is the explicit exception:
+it is a Python/FastAPI/PaddleOCR runtime boundary documented under
+`docs/services/parser/` and should not be forced into the Go module layout.
 
 ---
 
@@ -110,6 +113,12 @@ When adding a service:
 5. Add Dockerfile and Docker Compose service wiring.
 6. Add CI path filters for `services/<service>/**`.
 7. Update README and this spec if the service changes architecture.
+
+When adding or changing a non-Go runtime such as Parser, document the runtime
+boundary, package manager, lockfile, Dockerfile, and service API under
+`docs/services/<service>/` and `docs/architecture/technology-decisions.md`.
+Do not introduce Go wrappers around runtime-specific libraries solely to match
+the Go service template.
 
 ### Baseline Slice For Service Migration
 

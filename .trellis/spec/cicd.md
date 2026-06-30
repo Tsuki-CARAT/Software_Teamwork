@@ -555,9 +555,10 @@ Rules:
 - Do not encode a specific build tool in workflow logic unless the frontend tool is selected and documented.
 - Cache package-manager dependencies using lockfile-based keys.
 - Fail if the lockfile and package manifest are inconsistent.
-- Add Vitest, React Testing Library, and Playwright only after their scripts and
-  dependencies exist in `apps/web/package.json`; do not mark them required from
-  this spec alone.
+- Vitest, React Testing Library, and Playwright scripts/dependencies already
+  exist in `apps/web/package.json`. If replacing or adding frontend test tools,
+  update `apps/web/package.json`, `bun.lock`, `docs/architecture/technology-decisions.md`,
+  `docs/testing/strategy.md`, and this spec together.
 
 ---
 

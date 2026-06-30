@@ -23,22 +23,27 @@ Confirmed Go infrastructure target stack:
 
 Current repository facts from `docs/architecture/technology-decisions.md`:
 
-- Auth, Knowledge, QA, Document, and AI Gateway use `pgx/v5@v5.7.6`. New
-  PostgreSQL services should reuse that major version and must not reintroduce
-  `pgx/v4` or a third pgx major version without updating the technology
-  baseline.
+- Auth, Knowledge, QA, Document, File, and AI Gateway use `pgx/v5@v5.9.2`.
+  New PostgreSQL services should reuse that major version and must not
+  reintroduce `pgx/v4` or a third pgx major version without updating the
+  technology baseline.
+- The repository-wide recommended `sqlc` CLI version is `v1.31.1`. Regenerate
+  service query packages with
+  `go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate`; do not use an
+  unpinned `sqlc generate` command in docs, CI, or handoff notes.
 - Gateway directly uses `go-redis/v9@v9.21.0`; Knowledge indirectly uses
   `go-redis/v9@v9.14.1` through asynq. Aligning Redis client versions is a
   follow-up decision, not an implementation-PR side effect.
 - Knowledge and Document have fixed `asynq v0.26.0`; new asynchronous jobs
   should reuse that version unless a documented decision upgrades it.
-- File Service runtime currently has memory/local/MinIO object-store adapters.
-  PostgreSQL metadata repository files and migrations exist, but
-  `cmd/server` still uses a memory metadata repository until the runtime
-  integration lands.
-- Qdrant remains a Knowledge target; the runtime adapter and Knowledge
-  embedding/rerank retrieval loop are not implemented just because AI Gateway
-  exposes embedding and rerank endpoints.
+- File Service runtime has memory/local/MinIO object-store adapters, a
+  PostgreSQL metadata repository, migrations, and service-token validation.
+  `FILE_DATABASE_URL` being empty is a local/test fallback, not the production
+  persistence baseline.
+- Knowledge owns Qdrant vector persistence and retrieval hydration. Keep
+  Qdrant as a Knowledge boundary and treat missing real-dependency smoke as a
+  validation gap, not permission for QA, Gateway, or AI Gateway to mutate
+  Qdrant directly.
 
 Do not introduce an ORM by default. If a service needs one, document the reason
 in that service README, update `docs/architecture/technology-decisions.md`,
@@ -116,8 +121,10 @@ func (r *UserRepository) FindByID(ctx context.Context, id UserID) (User, error) 
 
 ### 2. Signatures
 
-- Module dependency: `github.com/jackc/pgx/v5 v5.7.6`.
+- Module dependency: `github.com/jackc/pgx/v5 v5.9.2`.
 - sqlc config: `sql_package: "pgx/v5"`.
+- sqlc generation command:
+  `go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate`.
 - Pool import: `github.com/jackc/pgx/v5/pgxpool`.
 - Pool constructor: `pgxpool.New(ctx, databaseURL)`.
 - Startup reachability check: `pool.Ping(ctx)` when the service is expected to
@@ -136,6 +143,10 @@ func (r *UserRepository) FindByID(ctx context.Context, id UserID) (User, error) 
   before leaving `internal/repository`.
 - New PostgreSQL services must not introduce `github.com/jackc/pgx/v4` or a
   third pgx major version without updating `docs/architecture/technology-decisions.md`.
+- New or regenerated query packages must use the pinned `sqlc@v1.31.1`
+  command. Knowledge and QA may still contain older generated code until their
+  SQL changes, but the next SQL edit must regenerate with the pinned command
+  and commit the result.
 - Migrating from `pgxpool.Connect` to `pgxpool.New` must not silently change
   startup behavior. If the old service failed startup when PostgreSQL was
   unreachable, call `pool.Ping(ctx)` before registering the repository.
@@ -156,10 +167,11 @@ func (r *UserRepository) FindByID(ctx context.Context, id UserID) (User, error) 
 
 ### 5. Good/Base/Bad Cases
 
-- Good: service `go.mod` requires `pgx/v5@v5.7.6`, `sqlc.yaml` uses
+- Good: service `go.mod` requires `pgx/v5@v5.9.2`, `sqlc.yaml` uses
   `pgx/v5`, startup preserves required PostgreSQL reachability checks,
   repository maps `pgtype.Text` / `pgtype.Timestamptz` to domain fields,
-  handlers import only service interfaces, and goose applies cleanly.
+  generated query code is refreshed with `sqlc@v1.31.1`, handlers import only
+  service interfaces, and goose applies cleanly.
 - Base: an existing service migration preserves public/internal API semantics
   and only changes dependency/import/mapping code plus docs.
 - Bad: leaving v4 in `go.mod`, hand-editing generated sqlc code without

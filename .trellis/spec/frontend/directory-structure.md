@@ -76,7 +76,8 @@ apps/
 - `apps/web/src/layouts/`: route shells such as authenticated AppShell and unauthenticated AuthLayout.
 - `apps/web/src/pages/`: route-level composition. Pages should orchestrate feature components, not contain reusable business logic.
 - `apps/web/src/features/`: domain-specific components, hooks, schemas, and helpers grouped by product module.
-- `apps/web/src/components/ui/`: shadcn/ui generated primitives. Keep them generic.
+- `apps/web/src/components/ui/`: generated or local UI primitives backed by
+  Base UI/Radix and the shadcn `base-nova` registry config. Keep them generic.
 - `apps/web/src/components/common/`: cross-domain reusable UI with minimal product assumptions.
 - `apps/web/src/components/data-table/`: table shell, filters, pagination, column helpers, row actions.
 - `apps/web/src/components/file-upload/`: reusable upload/dropzone components and progress UI.

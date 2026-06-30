@@ -73,7 +73,7 @@ func (c *Client) Retrieve(ctx context.Context, userID string, input service.Retr
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
+		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusNotFound {
 			return nil, service.NewError(service.CodeForbidden, "knowledge base access is forbidden", nil)
 		}
 		return nil, fmt.Errorf("knowledge service returned HTTP %d", resp.StatusCode)
@@ -91,6 +91,7 @@ func (c *Client) Retrieve(ctx context.Context, userID string, input service.Retr
 				SectionPath     string         `json:"sectionPath"`
 				ContentPreview  string         `json:"contentPreview"`
 				ChunkIndex      *int           `json:"chunkIndex"`
+				ChunkType       *string        `json:"chunkType"`
 				Tags            []string       `json:"tags"`
 				Metadata        map[string]any `json:"metadata"`
 			} `json:"results"`
@@ -101,18 +102,28 @@ func (c *Client) Retrieve(ctx context.Context, userID string, input service.Retr
 	}
 	results := make([]service.RetrievalTestResult, 0, len(decoded.Data.Results))
 	for i, item := range decoded.Data.Results {
-		vectorScore := item.Score
+		vectorScore := 0.0
 		if item.VectorScore != nil {
 			vectorScore = *item.VectorScore
+		} else if !retrieval.EnableRerank {
+			vectorScore = item.Score
+		}
+		rerankScore := item.RerankScore
+		if rerankScore == nil && retrieval.EnableRerank {
+			score := item.Score
+			rerankScore = &score
 		}
 		metadata := sanitizedMetadata(item.Metadata)
 		if item.ChunkIndex != nil {
 			metadata["chunkIndex"] = *item.ChunkIndex
 		}
+		if item.ChunkType != nil && strings.TrimSpace(*item.ChunkType) != "" {
+			metadata["chunkType"] = strings.TrimSpace(*item.ChunkType)
+		}
 		if len(item.Tags) > 0 {
 			metadata["tags"] = append([]string(nil), item.Tags...)
 		}
-		results = append(results, service.RetrievalTestResult{RankNo: i + 1, KnowledgeBaseID: item.KnowledgeBaseID, DocumentID: item.DocumentID, DocID: item.DocumentID, ChunkID: item.ChunkID, DocumentName: item.DocumentName, DocName: item.DocumentName, SectionPath: item.SectionPath, Score: item.Score, VectorScore: vectorScore, RerankScore: item.RerankScore, ContentPreview: item.ContentPreview, Text: item.ContentPreview, Metadata: metadata})
+		results = append(results, service.RetrievalTestResult{RankNo: i + 1, KnowledgeBaseID: item.KnowledgeBaseID, DocumentID: item.DocumentID, DocID: item.DocumentID, ChunkID: item.ChunkID, DocumentName: item.DocumentName, DocName: item.DocumentName, SectionPath: item.SectionPath, Score: item.Score, VectorScore: vectorScore, RerankScore: rerankScore, ContentPreview: item.ContentPreview, Text: item.ContentPreview, Metadata: metadata})
 	}
 	return results, nil
 }

@@ -29,7 +29,7 @@ func TestRetrievePropagatesTrustedContextAndMapsResults(t *testing.T) {
 			t.Fatalf("payload=%+v", payload)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"results":[{"score":0.9,"vectorScore":0.88,"rerankScore":0.77,"knowledgeBaseId":"kb-1","documentId":"doc-1","chunkId":"chunk-1","documentName":"guide","sectionPath":"1 / 2","contentPreview":"preview","chunkIndex":2,"tags":["safe"],"metadata":{"category":"manual","vector":[1,2],"prompt":"secret","internalUrl":"http://internal"}}]},"requestId":"req-knowledge-test"}`))
+		_, _ = w.Write([]byte(`{"data":{"results":[{"score":0.77,"knowledgeBaseId":"kb-1","documentId":"doc-1","chunkId":"chunk-1","documentName":"guide","sectionPath":"1 / 2","contentPreview":"preview","chunkIndex":2,"chunkType":"paragraph","tags":["safe"]}]},"requestId":"req-knowledge-test"}`))
 	}))
 	defer server.Close()
 	client, err := New(server.URL, "service-token", time.Second)
@@ -41,10 +41,10 @@ func TestRetrievePropagatesTrustedContextAndMapsResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(results) != 1 || results[0].DocumentID != "doc-1" || results[0].VectorScore != 0.88 || results[0].RerankScore == nil || *results[0].RerankScore != 0.77 {
+	if len(results) != 1 || results[0].DocumentID != "doc-1" || results[0].VectorScore != 0 || results[0].RerankScore == nil || *results[0].RerankScore != 0.77 {
 		t.Fatalf("results=%+v", results)
 	}
-	if results[0].Metadata["category"] != "manual" || results[0].Metadata["chunkIndex"] != float64(2) && results[0].Metadata["chunkIndex"] != 2 {
+	if results[0].Metadata["chunkIndex"] != float64(2) && results[0].Metadata["chunkIndex"] != 2 || results[0].Metadata["chunkType"] != "paragraph" {
 		t.Fatalf("metadata=%+v", results[0].Metadata)
 	}
 	if _, ok := results[0].Metadata["vector"]; ok {
@@ -52,9 +52,28 @@ func TestRetrievePropagatesTrustedContextAndMapsResults(t *testing.T) {
 	}
 }
 
+func TestRetrieveTreatsKnowledgeScoreAsVectorScoreWithoutRerank(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"results":[{"score":0.88,"knowledgeBaseId":"kb-1","documentId":"doc-1","chunkId":"chunk-1","documentName":"guide","contentPreview":"preview"}]},"requestId":"req-knowledge-test"}`))
+	}))
+	defer server.Close()
+	client, err := New(server.URL, "service-token", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results, err := client.Retrieve(context.Background(), "user-1", service.RetrievalTestInput{Question: "query", Retrieval: service.RetrievalSettings{TopK: 5}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].Score != 0.88 || results[0].VectorScore != 0.88 || results[0].RerankScore != nil {
+		t.Fatalf("results=%+v", results)
+	}
+}
+
 func TestRetrieveMapsForbiddenKnowledgeResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		http.Error(w, "not found through scoped knowledge lookup", http.StatusNotFound)
 	}))
 	defer server.Close()
 	client, err := New(server.URL, "service-token", time.Second)

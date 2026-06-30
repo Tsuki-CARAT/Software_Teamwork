@@ -20,27 +20,36 @@ jobs:
           PROJECTS_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
         with:
           script: |
-            const { getOctokit } = require('@actions/github');
-
             const projectOwner = 'Sakayori-Iroha-168';
             const projectNumber = 1;
             const projectName = 'Software Teamwork';
-            const projectOctokit = process.env.PROJECTS_TOKEN
-              ? getOctokit(process.env.PROJECTS_TOKEN)
-              : github;
-            const projectGraphql = projectOctokit.graphql;
+            const projectGraphql = process.env.PROJECTS_TOKEN
+              ? github.graphql.defaults({
+                headers: {
+                  authorization: `token ${process.env.PROJECTS_TOKEN}`,
+                },
+              })
+              : github.graphql;
             const issue = context.payload.issue;
             const body = issue.body || '';
 
-            const titleMatch = issue.title.match(/^\[([SABCF]-(?:\d{8}-)?\d{2})\]\s+.+$/u);
+            const parseTaskCode = (title) => {
+              const nextTemplateMatch = title.match(/^([SABCF]-\d{3})\s+.+$/u);
+              if (nextTemplateMatch) {
+                return nextTemplateMatch[1];
+              }
+              const legacyMatch = title.match(/^\[([SABCF]-(?:\d{8}-)?\d{2})\]\s+.+$/u);
+              return legacyMatch ? legacyMatch[1] : '';
+            };
+
+            const taskCode = parseTaskCode(issue.title || '');
             const mentionsProject = body.includes(`GitHub Project`) && body.includes(projectName);
 
-            if (!titleMatch || !mentionsProject) {
+            if (!taskCode || !mentionsProject) {
               core.info('Issue does not look like a managed task issue; skipping.');
               return;
             }
 
-            const taskCode = titleMatch[1];
             const prefix = taskCode[0];
             const defaultGroupByPrefix = {
               A: 'L1nggTeam',

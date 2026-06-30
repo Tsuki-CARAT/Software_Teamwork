@@ -626,3 +626,37 @@ Rejected section targets for non-section regeneration jobs and made AI outline p
 ### Next Steps
 
 - None - task complete
+
+
+## Session 19: Document section versions
+
+**Date**: 2026-07-01
+**Task**: Document section versions
+**Branch**: `PrimeTeam/feat/report-section-versions`
+
+### Summary
+
+Implemented transactional section version current switching, manual edit snapshots, preserveUserEdits overwrite handling, OpenAPI schema alignment, and upgraded x/sys after security self-check.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c0c871d` | (see git log) |
+| `a4aa9c4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

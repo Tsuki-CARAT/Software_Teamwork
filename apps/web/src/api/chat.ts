@@ -87,13 +87,11 @@ function parseSsePayload(
   const seq =
     typeof raw.eventSeq === 'number'
       ? raw.eventSeq
-      : typeof raw.sequenceNo === 'number'
-        ? raw.sequenceNo
-        : typeof raw.seq === 'number'
-          ? raw.seq
-          : fallbackSeq
+      : typeof raw.seq === 'number'
+        ? raw.seq
+        : fallbackSeq
 
-  return { seq, ...raw }
+  return { ...raw, seq }
 }
 
 function getAnswerDeltaContent(payload: Record<string, unknown>): string {

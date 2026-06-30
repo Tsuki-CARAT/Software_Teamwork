@@ -53,4 +53,48 @@ describe('chat stream API', () => {
       expect.objectContaining({ content: ' cause', index: 1, seq: 2 }),
     )
   })
+
+  it('does not treat payload sequenceNo as the cross-event stream seq', async () => {
+    const onMessageCreated = vi.fn()
+    const onAnswerDelta = vi.fn()
+    const onAnswerCompleted = vi.fn()
+    const onError = vi.fn()
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        streamResponse(
+          [
+            'event: message.created',
+            'data: {"messageId":"assistant-1","sequenceNo":99}',
+            '',
+            'event: answer.delta',
+            'data: {"content":"root","sequenceNo":1}',
+            '',
+            'event: answer.completed',
+            'data: {"responseRunId":"run-1"}',
+            '',
+            '',
+          ].join('\n'),
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    streamChat('session-1', 'question', {
+      onAnswerCompleted,
+      onAnswerDelta,
+      onError,
+      onMessageCreated,
+    })
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(onError).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(onAnswerCompleted).toHaveBeenCalledTimes(1))
+
+    expect(onMessageCreated).toHaveBeenCalledWith(
+      expect.objectContaining({ messageId: 'assistant-1', seq: 1, sequenceNo: 99 }),
+    )
+    expect(onAnswerDelta).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'root', seq: 2, sequenceNo: 1 }),
+    )
+  })
 })

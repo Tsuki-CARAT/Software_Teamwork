@@ -1,4 +1,12 @@
 export {
+  createSafeToolStep,
+  formatQAError,
+  formatQAStreamError,
+  getCitationAvailabilityText,
+  getCitationDelta,
+  getSafeReasoningStep,
+} from './capability'
+export {
   sessionKeys,
   useCreateSession,
   useDeleteSession,

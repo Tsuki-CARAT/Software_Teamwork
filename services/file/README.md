@@ -22,11 +22,11 @@ Implemented now:
 - `DELETE /internal/v1/documents/{documentId}`
 - `GET /internal/v1/documents/{documentId}/content`
 - Memory, local, and MinIO object-store adapters behind `service.ObjectStore`
+- Env-gated PostgreSQL metadata + MinIO object-store smoke test
 
 
 Out of scope for this MVP:
 
-- Local MinIO server / `mc` setup
 - Async object cleanup worker
 - Knowledge ingestion handoff and knowledge document state
 - Report template, report material, and generated report file business state
@@ -116,6 +116,48 @@ cd services/file
 $env:FILE_TEST_DATABASE_URL = "postgres://file:file@localhost:5432/file?sslmode=disable"
 go test ./internal/repository
 ```
+
+PostgreSQL + MinIO smoke tests are also env-gated. They use the public File
+Service HTTP handler, create an isolated PostgreSQL schema, write the object to
+MinIO, read it back through `/internal/v1/files/{fileId}/content`, then delete
+through the File API so test data is cleaned up.
+
+Start the local dependencies from the repository root:
+
+```bash
+cd deploy
+docker compose --env-file .env.example up -d postgres minio minio-init migrate-file
+```
+
+The root Compose MinIO initializer creates the local bucket
+`software-teamwork-local` with these placeholder credentials:
+
+```text
+endpoint: localhost:9000
+access key: minio_local_demo
+secret key: minio-local-demo-password
+region: empty
+```
+
+Run the combined smoke from `services/file`:
+
+```bash
+FILE_MINIO_POSTGRES_SMOKE=1 \
+FILE_TEST_DATABASE_URL='postgres://file_app:file_app_dev@localhost:5432/file_system?sslmode=disable' \
+FILE_MINIO_ENDPOINT='localhost:9000' \
+FILE_MINIO_ACCESS_KEY='minio_local_demo' \
+FILE_MINIO_SECRET_KEY='minio-local-demo-password' \
+FILE_MINIO_BUCKET='software-teamwork-local' \
+go test ./internal/integration -run TestFileMinIOPostgresSmoke -count=1 -v
+```
+
+If the smoke is not enabled, `go test ./...` skips it. If it is enabled but
+PostgreSQL, MinIO, or the bucket is missing, the test fails with the missing
+environment variable or dependency error. Check `docker compose logs postgres
+migrate-file minio minio-init` first. The smoke normally deletes its test file;
+if it is interrupted, remove the leftover object from the MinIO console or `mc`
+when the file ID is known from the partial run.
+
 ## Multipart Upload Shape
 
 Upload uses `multipart/form-data`:

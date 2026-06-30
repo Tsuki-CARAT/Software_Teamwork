@@ -48,3 +48,36 @@ Implemented and verified the local Knowledge Service ingest, vectorization, retr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Migrate Auth to pgx v5
+
+**Date**: 2026-06-30
+**Task**: Migrate Auth to pgx v5
+**Branch**: `L1nggTeam/fix/auth-pgx-v5`
+
+### Summary
+
+Migrated services/auth from pgx v4 to pgx v5, regenerated sqlc code, updated repository mappings and docs, verified tests/build/migration smoke, and archived the Trellis task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `175265f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

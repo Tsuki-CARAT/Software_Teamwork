@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 1
-- **Last Active**: 2026-06-28
+- **Total Sessions**: 2
+- **Last Active**: 2026-06-30
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~45 | Active |
+| `journal-1.md` | ~83 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 2 | 2026-06-30 | Migrate Auth to pgx v5 | `175265f` | `L1nggTeam/fix/auth-pgx-v5` |
 | 1 | 2026-06-28 | Knowledge service local ingest stack | `54754d4` | `Fisherman6a/feat/knowledge-service-contracts` |
 <!-- @@@/auto:session-history -->
 

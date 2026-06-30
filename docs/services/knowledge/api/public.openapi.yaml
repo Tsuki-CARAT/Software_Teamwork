@@ -681,7 +681,6 @@ components:
         chunkType: { type: string }
         content: { type: string }
         tokenCount: { type: integer }
-        qdrantPointId: { type: string, nullable: true }
         embeddingProvider: { type: string, nullable: true }
         embeddingDimension: { type: integer, nullable: true }
         metadata:
@@ -780,12 +779,12 @@ components:
       type: object
       required: [query]
       properties:
-        query: { type: string }
+        query: { type: string, maxLength: 2000 }
         knowledgeBaseIds:
           type: array
           items: { type: string }
-        topK: { type: integer }
-        scoreThreshold: { type: number }
+        topK: { type: integer, minimum: 1, maximum: 100, default: 10 }
+        scoreThreshold: { type: number, minimum: 0, default: 0.35 }
         tags:
           type: array
           items: { type: string }
@@ -793,8 +792,8 @@ components:
           type: object
           additionalProperties:
             type: string
-        rerank: { type: boolean }
-        rerankTopN: { type: integer, nullable: true }
+        rerank: { type: boolean, default: false }
+        rerankTopN: { type: integer, minimum: 1, nullable: true }
     KnowledgeQueryResponse:
       allOf:
         - $ref: '#/components/schemas/EnvelopeBase'
@@ -842,6 +841,7 @@ components:
         documentName: { type: string }
         sectionPath: { type: string }
         chunkIndex: { type: integer, nullable: true }
+        chunkType: { type: string, nullable: true }
         contentPreview: { type: string }
         tags:
           type: array

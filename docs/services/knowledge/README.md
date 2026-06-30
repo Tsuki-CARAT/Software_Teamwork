@@ -140,12 +140,12 @@ POST /api/v1/knowledge-queries
 | --- | --- |
 | `query` | 用户检索问题或关键词。 |
 | `knowledgeBaseIds` | 可选知识库范围；空数组表示由权限和默认策略决定范围。 |
-| `topK` | 向量召回数量上限。 |
-| `scoreThreshold` | 相似度阈值，低于阈值的结果应过滤。 |
+| `topK` | 向量召回数量上限，默认 10，范围 1-100。 |
+| `scoreThreshold` | 相似度阈值，默认 0.35，低于阈值的结果应过滤。 |
 | `tags` | 标签过滤条件。 |
 | `metadataFilter` | 扩展元数据过滤条件。 |
-| `rerank` | 是否请求重排序；具体重排序实现由 knowledge 服务决定。 |
-| `rerankTopN` | 重排序后保留数量。 |
+| `rerank` | 是否请求重排序；A-12 保留 provider-neutral boundary，真实 AI Gateway adapter 等 S-04。 |
+| `rerankTopN` | 重排序后保留数量，必须小于等于 `topK`；未配置 reranker 时仍会按向量顺序截断。 |
 
 响应必须返回可溯源字段，例如 `knowledgeBaseId`、`documentId`、`chunkId`、`documentName`、`sectionPath`、`score` 和 `contentPreview`。不要向前端返回原始向量、完整 Qdrant payload、内部 object key、prompt 或下游服务 URL。
 

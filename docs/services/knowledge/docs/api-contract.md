@@ -238,7 +238,6 @@ A-11 runtime。端到端 smoke 可以登记为 integration follow-up，不应阻
   "chunkType": "text",
   "content": "本规程适用于...",
   "tokenCount": 320,
-  "qdrantPointId": "550e8400-e29b-41d4-a716-446655440000",
   "metadata": {
     "page": 3
   },
@@ -258,6 +257,7 @@ A-11 runtime。端到端 smoke 可以登记为 integration follow-up，不应阻
   "score": 0.82,
   "contentPreview": "本规程适用于...",
   "chunkIndex": 1,
+  "chunkType": "text",
   "tags": ["锅炉", "2026"]
 }
 ```
@@ -771,6 +771,7 @@ POST /api/v1/knowledge-queries
         "score": 0.82,
         "contentPreview": "本规程适用于...",
         "chunkIndex": 1,
+        "chunkType": "text",
         "tags": ["锅炉", "2026"]
       }
     ],

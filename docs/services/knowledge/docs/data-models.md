@@ -216,7 +216,7 @@ parser service
 | `ScoreThreshold` | `scoreThreshold` | number | 相似度阈值，默认 runtime config。 |
 | `Tags` | `tags` | string[] | 标签过滤。 |
 | `MetadataFilter` | `metadataFilter` | object | 切片 metadata 等值过滤。 |
-| `Rerank` | `rerank` | boolean | 是否请求 rerank。当前 trace 记录该请求。 |
+| `Rerank` | `rerank` | boolean | 是否请求 rerank；当前通过 provider-neutral boundary 执行，未配置 reranker 时保留向量顺序。 |
 | `RerankTopN` | `rerankTopN` | integer | rerank 后截断数，必须小于等于 `topK`。 |
 
 响应字段：

@@ -23,7 +23,7 @@ type retrievalIndex struct {
 }
 
 func (*retrievalIndex) Upsert(context.Context, []service.VectorPoint) error { return nil }
-func (*retrievalIndex) DeleteByDocument(context.Context, string) error     { return nil }
+func (*retrievalIndex) DeleteByDocument(context.Context, string) error      { return nil }
 func (i *retrievalIndex) Search(_ context.Context, request service.VectorSearchRequest) ([]service.VectorSearchHit, error) {
 	i.request = request
 	return append([]service.VectorSearchHit(nil), i.hits...), nil

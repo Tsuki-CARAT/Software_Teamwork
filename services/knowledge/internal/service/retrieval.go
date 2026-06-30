@@ -33,7 +33,6 @@ type KnowledgeQuerySummary struct {
 
 type KnowledgeQueryResult struct {
 	Score           float64
-	PointID         string
 	KnowledgeBaseID string
 	DocumentID      string
 	ChunkID         string
@@ -324,7 +323,6 @@ func (s *KnowledgeService) hydrateRetrievalResults(ctx context.Context, reqCtx R
 		chunkIndex := chunk.ChunkIndex
 		results = append(results, KnowledgeQueryResult{
 			Score:           hit.Score,
-			PointID:         hit.ID,
 			KnowledgeBaseID: chunk.KnowledgeBaseID,
 			DocumentID:      chunk.DocumentID,
 			ChunkID:         chunk.ID,

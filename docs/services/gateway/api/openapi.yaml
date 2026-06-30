@@ -2824,9 +2824,6 @@ components:
         chunkType:
           type: string
           nullable: true
-        qdrantPointId:
-          type: string
-          nullable: true
         embeddingProvider:
           type: string
           nullable: true
@@ -2834,11 +2831,6 @@ components:
           type: integer
           minimum: 1
           nullable: true
-        embeddingPreview:
-          type: array
-          nullable: true
-          items:
-            type: number
         metadata:
           $ref: '#/components/schemas/JsonObject'
         createdAt:
@@ -2866,6 +2858,7 @@ components:
       properties:
         query:
           type: string
+          maxLength: 2000
         knowledgeBaseIds:
           type: array
           items:
@@ -2878,7 +2871,7 @@ components:
         scoreThreshold:
           type: number
           minimum: 0
-          default: 0
+          default: 0.35
         tags:
           type: array
           items:
@@ -2920,6 +2913,9 @@ components:
         chunkIndex:
           type: integer
           minimum: 0
+          nullable: true
+        chunkType:
+          type: string
           nullable: true
         contentPreview:
           type: string

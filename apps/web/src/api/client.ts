@@ -203,6 +203,19 @@ export const apiClient = {
   },
 }
 
+export function resetApiClientForTests(): void {
+  _token = null
+  accessTokenProvider = undefined
+  requestIdProvider = undefined
+  unauthorizedHandler = undefined
+  mockRoutes = []
+  try {
+    localStorage.removeItem(AUTH_TOKEN_KEY)
+  } catch {
+    // localStorage may be unavailable outside browser-like test environments.
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------

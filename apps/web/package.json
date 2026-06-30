@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "typecheck": "tsc --noEmit",
-    "check": "bun run typecheck && bun run lint && bun run format:check",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
+    "check": "bun run typecheck && bun run typecheck:test && bun run lint && bun run format:check",
     "preview": "vite preview"
   },
   "dependencies": {

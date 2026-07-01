@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend service boundaries, pre-development checklist, and required service-local validation for Go changes."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Security-sensitive Go changes need service-local tests/builds and stable error behavior."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "URL, command, pagination, and dependency failures must be classified without leaking internals."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Credential, URL, prompt, token, and provider payload redaction requirements."}
+{"file": ".trellis/spec/cicd.md", "reason": "Workflow permission baseline and CI validation expectations."}
+{"file": "docs/architecture/service-boundaries.md", "reason": "Confirms QA, Knowledge, Document, and AI Gateway ownership boundaries."}
+{"file": "docs/architecture/technology-decisions.md", "reason": "Security baseline for credential storage, AI Gateway, and service communication."}
+{"file": "docs/testing/strategy.md", "reason": "Local validation matrix and PR evidence requirements."}

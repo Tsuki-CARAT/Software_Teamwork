@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Check expected Go service tests/builds and QA agent build coverage."}
+{"file": ".trellis/spec/cicd.md", "reason": "Check GitHub Actions permissions and workflow validation expectations."}
+{"file": "docs/testing/strategy.md", "reason": "Check required local commands and PR-before evidence for touched services."}
+{"file": "docs/architecture/technology-decisions.md", "reason": "Check updated credential fingerprinting and internal service security docs remain consistent."}

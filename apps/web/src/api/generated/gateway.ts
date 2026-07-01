@@ -1943,7 +1943,7 @@ export interface components {
             jobType: components["schemas"]["ReportJobType"];
             target?: {
                 /** @enum {string} */
-                scope?: "report" | "outline" | "section" | "file";
+                scope?: "report" | "section";
                 sectionId?: string;
             };
             requirements?: string;

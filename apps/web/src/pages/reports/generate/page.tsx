@@ -227,7 +227,7 @@ export function ReportGeneratePage() {
         reportId: report.id,
         payload: {
           jobType: 'outline_generation',
-          target: { scope: 'outline' },
+          target: { scope: 'report' },
           materialIds: selectedMaterialIds,
           requirements: parsed.data.extraContextText,
         },

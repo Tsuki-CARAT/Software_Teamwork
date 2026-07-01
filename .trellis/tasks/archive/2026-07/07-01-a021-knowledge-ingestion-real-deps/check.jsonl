@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend quality checklist"}
+{"file": ".trellis/spec/backend/api-contracts.md", "reason": "Verify service boundaries and stable error/request-id behavior"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify PostgreSQL/Qdrant/File cleanup and ownership rules"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify env-gated smoke behavior, Docker policy, and required checks"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify dependency errors and sanitized failure output"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Verify test placement does not cross internal package boundaries"}
+{"file": ".trellis/spec/guides/commit-convention.md", "reason": "Commit message format"}
+{"file": ".trellis/tasks/07-01-a021-knowledge-ingestion-real-deps/design.md", "reason": "Verify implementation matches selected A-021 design"}

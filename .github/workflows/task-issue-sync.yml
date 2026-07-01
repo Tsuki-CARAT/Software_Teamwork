@@ -51,11 +51,11 @@ jobs:
             const previousBody = context.payload.changes?.body?.from || '';
 
             const parseTaskCode = (title) => {
-              const bracketedMatch = title.trim().match(/^\[([SABCF]-(?:\d{8}-)?\d{2,3})\]\s+.+$/u);
+              const bracketedMatch = title.trim().match(/^\[([SABCFT]-(?:\d{8}-)?\d{2,3})\]\s+.+$/u);
               if (bracketedMatch) {
                 return { taskCode: bracketedMatch[1], legacyTitle: false };
               }
-              const bareMatch = title.trim().match(/^([SABCF]-(?:\d{8}-)?\d{2,3})\s+.+$/u);
+              const bareMatch = title.trim().match(/^([SABCFT]-(?:\d{8}-)?\d{2,3})\s+.+$/u);
               return bareMatch
                 ? { taskCode: bareMatch[1], legacyTitle: true }
                 : { taskCode: '', legacyTitle: false };
@@ -80,6 +80,7 @@ jobs:
               C: 'PrimeTeam',
               F: 'Frontend',
               S: 'Special',
+              T: 'Test',
             };
             const moduleLabelByModule = {
               gateway: 'service:gateway',
@@ -109,6 +110,22 @@ jobs:
               return match ? cleanValue(match[1]) : '';
             };
             const readField = (label) => readBodyField(body, label);
+            const readHourField = (baseLabel) => readField(`${baseLabel}（小时数）`) || readField(baseLabel);
+
+            const parseHourNumber = (value, label) => {
+              const normalized = cleanValue(value || '');
+              if (!normalized || normalized === '待估' || normalized === '未填写') {
+                return { number: 0, text: '0' };
+              }
+              if (!/^\d+(?:\.\d+)?$/u.test(normalized)) {
+                throw new Error(`${label} must be a non-negative hour number without units, e.g. 0, 0.5, 1.25.`);
+              }
+              const number = Number(normalized);
+              if (!Number.isFinite(number) || number < 0) {
+                throw new Error(`${label} must be a finite non-negative hour number.`);
+              }
+              return { number, text: String(number) };
+            };
 
             const normalizeDependency = (value) => {
               const normalized = cleanValue(value || '');
@@ -144,8 +161,8 @@ jobs:
             const priority = readField('优先级') || 'P1';
             const batch = readField('批次') || 'Batch 4';
             const moduleName = readField('模块') || 'ci';
-            const expectedHours = readField('预期工时') || '待估';
-            const actualHours = readField('实际工时') || '未填写';
+            const expectedHoursRaw = readHourField('预期工时');
+            const actualHoursRaw = readHourField('实际工时');
             const explicitRisk = readField('Risk');
             const risk = issueStatus === 'Blocked'
               ? 'Blocked'
@@ -208,6 +225,7 @@ jobs:
                         ... on ProjectV2Field {
                           id
                           name
+                          dataType
                         }
                         ... on ProjectV2SingleSelectField {
                           id
@@ -583,6 +601,27 @@ jobs:
                   value: { text },
                 });
               };
+              const updateNumberOrText = async (fieldName, hours) => {
+                const field = fieldByName.get(fieldName);
+                if (!field) {
+                  throw new Error(`Project field '${fieldName}' is missing.`);
+                }
+                const value = field.dataType === 'NUMBER'
+                  ? { number: hours.number }
+                  : { text: hours.text };
+                if (field.dataType && field.dataType !== 'NUMBER') {
+                  core.warning(`Project field '${fieldName}' is ${field.dataType}; writing text fallback. Convert it to a Number field for statistics.`);
+                }
+                await projectGraphql(updateFieldMutation, {
+                  projectId: project.id,
+                  itemId: item.id,
+                  fieldId: field.id,
+                  value,
+                });
+              };
+
+              const expectedHours = parseHourNumber(expectedHoursRaw, '预期工时（小时数）');
+              const actualHours = parseHourNumber(actualHoursRaw, '实际工时（小时数）');
 
               await updateSingleSelect('Status', projectStatus);
               await updateSingleSelect('Group', group);
@@ -591,8 +630,8 @@ jobs:
               await updateSingleSelect('Module', moduleName);
               await updateSingleSelect('Risk', risk);
               await updateText('Dependency', dependency);
-              await updateText('ExpectedHours', expectedHours);
-              await updateText('ActualHours', actualHours);
+              await updateNumberOrText('ExpectedHours', expectedHours);
+              await updateNumberOrText('ActualHours', actualHours);
               await updateText(
                 'OwnerNote',
                 `自动同步自 issue #${issue.number}；任务编号 ${taskCode}；由 Task Issue Sync 更新。`

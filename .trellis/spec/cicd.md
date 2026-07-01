@@ -52,52 +52,59 @@ task issue workflow docs, or GitHub Project custom fields.
 ### 2. Signatures
 
 - Managed task title: `[A-001] ...`, `[B-001] ...`, `[C-001] ...`,
-  `[F-001] ...`, or `[S-001] ...`.
+  `[F-001] ...`, `[S-001] ...`, or `[T-001] ...`.
 - Project marker: `GitHub Project：Software Teamwork`.
 - Issue body fields read by automation include `状态`, `主责小组`, `优先级`,
-  `批次`, `模块`, `预期工时`, `实际工时`, `Risk`, `依赖任务`, `阻塞任务`,
-  and `Project sync`.
+  `批次`, `模块`, `预期工时（小时数）`, `实际工时（小时数）`, `Risk`,
+  `依赖任务`, `阻塞任务`, and `Project sync`.
 - Project fields written include `Status`, `Group`, `Priority`, `Batch`,
   `Module`, `Risk`, `Dependency`, `ExpectedHours`, `ActualHours`, and
   `OwnerNote`.
 - Claim command: `认领：@<github-login>`.
-- Actual-hours command: `实际工时：<value>`.
+- Actual-hours command: `实际工时：<hour-number>`.
 
 ### 3. Contracts
 
 - Task Issue Sync must skip non-managed issues and issues without the
   `Software Teamwork` Project marker.
 - `Group` derives from the task title prefix, not from mutable issue body text.
-- Missing `预期工时` defaults to `待估`; missing `实际工时` defaults to
-  `未填写`.
-- Hour fields are text fields. Do not coerce values into numbers or durations in
-  workflow code.
+- `T-*` maps to Project `Group` option `Test`; use it only for testing
+  documentation, test code, test reports, and test support work. Bugs or
+  optimization requests found during testing but owned by development still use
+  the matching development group prefix.
+- Missing `预期工时（小时数）` defaults to numeric `0`; missing
+  `实际工时（小时数）` defaults to numeric `0`.
+- Hour fields must be non-negative hour numbers without units. Floating-point
+  values are allowed, e.g. `0`, `0.5`, `1.25`.
+- GitHub Project hour fields should be Number fields for statistics. Workflow
+  code may write a text fallback only while the remote Project still has legacy
+  Text fields.
 - GitHub Project field names are exact: `ExpectedHours` and `ActualHours`.
 - Claim comments must keep existing claim validation, set `Status` to
   `In Progress`, and refresh both hour fields in the Project.
-- Actual-hours comments must update the issue body `实际工时` field and sync
-  Project `ActualHours`; they must not require the task to be claimable.
+- Actual-hours comments must update the issue body `实际工时（小时数）` field
+  and sync Project `ActualHours`; they must not require the task to be claimable.
 
 ### 4. Validation & Error Matrix
 
 | Condition | Required handling |
 | --- | --- |
 | Issue title is not a managed task title | Skip without mutating the issue or Project. |
-| `预期工时` is missing | Sync `ExpectedHours` as `待估`. |
-| `实际工时` is missing | Sync `ActualHours` as `未填写`. |
-| Comment is `实际工时：` with an empty value | Reject with an issue comment and do not mutate fields. |
+| `预期工时（小时数）` is missing | Sync `ExpectedHours` as `0`. |
+| `实际工时（小时数）` is missing | Sync `ActualHours` as `0`. |
+| Comment is `实际工时：` with an empty or non-numeric value | Reject with an issue comment and do not mutate fields. |
 | Commenter is not trusted or assigned | Reject actual-hours update with an issue comment. |
 | Project lacks `ExpectedHours` or `ActualHours` | Set `Project sync` to `blocked` and fail the workflow run. |
 | Claim target differs from commenter | Reject the claim with an issue comment. |
 
 ### 5. Good/Base/Bad Cases
 
-- Good: a managed task body has `预期工时：1d`; a maintainer comments
-  `实际工时：6h`; the body and Project `ActualHours` both become `6h`.
+- Good: a managed task body has `预期工时（小时数）：1.5`; a maintainer comments
+  `实际工时：0.5`; the body and Project `ActualHours` both become numeric `0.5`.
 - Base: a new managed task omits hour fields; Project receives `ExpectedHours`
-  as `待估` and `ActualHours` as `未填写`.
+  as `0` and `ActualHours` as `0`.
 - Bad: the workflow writes `ActualHours` only during issue create/edit and
-  ignores `实际工时：2h` comments.
+  ignores `实际工时：2` comments.
 
 ### 6. Tests Required
 
@@ -106,7 +113,7 @@ task issue workflow docs, or GitHub Project custom fields.
 - Extract embedded `actions/github-script` bodies and run `node --check` inside
   an async wrapper.
 - Query GitHub Project fields and confirm `ExpectedHours` and `ActualHours` are
-  present as text fields before relying on automation.
+  present as Number fields before relying on statistics.
 - Run `git diff --check`.
 
 ### 7. Wrong vs Correct
@@ -117,16 +124,16 @@ task issue workflow docs, or GitHub Project custom fields.
 await updateText('ActualHours', actualHours);
 ```
 
-This is wrong if the workflow never reads `实际工时` from the issue body or never
-handles actual-hours comments.
+This is wrong if the Project field is a Number field, or if the workflow never
+reads `实际工时（小时数）` from the issue body or never handles actual-hours comments.
 
 #### Correct
 
 ```js
-const expectedHours = readField('预期工时') || '待估';
-const actualHours = readField('实际工时') || '未填写';
-await updateText('ExpectedHours', expectedHours);
-await updateText('ActualHours', actualHours);
+const expectedHours = parseHourNumber(readHourField('预期工时'), '预期工时（小时数）');
+const actualHours = parseHourNumber(readHourField('实际工时'), '实际工时（小时数）');
+await updateNumberOrText('ExpectedHours', expectedHours);
+await updateNumberOrText('ActualHours', actualHours);
 ```
 
 ## Current CI Status

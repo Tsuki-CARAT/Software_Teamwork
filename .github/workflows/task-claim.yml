@@ -57,11 +57,11 @@ jobs:
             }
 
             const parseTaskCode = (title) => {
-              const bracketedMatch = title.trim().match(/^\[([SABCF]-(?:\d{8}-)?\d{2,3})\]\s+.+$/u);
+              const bracketedMatch = title.trim().match(/^\[([SABCFT]-(?:\d{8}-)?\d{2,3})\]\s+.+$/u);
               if (bracketedMatch) {
                 return { taskCode: bracketedMatch[1], legacyTitle: false };
               }
-              const bareMatch = title.trim().match(/^([SABCF]-(?:\d{8}-)?\d{2,3})\s+.+$/u);
+              const bareMatch = title.trim().match(/^([SABCFT]-(?:\d{8}-)?\d{2,3})\s+.+$/u);
               return bareMatch
                 ? { taskCode: bareMatch[1], legacyTitle: true }
                 : { taskCode: '', legacyTitle: false };
@@ -85,6 +85,7 @@ jobs:
               C: 'PrimeTeam',
               F: 'Frontend',
               S: 'Special',
+              T: 'Test',
             };
             const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const cleanValue = (value) => value
@@ -96,6 +97,21 @@ jobs:
               const pattern = new RegExp(`^-\\s*${escapeRegExp(label)}\\s*[:：]\\s*(.+)$`, 'imu');
               const fieldMatch = (issue.body || '').match(pattern);
               return fieldMatch ? cleanValue(fieldMatch[1]) : '';
+            };
+            const readHourField = (baseLabel) => readField(`${baseLabel}（小时数）`) || readField(baseLabel);
+            const parseHourNumber = (value, label) => {
+              const normalized = cleanValue(value || '');
+              if (!normalized || normalized === '待估' || normalized === '未填写') {
+                return { number: 0, text: '0' };
+              }
+              if (!/^\d+(?:\.\d+)?$/u.test(normalized)) {
+                throw new Error(`${label} must be a non-negative hour number without units, e.g. 0, 0.5, 1.25.`);
+              }
+              const number = Number(normalized);
+              if (!Number.isFinite(number) || number < 0) {
+                throw new Error(`${label} must be a finite non-negative hour number.`);
+              }
+              return { number, text: String(number) };
             };
             const formatFieldLine = (label, value) => `- ${label}：\`${value}\``;
             const replaceOrInsertField = (body, label, value, anchors = []) => {
@@ -136,6 +152,7 @@ jobs:
                         ... on ProjectV2Field {
                           id
                           name
+                          dataType
                         }
                         ... on ProjectV2SingleSelectField {
                           id
@@ -237,6 +254,13 @@ jobs:
                     throw new Error(`Project field '${fieldUpdate.name}' option '${fieldUpdate.value}' is unavailable.`);
                   }
                   value = { singleSelectOptionId: option.id };
+                } else if (fieldUpdate.kind === 'number') {
+                  value = field.dataType === 'NUMBER'
+                    ? { number: fieldUpdate.value.number }
+                    : { text: fieldUpdate.value.text };
+                  if (field.dataType && field.dataType !== 'NUMBER') {
+                    core.warning(`Project field '${fieldUpdate.name}' is ${field.dataType}; writing text fallback. Convert it to a Number field for statistics.`);
+                  }
                 } else {
                   value = { text: fieldUpdate.value };
                 }
@@ -260,8 +284,8 @@ jobs:
             const moduleName = readField('模块') || 'ci';
             const dependency = normalizeDependency(readField('依赖任务'));
             const taskStatus = readField('状态') || 'Draft';
-            const expectedHours = readField('预期工时') || '待估';
-            const existingActualHours = readField('实际工时') || '未填写';
+            const expectedHoursRaw = readHourField('预期工时');
+            const existingActualHoursRaw = readHourField('实际工时');
 
             const createComment = async (body) => {
               await github.rest.issues.createComment({
@@ -288,8 +312,16 @@ jobs:
             if (actualHoursMatch) {
               const requestedActualHours = cleanValue(actualHoursMatch[1]);
               if (!requestedActualHours) {
-                await createComment('实际工时更新失败：请使用 `实际工时：2h` 这类非空格式。');
+                await createComment('实际工时更新失败：请使用 `实际工时：2` 或 `实际工时：0.5` 这类小时数字格式。');
                 core.info('Actual-hours update rejected because value is empty.');
+                return;
+              }
+              let requestedActualHoursValue;
+              try {
+                requestedActualHoursValue = parseHourNumber(requestedActualHours, '实际工时（小时数）');
+              } catch (error) {
+                await createComment('实际工时更新失败：请填写非负小时数，不要带单位；例如 `实际工时：2` 或 `实际工时：0.5`。');
+                core.info(`Actual-hours update rejected because value is invalid: ${error.message}`);
                 return;
               }
 
@@ -306,8 +338,8 @@ jobs:
               let syncErrorMessage = '';
               try {
                 await updateProjectFields([
-                  { kind: 'text', name: 'ExpectedHours', value: expectedHours },
-                  { kind: 'text', name: 'ActualHours', value: requestedActualHours },
+                  { kind: 'number', name: 'ExpectedHours', value: parseHourNumber(expectedHoursRaw, '预期工时（小时数）') },
+                  { kind: 'number', name: 'ActualHours', value: requestedActualHoursValue },
                   { kind: 'text', name: 'OwnerNote', value: `@${commenterLogin} 通过 issue 评论更新实际工时；任务编号 ${taskCode}；由 Task Claim 更新。` },
                 ]);
                 syncState = 'synced';
@@ -320,15 +352,15 @@ jobs:
               }
 
               const body = issue.body || '';
-              let nextBody = replaceOrInsertField(body, '实际工时', requestedActualHours, ['预期工时', '模块']);
+              let nextBody = replaceOrInsertField(body, '实际工时（小时数）', requestedActualHoursValue.text, ['预期工时（小时数）', '预期工时', '模块']);
               nextBody = replaceOrInsertField(nextBody, 'Project sync', syncState, ['GitHub Project']);
               await updateIssueBody(nextBody);
 
               if (syncState === 'blocked') {
                 core.setFailed(`Updated actual hours on issue #${issue.number}, but Project sync is blocked. ${syncErrorMessage}`);
               } else {
-                await createComment(`实际工时已更新为 \`${requestedActualHours}\`。`);
-                core.info(`Updated actual hours on issue #${issue.number} to ${requestedActualHours}.`);
+                await createComment(`实际工时已更新为 \`${requestedActualHoursValue.text}\` 小时。`);
+                core.info(`Updated actual hours on issue #${issue.number} to ${requestedActualHoursValue.text} hours.`);
               }
               return;
             }
@@ -381,8 +413,8 @@ jobs:
                 { kind: 'single-select', name: 'Module', value: moduleName },
                 { kind: 'single-select', name: 'Risk', value: 'Normal' },
                 { kind: 'text', name: 'Dependency', value: dependency },
-                { kind: 'text', name: 'ExpectedHours', value: expectedHours },
-                { kind: 'text', name: 'ActualHours', value: existingActualHours },
+                { kind: 'number', name: 'ExpectedHours', value: parseHourNumber(expectedHoursRaw, '预期工时（小时数）') },
+                { kind: 'number', name: 'ActualHours', value: parseHourNumber(existingActualHoursRaw, '实际工时（小时数）') },
                 { kind: 'text', name: 'OwnerNote', value: `@${commenterLogin} 通过 issue 评论认领；任务编号 ${taskCode}；由 Task Claim 更新。` },
               ]);
               syncState = 'synced';

@@ -1,7 +1,7 @@
 ---
 name: Task Issue
 about: Create a tracked task for issue-driven development
-title: '[A/B/C/F/S-001] 中文任务标题'
+title: '[A/B/C/F/S/T-001] 中文任务标题'
 labels: ''
 assignees: ''
 ---
@@ -15,15 +15,15 @@ assignees: ''
 
 ## 任务信息
 
-- 编号：`A/B/C/F/S-001`
+- 编号：`A/B/C/F/S/T-001`
 - 状态：`Draft / Ready / In Progress / Blocked / Review / Done`
-- 主责小组：`L1nggTeam / JerryTeam / PrimeTeam / Frontend / Special`
-- View：`Platform / QA / Report / Frontend / Special`
+- 主责小组：`L1nggTeam / JerryTeam / PrimeTeam / Frontend / Special / Test`
+- View：`Platform / QA / Report / Frontend / Special / Test`
 - 优先级：`P0 / P1 / P2`
 - 批次：`Batch 0 / Batch 1 / Batch 2 / Batch 3 / Batch 4`
 - 模块：`gateway / auth / file / knowledge / qa / document / frontend / ai-gateway / parser / openapi / deploy / ci`
-- 预期工时：`待估 / 0.5h / 1d`
-- 实际工时：`未填写 / 0.5h / 1d`
+- 预期工时（小时数）：`0 / 0.5 / 1`
+- 实际工时（小时数）：`0 / 0.5 / 1`
 - Risk：`Normal / Needs Decision / Blocked`
 - 依赖任务：无 / #118 #125
 - 阻塞任务：无 / #126 #127
@@ -32,6 +32,11 @@ assignees: ''
 - 建议分支：`group/type/short-title`
 - GitHub Project：`Software Teamwork`
 - Project sync：`pending / synced / blocked`
+
+## 发布前检查
+
+- 最新分支：`upstream/develop @ <commit>`
+- 问题/缺口仍存在：`是；复现或核对方式：<命令、页面路径、日志、截图或链接>`
 
 ## 权威依据
 

@@ -264,3 +264,17 @@ Document 相关接口使用项目统一错误码：
 - 模板文件首期限定 DOCX；模板结构、默认章节和材料映射以数据库配置为权威，不从 DOCX 自动解析。
 - 首期 AI 生成闭环覆盖 `summer_peak_inspection`；新增报告类型或更复杂的检索/流式事件前必须确保 OpenAPI、状态枚举和错误处理已同步。
 - 契约测试应覆盖 active document operations 的 response envelope、字段命名、错误码、request id、权限边界和文件内容接口。
+
+## C-010 跨服务契约验证
+
+C-010 的本地可重复验证以 Document 服务内 fake-backed contract tests 为主，不要求启动真实 File、Knowledge 或 AI Gateway：
+
+```bash
+cd services/document
+go test ./...
+go build ./cmd/server
+```
+
+这些测试覆盖 Document 调用 File Service `/internal/v1/files/**`、`X-Service-Token` 透传、模板/素材/报告文件公开响应脱敏、报告文件 content 成功二进制返回、失败 JSON error envelope，以及 fake 依赖失败到 `dependency_error` 的映射。
+
+需要完整联调时，先通过 gateway 访问公开 `/api/v1/**` 路径，并确保 Document、File、Redis、AI Gateway 可用；如果生成请求使用知识库上下文，还需要 Knowledge。联调时重点检查 `X-Request-Id` 贯穿日志，File Service token 匹配，报告文件 content 未就绪时返回统一错误 envelope。当前富 DOCX 的 Pandoc/LibreOffice 工具链、Document MCP tools 和 `coal_inventory_audit` 生成策略仍是后续任务，不能作为 C-010 验收前提。

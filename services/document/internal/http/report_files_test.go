@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 type fakeReportFileService struct {
 	files   []service.ReportFile
 	content service.FileContent
+	err     error
 }
 
 func (f *fakeReportFileService) ListReportFiles(context.Context, service.RequestContext, service.ReportFileListFilter) (service.ReportFileListResult, error) {
@@ -46,6 +48,9 @@ func (f *fakeReportFileService) GetReportFile(context.Context, service.RequestCo
 }
 
 func (f *fakeReportFileService) ReadReportFileContent(context.Context, service.RequestContext, string) (service.FileContent, error) {
+	if f.err != nil {
+		return service.FileContent{}, f.err
+	}
 	return f.content, nil
 }
 
@@ -78,6 +83,49 @@ func TestCreateReportFileReturnsAcceptedSafeDTO(t *testing.T) {
 	}
 }
 
+func TestGetReportFileReturnsSafeDTO(t *testing.T) {
+	now := time.Date(2026, 6, 29, 0, 0, 0, 0, time.UTC)
+	server := NewServer(Config{ReportFileSvc: &fakeReportFileService{
+		files: []service.ReportFile{{
+			ID:        "rf-1",
+			ReportID:  "report-1",
+			JobID:     "job-1",
+			FileRef:   "file_internal_report",
+			Filename:  "report.docx",
+			Format:    service.ReportFileFormatDOCX,
+			FileSize:  128,
+			Status:    service.ReportFileStatusSucceeded,
+			CreatedBy: "user-1",
+			CreatedAt: now,
+		}},
+	}})
+	req := httptest.NewRequest(http.MethodGet, "/report-files/rf-1", nil)
+	req.Header.Set("X-User-Id", "user-1")
+	req.Header.Set("X-Request-Id", "req-file")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	assertNoDocumentInternals(t, rec.Body.String())
+	var envelope struct {
+		Data struct {
+			ID          string `json:"id"`
+			ContentPath string `json:"contentPath"`
+			FileSize    int64  `json:"fileSize"`
+		} `json:"data"`
+		RequestID string `json:"requestId"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if envelope.Data.ID != "rf-1" || envelope.Data.FileSize != 128 || envelope.RequestID != "req-file" {
+		t.Fatalf("unexpected response: %+v", envelope)
+	}
+}
+
 func TestGetReportFileContentStreamsBinary(t *testing.T) {
 	server := NewServer(Config{ReportFileSvc: &fakeReportFileService{
 		content: service.FileContent{
@@ -104,5 +152,37 @@ func TestGetReportFileContentStreamsBinary(t *testing.T) {
 	}
 	if got := rec.Header().Get("Content-Disposition"); !strings.Contains(got, "report.docx") {
 		t.Fatalf("Content-Disposition = %q", got)
+	}
+}
+
+func TestGetReportFileContentFailureUsesErrorEnvelope(t *testing.T) {
+	server := NewServer(Config{ReportFileSvc: &fakeReportFileService{
+		err: service.NewError(service.CodeDependency, "file service failed", errors.New("minio bucket raw object")),
+	}})
+	req := httptest.NewRequest(http.MethodGet, "/report-files/rf-1/content", nil)
+	req.Header.Set("X-User-Id", "user-1")
+	req.Header.Set("X-Request-Id", "req-file-error")
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("Content-Type = %q, want JSON error envelope", got)
+	}
+	assertNoDocumentInternals(t, rec.Body.String())
+	var envelope struct {
+		Error struct {
+			Code      string `json:"code"`
+			RequestID string `json:"requestId"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if envelope.Error.Code != "dependency_error" || envelope.Error.RequestID != "req-file-error" {
+		t.Fatalf("unexpected error envelope: %+v", envelope)
 	}
 }

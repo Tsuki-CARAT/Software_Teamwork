@@ -162,13 +162,16 @@ func TestReadFileContentStreamsBodyAndHeaders(t *testing.T) {
 		if got := r.Header.Get("X-Request-Id"); got != "req_file" {
 			t.Fatalf("X-Request-Id = %q", got)
 		}
+		if got := r.Header.Get("X-Service-Token"); got != "svc-token" {
+			t.Fatalf("X-Service-Token = %q", got)
+		}
 		w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 		w.Header().Set("Content-Disposition", `attachment; filename="report.docx"`)
 		_, _ = w.Write([]byte("docx-bytes"))
 	}))
 	defer server.Close()
 
-	client, err := New(server.URL, server.Client())
+	client, err := NewWithServiceToken(server.URL, "svc-token", server.Client())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -186,23 +189,38 @@ func TestReadFileContentStreamsBodyAndHeaders(t *testing.T) {
 	}
 }
 
-func TestReadFileContentMapsMissingFileToNotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"error":{"message":"hidden"}}`))
-	}))
-	defer server.Close()
+func TestReadFileContentClassifiesDownstreamErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		wantCode service.Code
+	}{
+		{name: "missing", status: http.StatusNotFound, wantCode: service.CodeNotFound},
+		{name: "dependency", status: http.StatusInternalServerError, wantCode: service.CodeDependency},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != "/internal/v1/files/file_001/content" {
+					t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+				}
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(`{"error":{"message":"hidden downstream detail","objectKey":"bucket/raw.docx"}}`))
+			}))
+			defer server.Close()
 
-	client, err := New(server.URL, server.Client())
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-	_, err = client.ReadFileContent(context.Background(), service.RequestContext{}, "file_001")
-	appErr, ok := service.Classify(err)
-	if !ok || appErr.Code != service.CodeNotFound {
-		t.Fatalf("error = %#v, want not_found", err)
-	}
-	if strings.Contains(appErr.Message, "hidden") {
-		t.Fatalf("downstream body leaked into message: %q", appErr.Message)
+			client, err := New(server.URL, server.Client())
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			_, err = client.ReadFileContent(context.Background(), service.RequestContext{}, "file_001")
+			appErr, ok := service.Classify(err)
+			if !ok || appErr.Code != tt.wantCode {
+				t.Fatalf("error = %#v, want code %q", err, tt.wantCode)
+			}
+			if strings.Contains(appErr.Message, "hidden") || strings.Contains(appErr.Message, "objectKey") {
+				t.Fatalf("downstream body leaked into message: %q", appErr.Message)
+			}
+		})
 	}
 }

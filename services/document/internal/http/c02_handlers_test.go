@@ -51,9 +51,7 @@ func TestListReportTemplatesUsesPagedEnvelopeAndHidesFileRef(t *testing.T) {
 		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if strings.Contains(body, "file_internal_123") || strings.Contains(body, "file_ref") || strings.Contains(body, "fileRef") {
-		t.Fatalf("response leaked internal file reference: %s", body)
-	}
+	assertNoDocumentInternals(t, body)
 	var decoded struct {
 		Data []struct {
 			ID           string `json:"id"`
@@ -125,8 +123,84 @@ func TestCreateReportMaterialParsesMultipartAndHidesFileRef(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
 	}
-	if strings.Contains(rec.Body.String(), "file_internal_456") || strings.Contains(rec.Body.String(), "fileRef") {
-		t.Fatalf("response leaked internal file reference: %s", rec.Body.String())
+	assertNoDocumentInternals(t, rec.Body.String())
+}
+
+func TestGetReportTemplateAndMaterialHideStorageInternals(t *testing.T) {
+	now := time.Date(2026, 6, 29, 13, 30, 0, 0, time.UTC)
+	documents := &fakeDocumentService{
+		getTemplate: func(context.Context, service.RequestContext, string) (service.ReportTemplate, error) {
+			return service.ReportTemplate{
+				ID:           "tpl-1",
+				TemplateName: "inspection",
+				ReportType:   "summer_peak_inspection",
+				Version:      1,
+				FileRef:      "file_internal_template",
+				Filename:     "inspection.docx",
+				FileSize:     128,
+				Enabled:      true,
+				CreatedAt:    now,
+				UpdatedAt:    now,
+			}, nil
+		},
+		getMaterial: func(context.Context, service.RequestContext, string) (service.ReportMaterial, error) {
+			return service.ReportMaterial{
+				ID:           "mat-1",
+				MaterialName: "audit evidence",
+				MaterialType: "docx",
+				FileRef:      "file_internal_material",
+				Filename:     "evidence.docx",
+				FileSize:     64,
+				Tags:         []string{"audit"},
+				Enabled:      true,
+				CreatedAt:    now,
+				UpdatedAt:    now,
+			}, nil
+		},
+	}
+	server := NewServer(Config{DocumentService: documents})
+
+	for _, item := range []struct {
+		name string
+		path string
+	}{
+		{name: "template", path: "/report-templates/tpl-1"},
+		{name: "material", path: "/report-materials/mat-1"},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, item.path, nil)
+			req.Header.Set("X-User-Id", "usr_test")
+			rec := httptest.NewRecorder()
+
+			server.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+			assertNoDocumentInternals(t, rec.Body.String())
+		})
+	}
+}
+
+func assertNoDocumentInternals(t *testing.T, body string) {
+	t.Helper()
+	for _, marker := range []string{
+		"file_internal",
+		"file_ref",
+		"fileRef",
+		"objectKey",
+		"object_key",
+		"bucket",
+		"minio",
+		"X-Amz-Signature",
+		"provider.internal",
+		"qdrant",
+		"prompt=",
+		"sk-",
+	} {
+		if strings.Contains(body, marker) {
+			t.Fatalf("response leaked internal marker %q: %s", marker, body)
+		}
 	}
 }
 

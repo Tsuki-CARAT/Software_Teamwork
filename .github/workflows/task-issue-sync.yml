@@ -144,6 +144,8 @@ jobs:
             const priority = readField('优先级') || 'P1';
             const batch = readField('批次') || 'Batch 4';
             const moduleName = readField('模块') || 'ci';
+            const expectedHours = readField('预期工时') || '待估';
+            const actualHours = readField('实际工时') || '未填写';
             const explicitRisk = readField('Risk');
             const risk = issueStatus === 'Blocked'
               ? 'Blocked'
@@ -589,6 +591,8 @@ jobs:
               await updateSingleSelect('Module', moduleName);
               await updateSingleSelect('Risk', risk);
               await updateText('Dependency', dependency);
+              await updateText('ExpectedHours', expectedHours);
+              await updateText('ActualHours', actualHours);
               await updateText(
                 'OwnerNote',
                 `自动同步自 issue #${issue.number}；任务编号 ${taskCode}；由 Task Issue Sync 更新。`

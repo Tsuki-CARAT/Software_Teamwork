@@ -66,7 +66,7 @@ check 名称补入 `contexts`。
 - 识别标题形如 `[A-001] ...`、`[B-001] ...`、`[C-001] ...`、`[F-001] ...` 或 `[S-001] ...`，且正文写明
   `GitHub Project：Software Teamwork` 的任务 issue。
 - 根据 issue 标题前缀强制同步 `Group`，并根据任务正文的 `优先级`、
-  `批次`、`模块`、`Risk`、`依赖任务` 同步 GitHub Project 字段。
+  `批次`、`模块`、`预期工时`、`实际工时`、`Risk`、`依赖任务` 同步 GitHub Project 字段。
 - 根据任务正文的 `依赖任务` 和 `阻塞任务` 写入 GitHub Issue 原生 relationship。
   清理旧 relationship 时，只删除本次正文编辑确实从当前字段移除、对端也是受管
   任务 issue、且两端任务字段都不再声明的关系；`并行任务` 只保留在正文中，不创建
@@ -79,8 +79,15 @@ check 名称补入 `contexts`。
   `blocked`，并将本次 workflow run 标记为失败，方便维护者发现权限问题。
 
 新任务 issue 默认使用 [.github/ISSUE_TEMPLATE/issue.md](../../.github/ISSUE_TEMPLATE/issue.md)。
-模板标题采用 `[A/B/C/F/S-001] 中文任务标题` 格式，正文包含任务信息、依赖字段和
+模板标题采用 `[A/B/C/F/S-001] 中文任务标题` 格式，正文包含任务信息、工时字段、依赖字段和
 `Project sync` 字段，以便 Task Issue Sync 识别和同步 Project 字段。
+
+Project `Software Teamwork` 需要包含以下工时字段：
+
+| Project 字段 | 类型 | Issue 正文字段 | 默认值 |
+| --- | --- | --- | --- |
+| `ExpectedHours` | Text | `预期工时` | `待估` |
+| `ActualHours` | Text | `实际工时` | `未填写` |
 
 GitHub user-level Projects v2 通常需要额外 token。维护者应创建一个有 Project
 读写权限的 fine-grained token 或 classic token，并在仓库 Secrets 中配置：
@@ -101,9 +108,10 @@ Issue label、Assignee 和正文更新仍使用默认 `GITHUB_TOKEN`，`PROJECTS
 
 ```text
 认领：@your-github-login
+实际工时：2h
 ```
 
-规则：
+认领规则：
 
 - 只能认领自己，评论中的用户名必须等于评论者 GitHub login。
 - `Blocked`、`Review`、`Done` 状态的任务不能直接认领，需要协调人先改为
@@ -112,9 +120,18 @@ Issue label、Assignee 和正文更新仍使用默认 `GITHUB_TOKEN`，`PROJECTS
 - 认领成功后自动把评论者设为 Assignee。
 - 若正文包含任务模板字段，会把 `状态` 从 `Draft` 或 `Ready` 改为
   `In Progress`，并把 Project `Status` 同步为 `In Progress`。
+- 认领同步会刷新 Project `ExpectedHours` 和 `ActualHours`，来源分别是正文
+  `预期工时` 和 `实际工时`。
 - 若 Project 同步成功，正文中的 `Project sync` 会写为 `synced`；同步失败会写为
   `blocked`，并将本次 workflow run 标记为失败，此时维护者需要检查
   `PROJECTS_TOKEN`。
+
+实际工时规则：
+
+- 仓库维护者、协作者或当前 Assignee 可以评论 `实际工时：2h` 设置实际工时。
+- 自动化会更新正文 `实际工时` 字段，并同步 Project `ActualHours`。
+- 如果 Project 同步失败，正文仍会保留评论中的实际工时，`Project sync` 会写为
+  `blocked`，workflow run 会失败以提醒维护者补权限或字段配置。
 
 ## main 分支保护
 

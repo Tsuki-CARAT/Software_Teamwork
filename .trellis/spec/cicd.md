@@ -36,8 +36,98 @@ These workflows already exist and must remain separate from product build jobs:
 | Auto Label | `.github/workflows/auto-label.yml` | Applies team/path labels and syncs PR `blocked` label from linked issues |
 | PR Guard | `.github/workflows/pr-guard.yml` | Enforces fork + PR collaboration rules and allowed base branches |
 | Commitlint | `.github/workflows/commitlint.yml` | Enforces Conventional Commits on PR commits |
+| Task Issue Sync | `.github/workflows/task-issue-sync.yml` | Syncs managed task issues into the GitHub Project |
+| Task Claim | `.github/workflows/task-claim.yml` | Handles task claim comments and actual-hours comments |
 
 Do not weaken collaboration checks when adding product CI.
+
+## Task Issue Project Sync Contract
+
+### 1. Scope / Trigger
+
+Update this contract when changing `.github/ISSUE_TEMPLATE/issue.md`,
+`.github/workflows/task-issue-sync.yml`, `.github/workflows/task-claim.yml`,
+task issue workflow docs, or GitHub Project custom fields.
+
+### 2. Signatures
+
+- Managed task title: `[A-001] ...`, `[B-001] ...`, `[C-001] ...`,
+  `[F-001] ...`, or `[S-001] ...`.
+- Project marker: `GitHub Project：Software Teamwork`.
+- Issue body fields read by automation include `状态`, `主责小组`, `优先级`,
+  `批次`, `模块`, `预期工时`, `实际工时`, `Risk`, `依赖任务`, `阻塞任务`,
+  and `Project sync`.
+- Project fields written include `Status`, `Group`, `Priority`, `Batch`,
+  `Module`, `Risk`, `Dependency`, `ExpectedHours`, `ActualHours`, and
+  `OwnerNote`.
+- Claim command: `认领：@<github-login>`.
+- Actual-hours command: `实际工时：<value>`.
+
+### 3. Contracts
+
+- Task Issue Sync must skip non-managed issues and issues without the
+  `Software Teamwork` Project marker.
+- `Group` derives from the task title prefix, not from mutable issue body text.
+- Missing `预期工时` defaults to `待估`; missing `实际工时` defaults to
+  `未填写`.
+- Hour fields are text fields. Do not coerce values into numbers or durations in
+  workflow code.
+- GitHub Project field names are exact: `ExpectedHours` and `ActualHours`.
+- Claim comments must keep existing claim validation, set `Status` to
+  `In Progress`, and refresh both hour fields in the Project.
+- Actual-hours comments must update the issue body `实际工时` field and sync
+  Project `ActualHours`; they must not require the task to be claimable.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required handling |
+| --- | --- |
+| Issue title is not a managed task title | Skip without mutating the issue or Project. |
+| `预期工时` is missing | Sync `ExpectedHours` as `待估`. |
+| `实际工时` is missing | Sync `ActualHours` as `未填写`. |
+| Comment is `实际工时：` with an empty value | Reject with an issue comment and do not mutate fields. |
+| Commenter is not trusted or assigned | Reject actual-hours update with an issue comment. |
+| Project lacks `ExpectedHours` or `ActualHours` | Set `Project sync` to `blocked` and fail the workflow run. |
+| Claim target differs from commenter | Reject the claim with an issue comment. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: a managed task body has `预期工时：1d`; a maintainer comments
+  `实际工时：6h`; the body and Project `ActualHours` both become `6h`.
+- Base: a new managed task omits hour fields; Project receives `ExpectedHours`
+  as `待估` and `ActualHours` as `未填写`.
+- Bad: the workflow writes `ActualHours` only during issue create/edit and
+  ignores `实际工时：2h` comments.
+
+### 6. Tests Required
+
+- Run `actionlint` for changed workflow files.
+- Parse changed workflow YAML.
+- Extract embedded `actions/github-script` bodies and run `node --check` inside
+  an async wrapper.
+- Query GitHub Project fields and confirm `ExpectedHours` and `ActualHours` are
+  present as text fields before relying on automation.
+- Run `git diff --check`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```js
+await updateText('ActualHours', actualHours);
+```
+
+This is wrong if the workflow never reads `实际工时` from the issue body or never
+handles actual-hours comments.
+
+#### Correct
+
+```js
+const expectedHours = readField('预期工时') || '待估';
+const actualHours = readField('实际工时') || '未填写';
+await updateText('ExpectedHours', expectedHours);
+await updateText('ActualHours', actualHours);
+```
 
 ## Current CI Status
 

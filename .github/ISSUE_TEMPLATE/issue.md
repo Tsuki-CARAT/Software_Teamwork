@@ -22,6 +22,8 @@ assignees: ''
 - 优先级：`P0 / P1 / P2`
 - 批次：`Batch 0 / Batch 1 / Batch 2 / Batch 3 / Batch 4`
 - 模块：`gateway / auth / file / knowledge / qa / document / frontend / ai-gateway / parser / openapi / deploy / ci`
+- 预期工时：`待估 / 0.5h / 1d`
+- 实际工时：`未填写 / 0.5h / 1d`
 - Risk：`Normal / Needs Decision / Blocked`
 - 依赖任务：无 / #118 #125
 - 阻塞任务：无 / #126 #127

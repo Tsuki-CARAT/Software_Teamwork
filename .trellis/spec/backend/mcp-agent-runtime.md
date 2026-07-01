@@ -37,8 +37,8 @@ Supported MCP transports:
 
 ```text
 disabled         # built-in Function Calling tools only
-stdio            # P0, local child process
-streamable_http  # remote MCP server
+streamable_http  # runtime MCP server
+stdio            # package-test-only SDK lifecycle helper
 ```
 
 ### 3. Contracts
@@ -51,9 +51,9 @@ Environment keys:
 | `DEEPSEEK_BASE_URL` | no | Defaults to `https://api.deepseek.com`; `/chat/completions` is appended. |
 | `MODEL_ID` | no | Defaults to `deepseek-v4-pro`. |
 | `AI_GATEWAY_URL` | production override | Full OpenAI-compatible endpoint; takes precedence over direct DeepSeek settings. |
-| `MCP_TRANSPORT` | no | Defaults to `disabled`; optional values are `stdio` and `streamable_http`. |
-| `MCP_SERVER_COMMAND` | for stdio | Executable path/name; invoked without a shell. |
-| `MCP_SERVER_ARGS_JSON` | no | JSON string array; shell-style command text is invalid. |
+| `MCP_TRANSPORT` | no | Defaults to `disabled`; runtime values are `disabled` and `streamable_http`; `stdio` is rejected outside package tests. |
+| `MCP_SERVER_COMMAND` | no | Reserved for package-owned stdio tests; runtime configuration must not launch local commands. |
+| `MCP_SERVER_ARGS_JSON` | no | Reserved for package-owned stdio tests; runtime MCP servers use Streamable HTTP. |
 | `MCP_SERVER_URL` | for HTTP | Absolute HTTP(S) Streamable HTTP endpoint. |
 | `MCP_SERVER_TOKEN` | no | Remote MCP credential; never log or persist. |
 | `MCP_TOOL_TIMEOUT` | no | Positive Go duration, default `30s`. |
@@ -90,7 +90,7 @@ bash(command, timeout_seconds?)  # only when explicitly enabled
 - The loop executes every tool call in a model turn, appends correlated tool results, and calls the model again.
 - Built-in and MCP tools are merged behind one `ToolClient`; duplicate names fail discovery instead of silently shadowing another tool.
 - File tool paths are relative to `AGENT_WORKDIR` and checked after symlink resolution. File content must be UTF-8 and bounded.
-- The command tool runs inside `AGENT_WORKDIR`, has bounded output and timeout, and is disabled by default.
+- The command tool runs inside `AGENT_WORKDIR`, has bounded output and timeout, and is disabled by default. It only permits path-free diagnostic commands; file access must use the workspace-bounded file tools.
 - Tool failures become sanitized tool-result messages so the model can recover. Raw downstream errors, prompts, credentials, and internal payloads are not returned to the model or frontend.
 - The loop terminates on a final non-empty assistant message, context cancellation, dependency failure, or maximum iterations.
 
@@ -99,7 +99,7 @@ bash(command, timeout_seconds?)  # only when explicitly enabled
 | Condition | Required result |
 | --- | --- |
 | Missing model URL/key/model | Startup configuration error. |
-| Stdio without command | Startup configuration error. |
+| Stdio transport in runtime configuration | Startup configuration error; use `streamable_http`. |
 | HTTP without absolute endpoint | Startup configuration error. |
 | Invalid `MCP_SERVER_ARGS_JSON` | Startup configuration error; never invoke a shell. |
 | Missing or invalid `AGENT_WORKDIR` | Startup configuration error. |
@@ -125,7 +125,7 @@ bash(command, timeout_seconds?)  # only when explicitly enabled
 
 - Runner unit test: tool call → tool result message → second model call → final answer.
 - Runner unit test: multiple tool calls, unknown tool, tool failure, invalid final response, and maximum iterations.
-- MCP integration test: real SDK lifecycle over stdio and Streamable HTTP, then `tools/list` and `tools/call`.
+- MCP integration test: real SDK lifecycle over package-test-only stdio and runtime Streamable HTTP, then `tools/list` and `tools/call`.
 - Local-tool tests: read/write/edit round trip, traversal and symlink escape, file limits, command opt-in, dangerous pattern, and timeout.
 - Composite-tool tests: merge and route local/MCP providers; reject duplicate names.
 - Model client contract test: Authorization header, `tools`, `tool_choice`, assistant `tool_calls`, and sanitized non-2xx handling.

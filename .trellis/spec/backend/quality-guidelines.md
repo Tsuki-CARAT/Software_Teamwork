@@ -607,6 +607,123 @@ func TestGatewayKnowledgeOwnerRouteSmoke(t *testing.T) {
 
 ---
 
+## Scenario: Code Scanning Security Boundary Fixes
+
+### 1. Scope / Trigger
+
+- Trigger: fixing CodeQL or code-scanning findings for command execution, SSRF,
+  allocation size, integer conversion, or credential fingerprinting in Go
+  services.
+- Applies to service-local config loaders, platform clients, repositories,
+  credential encryption/fingerprint helpers, and tests that prove the alert is
+  closed by a real boundary rather than by suppressing the alert.
+
+### 2. Signatures
+
+- Commands must use `exec.CommandContext(ctx, executable, args...)` with a fixed
+  executable string and argument vector.
+- Internal AI Gateway callers use service-owned env keys such as
+  `AI_GATEWAY_URL` and `DOCUMENT_AI_GATEWAY_URL`.
+- Repository pagination/cursor helpers convert to SQL `int32` params only after
+  explicit range checks.
+- Credential lookup fingerprints use a keyed HMAC helper; compatibility field
+  names such as `FingerprintSHA256` may remain when the stored value changes.
+
+### 3. Contracts
+
+- Do not execute user-controlled strings through `/bin/sh -c`, PowerShell
+  `-Command`, `cmd /c`, or equivalent shell interpretation.
+- Allowlisted stdio or diagnostic commands must reject whitespace,
+  control characters, NULs, shell metacharacters, redirects, pipes, expansions,
+  and non-allowlisted executable names before process start. LLM-exposed
+  diagnostic command tools must be path-free; file reads, writes, and edits must
+  go through workspace-bounded file tools instead of path-capable executables.
+- MCP stdio is package-test-only. Runtime MCP configuration must reject stdio
+  and use Streamable HTTP; package tests that exercise stdio must map validated
+  test configuration to an exact code-owned command spec with literal
+  executable and argument values. Do not pass configured executable or argv
+  values directly into `exec.Command`.
+- Internal service URLs must be absolute `http` or `https`, contain no userinfo,
+  query, or fragment, and restrict paths to the expected internal endpoint or
+  base path.
+- Trusted internal hosts are explicit service DNS names documented by the
+  caller plus loopback/local development hosts; raw private, link-local,
+  multicast, unspecified, or public escape targets are not a safe default.
+- Allocation sizes derived from request/provider data must be capped by a
+  service-level validated maximum before allocating slices or maps.
+- `int` to `int32` conversion must reject negative values and overflow,
+  including computed offset overflow; do not silently clamp caller input.
+- Fingerprints over provider API keys or similar secrets must use keyed HMAC
+  with domain separation, not bare SHA-256 over the secret.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Command contains shell syntax or a path-capable executable | Reject before `exec.CommandContext`; no process starts. |
+| Runtime MCP configuration uses stdio, or a test stdio command spec is not allowlisted | Return validation/configuration error. |
+| Internal URL includes credentials, query, fragment, or wrong path | Reject at config loading and client construction. |
+| Internal URL uses raw private/link-local/public host outside the allowlist | Reject as untrusted target. |
+| Allocation limit exceeds service maximum | Cap to the validated maximum before allocation or reject the request. |
+| Pagination, offset, or cursor is negative/over `math.MaxInt32` | Return a validation error before building SQL params. |
+| Credential fingerprint equals bare SHA-256 of the secret | Fail tests; replace with keyed HMAC. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: a QA diagnostic tool parses a simple `echo hello` command into an
+  allowlisted executable plus args, starts it without a shell, and rejects
+  `echo hello; uname -a`.
+- Base: `httptest.Server` and loopback AI Gateway URLs remain accepted for
+  local tests while credentialed URLs and wrong internal paths fail.
+- Bad: a repository casts `(page - 1) * pageSize` to `int32`, a client trusts any
+  `http://10.0.0.5/...` URL from env, or a secret fingerprint is
+  `hex(sha256(apiKey))`.
+
+### 6. Tests Required
+
+- Add table-driven unit tests for allowed and rejected command values, including
+  shell metacharacters, non-allowlisted executables, and non-allowlisted MCP
+  command specs.
+- Add URL validator tests for malformed, credentialed, wrong-path, public,
+  private/link-local, loopback, and explicit service-DNS cases.
+- Add integer boundary tests for negative, valid maximum, and overflow values,
+  including computed offset overflow.
+- Add allocation boundary tests where the effective allocation cap can differ
+  from caller/provider supplied counts.
+- Add fingerprint tests for determinism with the same key, key separation, and
+  non-equality with bare SHA-256.
+- Run the changed service's `go test ./...`, required `go build ./cmd/server`,
+  and any service-specific additional build such as QA `go build ./cmd/agent`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```go
+cmd := exec.CommandContext(ctx, "/bin/sh", "-c", request.Command)
+offset := int32((page - 1) * pageSize)
+fingerprint := sha256.Sum256([]byte(apiKey))
+```
+
+#### Correct
+
+```go
+spec, err := validateCommand(request.Command)
+if err != nil {
+    return err
+}
+cmd := exec.CommandContext(ctx, spec.Executable, spec.Args...)
+
+limit, offset, err := paginationInt32(page, pageSize)
+if err != nil {
+    return err
+}
+
+fingerprint := hmacSHA256(fingerprintKey, []byte(apiKey))
+```
+
+---
+
 ## Forbidden Patterns
 
 - Root-level Go module used to build all microservices together.

@@ -3,6 +3,8 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"testing"
 )
@@ -58,6 +60,40 @@ func TestCreateModelProfileRedactsCredential(t *testing.T) {
 	}
 	if got := repo.credentials[profile.CredentialID]; string(got.Ciphertext) == "sk-secret-value" || len(got.Nonce) == 0 {
 		t.Fatalf("credential was not encrypted")
+	}
+}
+
+func TestCredentialFingerprintUsesKeyedHMAC(t *testing.T) {
+	key := []byte("12345678901234567890123456789012")
+	encryptor, err := NewCredentialEncryptor(key, "local-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := encryptor.Encrypt("sk-secret-value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := encryptor.Encrypt("sk-secret-value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.FingerprintSHA256 != second.FingerprintSHA256 {
+		t.Fatalf("fingerprint not deterministic: %q != %q", first.FingerprintSHA256, second.FingerprintSHA256)
+	}
+	plain := sha256.Sum256([]byte("sk-secret-value"))
+	if first.FingerprintSHA256 == hex.EncodeToString(plain[:]) {
+		t.Fatal("fingerprint must not be raw SHA-256 of the API key")
+	}
+	other, err := NewCredentialEncryptor([]byte("abcdefghijklmnopqrstuvwxzy123456"), "other-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherCredential, err := other.Encrypt("sk-secret-value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.FingerprintSHA256 == otherCredential.FingerprintSHA256 {
+		t.Fatal("fingerprint should be separated by encryption key")
 	}
 }
 

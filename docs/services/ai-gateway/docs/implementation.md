@@ -38,7 +38,7 @@
 | --- | --- | --- | --- | --- |
 | 健康/就绪检查 | `services/ai-gateway/internal/http/server.go` | AI Gateway OpenAPI | `cd services/ai-gateway && go test ./...` | ready 检查 repo/profile 状态。 |
 | model profile CRUD | `internal/http/server.go`、`internal/service/service.go` | AI Gateway OpenAPI / Gateway admin model profiles | HTTP/service tests | 支持 list/create/get/update/delete。 |
-| provider credential 加密 | `internal/service/crypto.go` | AI Gateway README | `TestCreateModelProfileDoesNotReturnAPIKey` | 响应只返回 `apiKeyConfigured`。 |
+| provider credential 加密 | `internal/service/crypto.go` | AI Gateway README | `TestCreateModelProfileDoesNotReturnAPIKey`、`TestCredentialFingerprintUsesKeyedHMAC` | 响应只返回 `apiKeyConfigured`。数据库字段 `fingerprint_sha256` 保持兼容命名，但写入值是由凭据加密密钥派生的 HMAC-SHA-256 指纹，不是 API key 的裸 SHA-256。 |
 | sensitive default parameter validation | `internal/service/service.go` | AI Gateway README | service tests | 拒绝敏感参数进入 profile defaults。 |
 | service-token/caller-service auth | `internal/middleware/auth.go`、`internal/http/server.go` | AI Gateway README | auth/http tests | 要求 token hash 和 `X-Caller-Service`。 |
 | OpenAI-compatible chat completions | `internal/http/server.go`、`internal/service/chat.go`、`internal/provider/chat_http.go` | AI Gateway OpenAPI | fake provider HTTP tests | 支持非流式和流式请求，转发 function-calling 字段。 |

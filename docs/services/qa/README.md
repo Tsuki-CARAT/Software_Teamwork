@@ -283,6 +283,8 @@ user message
 安全规则：
 
 - MCP server 和工具必须在白名单内。
+- runtime MCP 只能通过 `streamable_http` 接入；stdio 仅用于包内 SDK lifecycle 测试，并且必须映射到代码内精确 allowlist 的 command spec，避免把配置中的 executable/argv 作为进程启动输入。
+- 内置命令工具只允许 path-free diagnostic command；读取、写入或编辑文件必须通过已做 workspace/symlink 边界校验的 file tools。
 - 每次工具调用必须校验 JSON Schema。
 - 根据用户权限裁剪可用工具，不把未授权工具暴露给模型。
 - 工具结果必须限制长度和条数，并在进入模型上下文、日志、SSE 或数据库前脱敏。

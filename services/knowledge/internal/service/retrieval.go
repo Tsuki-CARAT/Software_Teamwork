@@ -219,6 +219,9 @@ func (s *Service) rerankRetrievalResults(ctx context.Context, reqCtx RequestCont
 	if topN != nil && *topN < limit {
 		limit = *topN
 	}
+	if limit > maxRetrievalTopK {
+		limit = maxRetrievalTopK
+	}
 	if limit == 0 {
 		return []KnowledgeQueryResult{}, nil
 	}

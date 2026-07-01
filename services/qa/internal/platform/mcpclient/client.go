@@ -9,11 +9,14 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/mcppolicy"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/platform/httpclient"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/service/agent"
 )
@@ -30,6 +33,10 @@ type Config struct {
 	Endpoint    string
 	Token       string
 	TokenHeader string
+
+	// AllowTestStdio enables the package-owned stdio echo server used by
+	// integration tests. Runtime configuration must use streamable_http.
+	AllowTestStdio bool
 }
 
 type Client struct {
@@ -52,10 +59,10 @@ func Connect(ctx context.Context, cfg Config) (*Client, error) {
 func buildTransport(cfg Config) (mcp.Transport, error) {
 	switch cfg.Transport {
 	case TransportStdio:
-		if strings.TrimSpace(cfg.Command) == "" {
-			return nil, errors.New("MCP stdio command is required")
+		command, err := buildStdioCommand(cfg.Command, cfg.Args, cfg.AllowTestStdio)
+		if err != nil {
+			return nil, err
 		}
-		command := exec.Command(cfg.Command, cfg.Args...)
 		// MCP reserves stdout for JSON-RPC. Child diagnostics belong on stderr.
 		command.Stderr = os.Stderr
 		return &mcp.CommandTransport{Command: command}, nil
@@ -85,6 +92,28 @@ func buildTransport(cfg Config) (mcp.Transport, error) {
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported MCP transport %q", cfg.Transport)
+	}
+}
+
+func buildStdioCommand(command string, args []string, allowTestStdio bool) (*exec.Cmd, error) {
+	if !allowTestStdio {
+		return nil, errors.New("MCP stdio transport is reserved for package tests; use streamable_http for runtime MCP servers")
+	}
+	spec, err := mcppolicy.ValidateStdioCommand(command, args)
+	if err != nil {
+		return nil, err
+	}
+	switch spec {
+	case mcppolicy.StdioCommandEchoTest:
+		_, file, _, ok := runtime.Caller(0)
+		if !ok {
+			return nil, errors.New("resolve MCP stdio test command directory")
+		}
+		cmd := exec.Command("go", "run", "./testserver/cmd/echo")
+		cmd.Dir = filepath.Dir(file)
+		return cmd, nil
+	default:
+		return nil, errors.New("MCP stdio command is not allowlisted")
 	}
 }
 

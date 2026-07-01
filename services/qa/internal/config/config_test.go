@@ -14,18 +14,18 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Setenv("AI_GATEWAY_STREAM", "")
 	t.Setenv("INTERNAL_SERVICE_TOKEN", "test-service-token")
 	t.Setenv("MODEL_ID", "")
-	t.Setenv("MCP_TRANSPORT", "stdio")
-	t.Setenv("MCP_SERVER_COMMAND", "python")
-	t.Setenv("MCP_SERVER_ARGS_JSON", `["server.py","--safe"]`)
+	t.Setenv("MCP_TRANSPORT", "")
+	t.Setenv("MCP_SERVER_COMMAND", "")
+	t.Setenv("MCP_SERVER_ARGS_JSON", "")
 }
 
-func TestLoadStdioConfiguration(t *testing.T) {
+func TestLoadDefaultConfiguration(t *testing.T) {
 	setRequiredEnvironment(t)
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.MCPTransport != TransportStdio || len(cfg.MCPServerArgs) != 2 {
+	if cfg.MCPTransport != TransportDisabled || len(cfg.MCPServerArgs) != 0 {
 		t.Fatalf("unexpected MCP config: %+v", cfg)
 	}
 	if cfg.ModelTimeout != 60*time.Second || cfg.MaxIterations != 8 {
@@ -73,7 +73,7 @@ func TestLoadDefaultsToBuiltInToolsOnly(t *testing.T) {
 
 func TestLoadAcceptsExplicitAIGatewayEndpoint(t *testing.T) {
 	setRequiredEnvironment(t)
-	t.Setenv("AI_GATEWAY_URL", "https://ai-gateway.example.test/internal/v1/chat/completions")
+	t.Setenv("AI_GATEWAY_URL", "http://ai-gateway:8086/internal/v1/chat/completions")
 	t.Setenv("AI_GATEWAY_TOKEN", "explicit-token")
 	t.Setenv("AI_GATEWAY_TOKEN_HEADER", "X-Service-Token")
 	t.Setenv("AI_GATEWAY_PROFILE_ID", "profile-chat")
@@ -82,12 +82,31 @@ func TestLoadAcceptsExplicitAIGatewayEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.AIGatewayURL != "https://ai-gateway.example.test/internal/v1/chat/completions" ||
+	if cfg.AIGatewayURL != "http://ai-gateway:8086/internal/v1/chat/completions" ||
 		cfg.AIGatewayToken != "explicit-token" ||
 		cfg.AIGatewayTokenHeader != "X-Service-Token" ||
 		cfg.AIGatewayProfileID != "profile-chat" ||
 		!cfg.AIGatewayStream {
 		t.Fatalf("unexpected AI Gateway override: %+v", cfg)
+	}
+}
+
+func TestLoadRejectsUntrustedAIGatewayEndpoint(t *testing.T) {
+	cases := []string{
+		"https://public.example.test/internal/v1/chat/completions",
+		"http://169.254.169.254/internal/v1/chat/completions",
+		"http://10.0.0.5/internal/v1/chat/completions",
+		"http://ai-gateway/internal/v1/model-profiles",
+		"http://ai-gateway/internal/v1/chat/completions?redirect=http://example.test",
+	}
+	for _, endpoint := range cases {
+		t.Run(endpoint, func(t *testing.T) {
+			setRequiredEnvironment(t)
+			t.Setenv("AI_GATEWAY_URL", endpoint)
+			if _, err := Load(); err == nil {
+				t.Fatalf("expected endpoint %q to fail", endpoint)
+			}
+		})
 	}
 }
 
@@ -109,5 +128,25 @@ func TestLoadRejectsShellStyleArguments(t *testing.T) {
 	t.Setenv("MCP_SERVER_ARGS_JSON", `server.py --unsafe`)
 	if _, err := Load(); err == nil {
 		t.Fatal("expected invalid JSON arguments to fail")
+	}
+}
+
+func TestLoadRejectsNonAllowlistedStdioSpec(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("MCP_TRANSPORT", TransportStdio)
+	t.Setenv("MCP_SERVER_COMMAND", "python3")
+	t.Setenv("MCP_SERVER_ARGS_JSON", `["server.py"]`)
+	if _, err := Load(); err == nil {
+		t.Fatal("expected non-allowlisted stdio command spec to fail")
+	}
+}
+
+func TestLoadRejectsRuntimeStdioTransport(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("MCP_TRANSPORT", TransportStdio)
+	t.Setenv("MCP_SERVER_COMMAND", "go")
+	t.Setenv("MCP_SERVER_ARGS_JSON", `["run","./testserver/cmd/echo"]`)
+	if _, err := Load(); err == nil {
+		t.Fatal("expected runtime stdio transport to fail")
 	}
 }

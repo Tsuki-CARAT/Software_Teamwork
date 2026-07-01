@@ -1,6 +1,9 @@
 package repository
 
 import (
+	"fmt"
+	"math"
+
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/repository/sqlc"
@@ -24,13 +27,31 @@ func conversationFromRow(row sqlc.ConversationSummaryRow) service.Conversation {
 	return conversation
 }
 
-func listConversationsParams(userID string, options service.ConversationListOptions) sqlc.ListConversationsParams {
+func listConversationsParams(userID string, options service.ConversationListOptions) (sqlc.ListConversationsParams, error) {
+	pageSize, offset, err := paginationInt32(options.Page, options.PageSize)
+	if err != nil {
+		return sqlc.ListConversationsParams{}, err
+	}
 	return sqlc.ListConversationsParams{
 		ExternalUserID: userID,
 		Status:         options.Status,
-		PageSize:       int32(options.PageSize),
-		PageOffset:     int32((options.Page - 1) * options.PageSize),
+		PageSize:       pageSize,
+		PageOffset:     offset,
+	}, nil
+}
+
+func paginationInt32(page, pageSize int) (int32, int32, error) {
+	if page < 1 {
+		return 0, 0, fmt.Errorf("page must be positive")
 	}
+	if pageSize < 1 || pageSize > math.MaxInt32 {
+		return 0, 0, fmt.Errorf("page size is out of int32 range")
+	}
+	offset := int64(page-1) * int64(pageSize)
+	if offset > math.MaxInt32 {
+		return 0, 0, fmt.Errorf("page offset is out of int32 range")
+	}
+	return int32(pageSize), int32(offset), nil
 }
 
 func nullableText(value string) pgtype.Text {

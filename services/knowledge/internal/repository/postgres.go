@@ -221,7 +221,10 @@ func (r *PostgresRepository) CreateKnowledgeBase(ctx context.Context, input serv
 }
 
 func (r *PostgresRepository) ListKnowledgeBases(ctx context.Context, scope service.AccessScope, page service.PageInput) (service.KnowledgeBaseList, error) {
-	limit, offset := limitOffset(page)
+	limit, offset, err := limitOffset(page)
+	if err != nil {
+		return service.KnowledgeBaseList{}, err
+	}
 	total, err := r.queries.CountKnowledgeBases(ctx, sqlc.CountKnowledgeBasesParams{
 		CanReadAll: scope.CanReadAll,
 		UserID:     scope.UserID,
@@ -346,7 +349,10 @@ func (r *PostgresRepository) ListDocumentsByKnowledgeBase(ctx context.Context, k
 	if status != nil {
 		statusValue = string(*status)
 	}
-	limit, offset := limitOffset(page)
+	limit, offset, err := limitOffset(page)
+	if err != nil {
+		return service.DocumentList{}, err
+	}
 	total, err := r.queries.CountDocumentsByKnowledgeBase(ctx, sqlc.CountDocumentsByKnowledgeBaseParams{
 		KnowledgeBaseID: knowledgeBaseID,
 		CanReadAll:      scope.CanReadAll,
@@ -859,7 +865,10 @@ RETURNING id, knowledge_base_id, document_id, job_type, status, current_stage, p
 }
 
 func (r *PostgresRepository) ListChunks(ctx context.Context, documentID string, scope service.AccessScope, page service.PageInput) (service.ChunkList, error) {
-	limit, offset := limitOffset(page)
+	limit, offset, err := limitOffset(page)
+	if err != nil {
+		return service.ChunkList{}, err
+	}
 	var count int64
 	if err := r.pool.QueryRow(ctx, `
 SELECT COUNT(*)::bigint
@@ -926,16 +935,19 @@ LIMIT $4 OFFSET $5`,
 	}, nil
 }
 
-func limitOffset(page service.PageInput) (int32, int32) {
+func limitOffset(page service.PageInput) (int32, int32, error) {
 	limit := page.PageSize
-	offset := (page.Page - 1) * page.PageSize
-	if limit > math.MaxInt32 {
-		limit = math.MaxInt32
+	if page.Page < 1 {
+		return 0, 0, service.ValidationError("request validation failed", map[string]string{"page": "must be positive"})
 	}
-	if offset > math.MaxInt32 {
-		offset = math.MaxInt32
+	if limit < 1 || limit > math.MaxInt32 {
+		return 0, 0, service.ValidationError("request validation failed", map[string]string{"pageSize": "must fit in int32"})
 	}
-	return int32(limit), int32(offset)
+	offset := int64(page.Page-1) * int64(page.PageSize)
+	if offset < 0 || offset > math.MaxInt32 {
+		return 0, 0, service.ValidationError("request validation failed", map[string]string{"page": "offset must fit in int32"})
+	}
+	return int32(limit), int32(offset), nil
 }
 
 func knowledgeBaseFromCreateRow(row sqlc.CreateKnowledgeBaseRow) service.KnowledgeBase {

@@ -10,10 +10,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/service/agent"
@@ -102,7 +102,7 @@ func (c *Client) ListTools(context.Context) ([]agent.ToolDefinition, error) {
 		}),
 	}
 	if c.enableCommandTool {
-		tools = append(tools, functionTool(ToolBash, "Run a shell command inside the configured workspace. This tool is explicitly enabled and bounded by a timeout.", map[string]any{
+		tools = append(tools, functionTool(ToolBash, "Run a small path-free diagnostic command inside the configured workspace. This tool is explicitly enabled and bounded by a timeout.", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"command":         map[string]any{"type": "string"},
@@ -364,12 +364,9 @@ func ensureInside(root, target string) error {
 }
 
 func (c *Client) runCommand(ctx context.Context, command string, requestedSeconds int) (agent.ToolResult, error) {
-	command = strings.TrimSpace(command)
-	if command == "" {
-		return failure("invalid_arguments", "command must not be empty"), nil
-	}
-	if dangerousCommand(command) {
-		return failure("command_blocked", "command matched a blocked dangerous pattern"), nil
+	spec, err := parseCommand(command)
+	if err != nil {
+		return failure("command_blocked", err.Error()), nil
 	}
 	timeout := c.commandTimeout
 	if requestedSeconds > 0 && time.Duration(requestedSeconds)*time.Second < timeout {
@@ -377,17 +374,12 @@ func (c *Client) runCommand(ctx context.Context, command string, requestedSecond
 	}
 	commandCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	var process *exec.Cmd
-	if runtime.GOOS == "windows" {
-		process = exec.CommandContext(commandCtx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command)
-	} else {
-		process = exec.CommandContext(commandCtx, "/bin/sh", "-c", command)
-	}
+	process := exec.CommandContext(commandCtx, spec.Executable, spec.Args...)
 	process.Dir = c.root
 	output := &limitedBuffer{limit: c.maxOutputBytes}
 	process.Stdout = output
 	process.Stderr = output
-	err := process.Run()
+	err = process.Run()
 	text := strings.TrimSpace(output.String())
 	if text == "" {
 		text = "(no output)"
@@ -401,18 +393,129 @@ func (c *Client) runCommand(ctx context.Context, command string, requestedSecond
 	return agent.ToolResult{Content: text}, nil
 }
 
-func dangerousCommand(command string) bool {
-	normalized := strings.ToLower(command)
-	patterns := []string{
-		"rm -rf /", "sudo ", "shutdown", "reboot", "> /dev/",
-		"format c:", "stop-computer", "remove-item c:\\",
+type commandSpec struct {
+	Executable string
+	Args       []string
+}
+
+var allowedCommands = map[string]struct{}{
+	"echo":  {},
+	"pwd":   {},
+	"sleep": {},
+}
+
+func parseCommand(command string) (commandSpec, error) {
+	fields, err := splitShellFree(command)
+	if err != nil {
+		return commandSpec{}, err
 	}
-	for _, pattern := range patterns {
-		if strings.Contains(normalized, pattern) {
-			return true
+	if len(fields) == 0 {
+		return commandSpec{}, errors.New("command must not be empty")
+	}
+	executable := fields[0]
+	if strings.ContainsAny(executable, `/\`) || executable == "." || executable == ".." {
+		return commandSpec{}, errors.New("command executable is not allowed")
+	}
+	if _, ok := allowedCommands[executable]; !ok {
+		return commandSpec{}, errors.New("command executable is not allowed")
+	}
+	args := append([]string(nil), fields[1:]...)
+	if err := validateCommandArgs(executable, args); err != nil {
+		return commandSpec{}, err
+	}
+	return commandSpec{Executable: executable, Args: args}, nil
+}
+
+func validateCommandArgs(executable string, args []string) error {
+	switch executable {
+	case "echo":
+		return nil
+	case "pwd":
+		if len(args) != 0 {
+			return errors.New("pwd does not accept arguments")
+		}
+		return nil
+	case "sleep":
+		if len(args) != 1 {
+			return errors.New("sleep requires one duration argument")
+		}
+		if !isSleepDuration(args[0]) {
+			return errors.New("sleep duration must be a positive number with an optional s/m/h suffix")
+		}
+		return nil
+	default:
+		return errors.New("command executable is not allowed")
+	}
+}
+
+func isSleepDuration(value string) bool {
+	value = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(value, "s"), "m"), "h")
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
 		}
 	}
-	return strings.ContainsRune(command, '\x00')
+	return value != "0"
+}
+
+func splitShellFree(command string) ([]string, error) {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return nil, nil
+	}
+	var fields []string
+	var current strings.Builder
+	var quote rune
+	escaped := false
+	for _, r := range command {
+		if r == '\x00' || r == '\r' || r == '\n' {
+			return nil, errors.New("command must not contain control characters")
+		}
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			if quote == '\'' {
+				current.WriteRune(r)
+				continue
+			}
+			escaped = true
+			continue
+		}
+		if quote != 0 {
+			if r == quote {
+				quote = 0
+				continue
+			}
+			current.WriteRune(r)
+			continue
+		}
+		switch {
+		case r == '\'' || r == '"':
+			quote = r
+		case unicode.IsSpace(r):
+			if current.Len() > 0 {
+				fields = append(fields, current.String())
+				current.Reset()
+			}
+		case strings.ContainsRune(";|&$<>`!(){}[]*", r):
+			return nil, errors.New("command contains shell syntax")
+		default:
+			current.WriteRune(r)
+		}
+	}
+	if escaped || quote != 0 {
+		return nil, errors.New("command contains incomplete quoting or escaping")
+	}
+	if current.Len() > 0 {
+		fields = append(fields, current.String())
+	}
+	return fields, nil
 }
 
 func readBounded(reader io.Reader, limit int) ([]byte, bool, error) {

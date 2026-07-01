@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ type resourceRepositoryStub struct {
 	messageCitations []Citation
 	citation         Citation
 	lookupCitations  []Citation
+	listEventsCalled bool
 }
 
 func (r *resourceRepositoryStub) GetResponseRun(context.Context, string, string) (ResponseRun, error) {
@@ -26,6 +28,7 @@ func (r *resourceRepositoryStub) CancelResponseRun(context.Context, string, stri
 	return ResponseRun{}, nil
 }
 func (r *resourceRepositoryStub) ListStreamEvents(context.Context, string, string, string, int) ([]StreamEvent, error) {
+	r.listEventsCalled = true
 	return nil, nil
 }
 func (r *resourceRepositoryStub) ListMessageCitations(context.Context, string, string) ([]Citation, error) {
@@ -103,6 +106,23 @@ func (llmTesterStub) TestLLM(context.Context, RuntimeLLMConfig) (LLMConnectionTe
 type runCancellerStub struct{}
 
 func (runCancellerStub) CancelActiveRun(string) {}
+
+func TestListStreamEventsRejectsCursorOverflow(t *testing.T) {
+	repository := &resourceRepositoryStub{}
+	resources, err := NewResourceService(repository, &knowledgeRetrieverStub{}, llmTesterStub{}, RuntimeLLMConfig{}, runCancellerStub{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = resources.ListStreamEvents(context.Background(), "user-1", "session-1", "run-1", math.MaxInt32+1)
+	appErr, ok := Classify(err)
+	if !ok || appErr.Code != CodeValidation || appErr.Fields["afterEventSeq"] == "" {
+		t.Fatalf("error=%v, want afterEventSeq validation", err)
+	}
+	if repository.listEventsCalled {
+		t.Fatal("repository should not be called for invalid afterEventSeq")
+	}
+}
 
 func TestCreateRetrievalTestRunMergesActiveConfigAndOverrides(t *testing.T) {
 	repository := &resourceRepositoryStub{activeQAConfig: QAConfigVersion{

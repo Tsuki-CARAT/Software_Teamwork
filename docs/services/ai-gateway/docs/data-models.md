@@ -210,7 +210,7 @@ Provider 凭据记录。该表只保存 secret 引用或加密密文元数据，
 | `secret_ref` | string | 外部 secret manager 引用；`storage_mode=secret_ref` 时必填。 |
 | `ciphertext` | bytea / text | 加密后的 API key；`storage_mode=encrypted_column` 时必填。 |
 | `encryption_key_version` | string | 加密密钥版本，可空。 |
-| `fingerprint_sha256` | string | API key 指纹，用于判断是否变更；不能反推明文。 |
+| `fingerprint_sha256` | string | API key 指纹，用于判断是否变更；字段名兼容存量 schema，写入值为 HMAC-SHA-256 指纹而不是裸 SHA-256。 |
 | `key_last4` | string | 内部排障用后四位，可选；不返回公开 API。 |
 | `status` | string | `active`、`rotated`、`disabled`、`deleted`。 |
 | `created_by_user_id` | string | 创建人外部用户 ID，可空。 |
@@ -225,7 +225,7 @@ Provider 凭据记录。该表只保存 secret 引用或加密密文元数据，
 - `storage_mode = 'secret_ref'` 时 `secret_ref` 必填且 `ciphertext` 为空。
 - `storage_mode = 'encrypted_column'` 时 `ciphertext` 必填且必须由应用层加密后写入。
 - `storage_mode` 只能取 `secret_ref` 或 `encrypted_column`；不得新增 `plaintext`、`env` 或其他会暴露明文的模式。
-- `fingerprint_sha256` 不得作为认证用途，只用于审计和变更检测。
+- `fingerprint_sha256` 不得作为认证用途，只用于审计和变更检测；应用层必须用凭据加密密钥派生出的 HMAC key 计算 HMAC-SHA-256，不能保存明文 API key 的裸 SHA-256。
 - 响应、日志和错误不得输出 `secret_ref`、`ciphertext`、`fingerprint_sha256` 或 `key_last4`。
 - `encryption_key_version` 只记录版本标识，不记录原始密钥、KMS token 或本地密钥文件路径。
 

@@ -46,10 +46,10 @@
 | QA/LLM config versions | `services/qa/internal/http/resource_handlers.go`、`internal/service/settings.go` | Gateway OpenAPI | config/settings tests | 配置版本持久化并加密敏感字段。 |
 | retrieval test / metrics | `services/qa/internal/http/resource_handlers.go` | Gateway OpenAPI | resource tests | 依赖 Knowledge retrieval client。 |
 | ResponseRun Agent Loop | `services/qa/internal/service/qa.go`、`internal/service/agent`、`internal/repository` | #89 / QA README / QA 数据模型 | service、repository、modelclient tests | 创建用户消息、助手占位、response run、初始事件和模型调用摘要；落库 `completed`、`model_error`、`timeout`、`cancelled`、`max_iterations` 等终止原因。 |
-| AI Gateway chat/function-calling client | `services/qa/internal/platform/modelclient/openai.go`、`internal/service/agent` | #90 / #253 / AI Gateway OpenAPI | modelclient/agent tests | 发送 OpenAI-compatible chat request，透传 `X-Caller-Service: qa` 和 request id，支持 `profile_id`、tool calls 和 streamed function-call completions。 |
+| AI Gateway chat/function-calling client | `services/qa/internal/platform/modelclient/openai.go`、`internal/service/agent` | #90 / #253 / AI Gateway OpenAPI | modelclient/agent tests | 发送 OpenAI-compatible chat request，透传 `X-Caller-Service: qa` 和 request id，支持 `profile_id`、tool calls 和 streamed function-call completions。运行时 endpoint 必须指向受控 AI Gateway `/internal/v1/chat/completions`，不得包含 credentials/query/fragment、公网域名或非 loopback IP。 |
 | QA -> AI Gateway env-gated smoke | `services/qa/internal/platform/modelclient/ai_gateway_smoke_test.go`、`services/qa/README.md` | #288 / AI Gateway seed runbook | `QA_AI_GATEWAY_SMOKE=1 go test ./internal/platform/modelclient -run '^TestAIGatewaySmoke$' -count=1 -v` | 默认 skip；显式启用时验证成功模型响应、service token 拒绝和缺失 profile 错误归一化。 |
-| MCP client/tooling | `services/qa/internal/platform/mcpclient`、`localtools` | QA README | platform tests | 支持 stdio、streamable HTTP、内置工具。 |
-| PostgreSQL schema/repository | `services/qa/migrations/*.sql`、`internal/repository` | QA 数据模型 | repository tests | 有 integration tests，但依赖 `QA_TEST_DATABASE_URL`。 |
+| MCP client/tooling | `services/qa/internal/platform/mcpclient`、`localtools` | QA README | platform tests | 支持 runtime Streamable HTTP、测试专用 exact-spec allowlisted stdio、内置工具。runtime 配置拒绝 stdio；包内 stdio 测试只映射代码内批准的 command spec 到固定 executable + argv，不把配置中的 executable/argv 直接传入 `exec.Command`；内置命令工具不再通过 shell 执行用户字符串，只运行 path-free diagnostic command，文件访问必须走 workspace-bounded file tools。 |
+| PostgreSQL schema/repository | `services/qa/migrations/*.sql`、`internal/repository` | QA 数据模型 | repository tests | 有 integration tests，但依赖 `QA_TEST_DATABASE_URL`。分页、事件游标等写入 sqlc `int4` 参数前在 repository 层做 `int32` 范围校验，避免上层绕过时溢出。 |
 
 ## 4. 未实现
 
@@ -114,6 +114,7 @@
 
 | 日期 | 检查人/工具 | 代码基准 | 结论 |
 | --- | --- | --- | --- |
+| 2026-07-01 | Codex #337 security pass | PR #359 | Code Scanning 修复收紧模型出站边界：QA runtime/settings/modelclient 只接受受信 AI Gateway `/internal/v1/chat/completions` endpoint，存量 `direct` 配置不再可作为任意 provider URL 出口；provider base URL 和密钥继续由 AI Gateway profile 承载。 |
 | 2026-06-30 | Codex #288 branch | working tree | 新增 QA -> AI Gateway env-gated chat smoke，覆盖成功响应、无效 service token、缺失 profile 和 request id 诊断；普通 CI 保持 skip，不扩展到完整 QA/Knowledge/Gateway 链路。 |
 | 2026-06-30 | Codex full-day audit | `develop@92d3afc` | 复核今日 PR/issue：QA 已包含 Agent Loop、function-calling adapter、SSE heartbeat/replay safeguards、MCP SDK security update 和 QA -> AI Gateway env-gated smoke；Knowledge `knowledge-queries` 已落地，剩余为完整 RAG/citation 跨服务 smoke、citation snapshot/detail/batch query、retrieval/metrics 强化。 |
 | 2026-06-29 | Codex #89 branch | `31711d9` + working tree | B-03 非流式 Agent Run MVP 覆盖成功、模型失败、超时、取消和 max-iterations；response_run、assistant message、初始事件和模型调用摘要保持一致。剩余风险为 Knowledge retrieval、跨服务 smoke 和 env-gated DB integration。 |

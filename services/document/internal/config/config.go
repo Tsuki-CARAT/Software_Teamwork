@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -109,7 +110,34 @@ func validateHTTPURL(name, value string) error {
 	if parsed.User != nil {
 		return fmt.Errorf("%s must not contain credentials", name)
 	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("%s must not contain query or fragment", name)
+	}
+	if name == "DOCUMENT_AI_GATEWAY_URL" {
+		path := strings.TrimRight(parsed.EscapedPath(), "/")
+		if path != "" && path != "/internal/v1" {
+			return fmt.Errorf("%s must be an AI Gateway service base URL", name)
+		}
+		if !trustedInternalHost(parsed.Hostname()) {
+			return fmt.Errorf("%s host is not trusted", name)
+		}
+	}
 	return nil
+}
+
+func trustedInternalHost(host string) bool {
+	host = strings.Trim(strings.ToLower(host), "[]")
+	if host == "" {
+		return false
+	}
+	switch host {
+	case "localhost", "ai-gateway":
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 func envOr(key string, fallback string) string {

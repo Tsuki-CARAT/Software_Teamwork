@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -25,21 +26,58 @@ type ProfileClient struct {
 }
 
 func NewProfileClient(baseURL, serviceToken string, httpClient *http.Client) (*ProfileClient, error) {
-	parsed, err := url.Parse(strings.TrimSpace(baseURL))
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return nil, errors.New("DOCUMENT_AI_GATEWAY_URL must be an absolute http(s) URL")
-	}
-	if parsed.User != nil {
-		return nil, errors.New("DOCUMENT_AI_GATEWAY_URL must not contain credentials")
+	normalized, err := validateAIGatewayBaseURL(baseURL)
+	if err != nil {
+		return nil, err
 	}
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: defaultTimeout}
 	}
 	return &ProfileClient{
-		baseURL:      strings.TrimRight(parsed.String(), "/"),
+		baseURL:      normalized,
 		serviceToken: strings.TrimSpace(serviceToken),
 		httpClient:   httpClient,
 	}, nil
+}
+
+func validateAIGatewayBaseURL(raw string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", errors.New("DOCUMENT_AI_GATEWAY_URL must be an absolute http(s) URL")
+	}
+	if parsed.User != nil {
+		return "", errors.New("DOCUMENT_AI_GATEWAY_URL must not contain credentials")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", errors.New("DOCUMENT_AI_GATEWAY_URL must not contain query or fragment")
+	}
+	path := strings.TrimRight(parsed.EscapedPath(), "/")
+	if path != "" && path != "/internal/v1" {
+		return "", errors.New("DOCUMENT_AI_GATEWAY_URL must be an AI Gateway service base URL")
+	}
+	if !trustedInternalHost(parsed.Hostname()) {
+		return "", errors.New("DOCUMENT_AI_GATEWAY_URL host is not trusted")
+	}
+	if path == "/internal/v1" {
+		parsed.Path = ""
+		parsed.RawPath = ""
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+func trustedInternalHost(host string) bool {
+	host = strings.Trim(strings.ToLower(host), "[]")
+	if host == "" {
+		return false
+	}
+	switch host {
+	case "localhost", "ai-gateway":
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 func (c *ProfileClient) GetModelProfile(ctx context.Context, reqCtx service.RequestContext, id string) (service.ModelProfileReference, error) {

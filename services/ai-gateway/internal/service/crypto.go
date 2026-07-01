@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,9 +14,12 @@ import (
 
 const StorageModeEncryptedColumn = "encrypted_column"
 
+var credentialFingerprintContext = []byte("ai-gateway credential fingerprint v1")
+
 type CredentialEncryptor struct {
-	aead       cipher.AEAD
-	keyVersion string
+	aead           cipher.AEAD
+	fingerprintKey []byte
+	keyVersion     string
 }
 
 func NewCredentialEncryptor(key []byte, keyVersion string) (*CredentialEncryptor, error) {
@@ -33,7 +37,8 @@ func NewCredentialEncryptor(key []byte, keyVersion string) (*CredentialEncryptor
 	if err != nil {
 		return nil, err
 	}
-	return &CredentialEncryptor{aead: aead, keyVersion: strings.TrimSpace(keyVersion)}, nil
+	fingerprintKey := hmacSHA256(key, credentialFingerprintContext)
+	return &CredentialEncryptor{aead: aead, fingerprintKey: fingerprintKey, keyVersion: strings.TrimSpace(keyVersion)}, nil
 }
 
 func (e *CredentialEncryptor) Encrypt(apiKey string) (ProviderCredential, error) {
@@ -46,13 +51,13 @@ func (e *CredentialEncryptor) Encrypt(apiKey string) (ProviderCredential, error)
 		return ProviderCredential{}, err
 	}
 	ciphertext := e.aead.Seal(nil, nonce, []byte(apiKey), nil)
-	fingerprint := sha256.Sum256([]byte(apiKey))
+	fingerprint := hmacSHA256(e.fingerprintKey, []byte(apiKey))
 	return ProviderCredential{
 		StorageMode:          StorageModeEncryptedColumn,
 		Ciphertext:           ciphertext,
 		Nonce:                nonce,
 		EncryptionKeyVersion: e.keyVersion,
-		FingerprintSHA256:    hex.EncodeToString(fingerprint[:]),
+		FingerprintSHA256:    hex.EncodeToString(fingerprint),
 		KeyLast4:             last4(apiKey),
 		Status:               CredentialActive,
 	}, nil
@@ -67,6 +72,12 @@ func (e *CredentialEncryptor) Decrypt(credential ProviderCredential) (string, er
 		return "", err
 	}
 	return string(plain), nil
+}
+
+func hmacSHA256(key, message []byte) []byte {
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write(message)
+	return mac.Sum(nil)
 }
 
 func last4(value string) string {

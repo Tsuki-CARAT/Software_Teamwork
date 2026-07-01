@@ -132,13 +132,34 @@ func TestCommandToolIsOptInAndBounded(t *testing.T) {
 	if err != nil || result.IsError || !strings.Contains(strings.ToLower(result.Content), "hello") {
 		t.Fatalf("command failed: result=%+v err=%v", result, err)
 	}
-	blockedCommand := "rm -rf /"
-	if runtime.GOOS == "windows" {
-		blockedCommand = "Stop-Computer"
-	}
-	blocked, err := enabled.CallTool(context.Background(), ToolBash, mustJSON(t, map[string]any{"command": blockedCommand}))
+	blocked, err := enabled.CallTool(context.Background(), ToolBash, mustJSON(t, map[string]any{"command": "echo hello; uname -a"}))
 	if err != nil || !blocked.IsError || !strings.Contains(blocked.Content, "command_blocked") {
 		t.Fatalf("dangerous command was not blocked: result=%+v err=%v", blocked, err)
+	}
+	rejectedExecutable, err := enabled.CallTool(context.Background(), ToolBash, mustJSON(t, map[string]any{"command": "python server.py"}))
+	if err != nil || !rejectedExecutable.IsError || !strings.Contains(rejectedExecutable.Content, "command_blocked") {
+		t.Fatalf("non-allowlisted command was not blocked: result=%+v err=%v", rejectedExecutable, err)
+	}
+}
+
+func TestCommandToolRejectsPathCapableCommands(t *testing.T) {
+	client := newTestClient(t, true)
+	tests := []string{
+		"cat /etc/passwd",
+		"cat ../secret",
+		"rg token /",
+		"ls /",
+		"pwd /tmp",
+		"sleep ../secret",
+	}
+
+	for _, command := range tests {
+		t.Run(command, func(t *testing.T) {
+			result, err := client.CallTool(context.Background(), ToolBash, mustJSON(t, map[string]any{"command": command}))
+			if err != nil || !result.IsError || !strings.Contains(result.Content, "command_blocked") {
+				t.Fatalf("path-capable command was not blocked: result=%+v err=%v", result, err)
+			}
+		})
 	}
 }
 
@@ -155,7 +176,7 @@ func TestCommandToolHonorsTimeout(t *testing.T) {
 	}
 	command := "sleep 1"
 	if runtime.GOOS == "windows" {
-		command = "Start-Sleep -Seconds 1"
+		t.Skip("sleep command is not portable on windows")
 	}
 	result, err := client.CallTool(context.Background(), ToolBash, mustJSON(t, map[string]any{"command": command}))
 	if err != nil || !result.IsError || !strings.Contains(result.Content, "command_timeout") {

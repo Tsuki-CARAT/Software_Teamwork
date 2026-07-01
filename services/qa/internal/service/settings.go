@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/modelendpoint"
 )
 
 const systemPromptKey = "system_prompt"
@@ -194,9 +196,7 @@ func (s *ConfigService) UpdateMCPServer(ctx context.Context, userID, requestID, 
 			current.TokenLast4 = last4(*patch.Token)
 		}
 	}
-	if current.Transport == "stdio" {
-		current.EndpointURL = ""
-	} else if current.Transport == "streamable_http" {
+	if current.Transport == "streamable_http" {
 		current.Command = ""
 		current.Args = []string{}
 	}
@@ -485,9 +485,7 @@ func (s *ConfigService) recordFromInput(input MCPServerInput) (MCPServerRecord, 
 		}
 		record.TokenLast4 = last4(*input.Token)
 	}
-	if record.Transport == "stdio" {
-		record.EndpointURL = ""
-	} else if record.Transport == "streamable_http" {
+	if record.Transport == "streamable_http" {
 		record.Command = ""
 		record.Args = []string{}
 	}
@@ -576,21 +574,13 @@ func validateRuntimeMCP(config RuntimeMCPConfig) error {
 	}
 	switch config.Transport {
 	case "stdio":
-		if config.Command == "" || strings.ContainsAny(config.Command, ";|&$<>`\r\n\t ") {
-			fields["command"] = "must be a shell-free executable name or path"
-		}
-		for _, arg := range config.Args {
-			if strings.ContainsAny(arg, "\x00\r\n") {
-				fields["args"] = "must not contain NUL or newlines"
-				break
-			}
-		}
+		fields["transport"] = "stdio is test-only; use streamable_http for runtime MCP servers"
 	case "streamable_http":
 		if err := validateAbsoluteHTTPURL(config.EndpointURL); err != nil {
 			fields["endpointUrl"] = "must be an absolute http(s) URL without credentials"
 		}
 	default:
-		fields["transport"] = "must be stdio or streamable_http"
+		fields["transport"] = "must be streamable_http"
 	}
 	if len(fields) > 0 {
 		return ValidationError(fields)
@@ -600,8 +590,8 @@ func validateRuntimeMCP(config RuntimeMCPConfig) error {
 
 func validateRuntimeLLM(config RuntimeLLMConfig) error {
 	fields := map[string]string{}
-	if err := validateAbsoluteHTTPURL(config.Endpoint); err != nil {
-		fields["llm.apiEndpoint"] = "must be an absolute http(s) URL without credentials"
+	if _, err := modelendpoint.NormalizeAIGatewayChatEndpoint(config.Endpoint); err != nil {
+		fields["llm.apiEndpoint"] = "must target trusted AI Gateway chat completions endpoint"
 	}
 	if config.Model == "" {
 		fields["llm.model"] = "is required"

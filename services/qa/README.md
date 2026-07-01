@@ -133,31 +133,14 @@ sessions, Gateway/Auth, Knowledge retrieval, MCP, or frontend flows.
 
 ### Optional MCP transports
 
-`MCP_TRANSPORT` defaults to `disabled`; built-in tools still work. Set it to
-`stdio` or `streamable_http` to merge remote tools with the built-in registry.
+`MCP_TRANSPORT` defaults to `disabled`; built-in tools still work. Runtime
+configuration supports `streamable_http` MCP servers only. The stdio transport
+is reserved for package-owned SDK lifecycle tests so deployed QA containers do
+not try to launch local source-only helper commands.
 
-#### Stdio
-
-| Variable               | Description                                               |
-| ---------------------- | --------------------------------------------------------- |
-| `MCP_TRANSPORT`        | `stdio`.                                                  |
-| `MCP_SERVER_COMMAND`   | Executable used to start the MCP server.                  |
-| `MCP_SERVER_ARGS_JSON` | JSON string array of arguments; no shell parsing is used. |
-
-Example:
-
-```powershell
-$env:MCP_SERVER_COMMAND = "python"
-$env:MCP_SERVER_ARGS_JSON = '["D:/path/to/server.py"]'
-```
-
-The child server's stdout is reserved for newline-delimited MCP JSON-RPC.
-Diagnostics must be written to stderr.
-
-#### Streamable HTTP
-
-Set `MCP_TRANSPORT=streamable_http` and provide `MCP_SERVER_URL`. Optional
-credentials use `MCP_SERVER_TOKEN` and `MCP_SERVER_TOKEN_HEADER`.
+Set `MCP_TRANSPORT=streamable_http` and provide `MCP_SERVER_URL` to merge remote
+tools with the built-in registry. Optional credentials use `MCP_SERVER_TOKEN`
+and `MCP_SERVER_TOKEN_HEADER`.
 
 ### MCP local integration
 
@@ -174,9 +157,9 @@ go test ./internal/platform/toolclient/... -v
 go test ./internal/platform/connectiontest/... -v
 ```
 
-These cover stdio and streamable HTTP transports, tool name prefixing, composite
-tool routing, and the settings connection-test path against an in-process echo
-server (`internal/platform/mcpclient/testserver`).
+These cover the test-only stdio echo helper, streamable HTTP transport, tool
+name prefixing, composite tool routing, and the settings connection-test path
+against an in-process echo server (`internal/platform/mcpclient/testserver`).
 
 #### Manual REPL check with the bundled echo server
 
@@ -285,13 +268,12 @@ go test ./internal/repository/... -run TestDocumentedResourceRoundTrip -count=1
 ## Run with Docker Compose
 
 Start Auth PostgreSQL, QA PostgreSQL (+ goose migrate), Redis, Auth, QA and
-Gateway. If AI Gateway is not running on the same Compose network under the
-`ai-gateway` hostname, override `QA_AI_GATEWAY_URL` before starting:
+Gateway. QA expects AI Gateway on the same Compose network under the
+`ai-gateway` hostname; provider endpoints outside Docker should be configured
+inside AI Gateway, not by pointing QA at `host.docker.internal`:
 
 ```powershell
 $env:INTERNAL_SERVICE_TOKEN = [Environment]::GetEnvironmentVariable('INTERNAL_SERVICE_TOKEN', 'User')
-# Optional when AI Gateway runs outside this compose project:
-# $env:QA_AI_GATEWAY_URL = "http://host.docker.internal:8086/internal/v1/chat/completions"
 docker compose up -d --build
 ```
 

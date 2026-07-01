@@ -24,6 +24,10 @@ type fakeQAService struct {
 
 type fakeSettingsService struct{}
 type fakeResourceService struct{}
+type fakeResourceServiceWithListEvents struct {
+	fakeResourceService
+	listStreamEvents func(context.Context, string, string, string, int) ([]service.StreamEvent, error)
+}
 type fakeResourceServiceWithCreate struct {
 	fakeResourceService
 	createRetrievalTestRun func(context.Context, string, service.RetrievalTestInput) (service.RetrievalTestRun, error)
@@ -83,6 +87,9 @@ func (fakeResourceService) CancelResponseRun(context.Context, string, string) (s
 }
 func (fakeResourceService) ListStreamEvents(context.Context, string, string, string, int) ([]service.StreamEvent, error) {
 	return []service.StreamEvent{}, nil
+}
+func (f fakeResourceServiceWithListEvents) ListStreamEvents(ctx context.Context, userID, sessionID, runID string, after int) ([]service.StreamEvent, error) {
+	return f.listStreamEvents(ctx, userID, sessionID, runID, after)
 }
 func (fakeResourceService) ListMessageCitations(context.Context, string, string) ([]service.Citation, error) {
 	return []service.Citation{}, nil
@@ -317,6 +324,28 @@ func TestCreateRetrievalTestReturnsSavedFailedRun(t *testing.T) {
 	}
 	if body.Data.ID != "rt-1" || body.Data.Status != "failed" || body.Data.ErrorMessage == "" {
 		t.Fatalf("unexpected run: %+v", body.Data)
+	}
+}
+
+func TestListEventsReturnsValidationErrorForCursorOverflow(t *testing.T) {
+	resources := fakeResourceServiceWithListEvents{
+		listStreamEvents: func(context.Context, string, string, string, int) ([]service.StreamEvent, error) {
+			return nil, service.ValidationError(map[string]string{"afterEventSeq": "must be between 0 and 2147483647"})
+		},
+	}
+	server := newTestServerWithResources(t, fakeQAService{}, resources)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/internal/v1/qa-sessions/session-id/events?responseRunId=run-id&afterEventSeq=2147483648", nil)
+	request.Header.Set("X-User-Id", "user-1")
+	request.Header.Set("X-Service-Token", "test-service-token")
+
+	server.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"code":"validation_error"`) || !strings.Contains(recorder.Body.String(), "afterEventSeq") {
+		t.Fatalf("unexpected response: %s", recorder.Body.String())
 	}
 }
 

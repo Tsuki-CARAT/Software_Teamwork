@@ -1,38 +1,20 @@
 package repository
 
 import (
-	"reflect"
+	"math"
 	"strings"
 	"testing"
-
-	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/service"
 )
 
-func TestApplyQAConfigVersionCompatibilityFieldsMirrorsAgentConfig(t *testing.T) {
-	config := service.QAConfigVersion{
-		Agent: service.AgentConfig{
-			MaxIterations:         6,
-			ToolTimeoutSeconds:    11,
-			ModelTimeoutSeconds:   61,
-			OverallTimeoutSeconds: 121,
-			EnabledToolNames:      []string{"search_knowledge", "general_chat"},
-		},
+func TestStreamEventSeqInt32RejectsInvalidValues(t *testing.T) {
+	if _, err := streamEventSeqInt32(-1); err == nil {
+		t.Fatal("expected negative cursor to fail")
 	}
-
-	applyQAConfigVersionCompatibilityFields(&config)
-
-	if config.MaxIterations != config.Agent.MaxIterations ||
-		config.ToolTimeoutSeconds != config.Agent.ToolTimeoutSeconds ||
-		config.ModelTimeoutSeconds != config.Agent.ModelTimeoutSeconds ||
-		config.OverallTimeoutSeconds != config.Agent.OverallTimeoutSeconds {
-		t.Fatalf("flat fields were not mirrored from agent: %+v", config)
+	if _, err := streamEventSeqInt32(math.MaxInt32 + 1); err == nil {
+		t.Fatal("expected overflow cursor to fail")
 	}
-	if !reflect.DeepEqual(config.EnabledToolNames, config.Agent.EnabledToolNames) {
-		t.Fatalf("enabledToolNames = %#v, want %#v", config.EnabledToolNames, config.Agent.EnabledToolNames)
-	}
-	config.Agent.EnabledToolNames[0] = "mutated"
-	if config.EnabledToolNames[0] != "search_knowledge" {
-		t.Fatalf("enabledToolNames aliases agent slice: %#v", config.EnabledToolNames)
+	if got, err := streamEventSeqInt32(math.MaxInt32); err != nil || got != math.MaxInt32 {
+		t.Fatalf("streamEventSeqInt32(MaxInt32) = %d, %v", got, err)
 	}
 }
 

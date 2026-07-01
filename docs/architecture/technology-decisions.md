@@ -315,6 +315,10 @@ services/<service>/
 - 密码哈希使用 `argon2id-v1`；固定参数为 `m=65536 KiB`、`t=3`、`p=2`、`salt=16 bytes`、`key=32 bytes`，编码为 PHC string。
 - AI Gateway provider API key 不进入日志、响应、指标 label 或前端缓存。
 - AI Gateway provider API key 生产环境优先保存 secret manager 引用；第一阶段如果使用数据库加密列，必须保存加密密文、加密密钥版本和脱敏状态，不能保存明文。
+- AI Gateway provider API key 指纹只用于审计和变更检测，不用于认证。数据库字段沿用 `fingerprint_sha256` 兼容命名，但写入值必须是用凭据加密密钥派生出的 HMAC-SHA-256 指纹，不能是明文 API key 的裸 SHA-256。
+- QA、Knowledge、Document 等领域服务调用 AI Gateway 时只能使用受控内部地址。运行时配置不得包含 URL credentials、query、fragment、意外 path 或公网/内网 IP literal；本地开发仅允许 loopback/`localhost` 和显式 Compose 服务名 `ai-gateway`。
+- QA 内置命令工具不得通过 shell 解释用户可控字符串。内置命令工具只能执行代码内批准的 path-free diagnostic command，例如 `echo`、`pwd`、带数值时长的 `sleep`；文件访问必须走 workspace-bounded file tools。MCP runtime 配置只能使用 Streamable HTTP；stdio 仅保留给包内 SDK lifecycle 测试，且必须映射到代码内精确 command spec allowlist，不能把配置中的 executable 或 argv 原样传给 `exec.Command`。
+- Repository 层把分页、游标或 limit/offset 转为 `int32` 前必须做显式范围检查；不得依赖上层校验，也不得用 `MaxInt32` 静默截断调用方输入。
 
 ## CI 和部署落地约定
 

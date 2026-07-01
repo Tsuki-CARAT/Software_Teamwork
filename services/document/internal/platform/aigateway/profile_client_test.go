@@ -82,3 +82,37 @@ func TestProfileClientMapsMissingProfileToNotFound(t *testing.T) {
 		t.Fatalf("GetModelProfile() error = %#v, want not_found", err)
 	}
 }
+
+func TestProfileClientRejectsUntrustedAIGatewayBaseURL(t *testing.T) {
+	cases := []string{
+		"https://public.example.test",
+		"http://169.254.169.254",
+		"http://ai-gateway.example.test",
+		"http://user:pass@ai-gateway",
+		"http://ai-gateway/internal/v1/model-profiles",
+		"http://ai-gateway?redirect=http://example.test",
+	}
+	for _, baseURL := range cases {
+		t.Run(baseURL, func(t *testing.T) {
+			if _, err := NewProfileClient(baseURL, "service-token", nil); err == nil {
+				t.Fatalf("NewProfileClient() accepted base URL %q", baseURL)
+			}
+		})
+	}
+}
+
+func TestProfileClientAcceptsLocalAndServiceBaseURL(t *testing.T) {
+	cases := []string{
+		"http://localhost:8086",
+		"http://127.0.0.1:8086/internal/v1",
+		"http://[::1]:8086",
+		"http://ai-gateway:8086",
+	}
+	for _, baseURL := range cases {
+		t.Run(baseURL, func(t *testing.T) {
+			if _, err := NewProfileClient(baseURL, "service-token", nil); err != nil {
+				t.Fatalf("NewProfileClient() rejected base URL %q: %v", baseURL, err)
+			}
+		})
+	}
+}

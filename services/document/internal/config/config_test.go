@@ -108,6 +108,22 @@ func TestLoadUsesDocumentAIGatewayServiceTokenFallback(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsUntrustedDocumentAIGatewayURL(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("DOCUMENT_DATABASE_URL", "postgres://document:document@localhost:5432/document?sslmode=disable")
+	t.Setenv("DOCUMENT_REDIS_ADDR", "localhost:6379")
+	t.Setenv("DOCUMENT_FILE_SERVICE_URL", "http://localhost:8082")
+	t.Setenv("DOCUMENT_AI_GATEWAY_URL", "https://public.example.test")
+	t.Setenv("DOCUMENT_AI_GATEWAY_PROFILE_ID", "default-chat")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected untrusted AI Gateway host to fail")
+	}
+	t.Setenv("DOCUMENT_AI_GATEWAY_URL", "http://ai-gateway/internal/v1/model-profiles")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected non-base AI Gateway path to fail")
+	}
+}
+
 func TestLoadUsesOptionalKnowledgeServiceConfig(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("DOCUMENT_DATABASE_URL", "postgres://document:document@localhost:5432/document?sslmode=disable")

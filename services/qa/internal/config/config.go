@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/modelendpoint"
 )
 
 const (
@@ -166,9 +168,7 @@ func (c Config) Validate() error {
 	switch c.MCPTransport {
 	case TransportDisabled:
 	case TransportStdio:
-		if c.MCPServerCommand == "" {
-			return errors.New("MCP_SERVER_COMMAND is required for stdio transport")
-		}
+		return errors.New("MCP_TRANSPORT=stdio is test-only; use streamable_http for runtime MCP servers")
 	case TransportStreamableHTTP:
 		if err := validateHTTPURL("MCP_SERVER_URL", c.MCPServerURL); err != nil {
 			return err
@@ -183,12 +183,21 @@ func validateHTTPURL(name, value string) error {
 	if value == "" {
 		return fmt.Errorf("%s is required", name)
 	}
+	if name == "AI_GATEWAY_URL" {
+		if _, err := modelendpoint.NormalizeAIGatewayChatEndpoint(value); err != nil {
+			return fmt.Errorf("%s is invalid: %w", name, err)
+		}
+		return nil
+	}
 	parsed, err := url.Parse(value)
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return fmt.Errorf("%s must be an absolute http(s) URL", name)
 	}
 	if parsed.User != nil {
 		return fmt.Errorf("%s must not contain credentials", name)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("%s must not contain query or fragment", name)
 	}
 	return nil
 }

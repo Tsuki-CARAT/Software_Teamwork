@@ -72,7 +72,10 @@ func (r *Postgres) ListConversations(ctx context.Context, userID string, options
 	if err != nil {
 		return service.Page[service.Conversation]{}, fmt.Errorf("count conversations: %w", err)
 	}
-	params := listConversationsParams(userID, options)
+	params, err := listConversationsParams(userID, options)
+	if err != nil {
+		return service.Page[service.Conversation]{}, fmt.Errorf("list conversations pagination: %w", err)
+	}
 	rows, err := r.listConversationRows(ctx, options.Sort, params)
 	if err != nil {
 		return service.Page[service.Conversation]{}, fmt.Errorf("list conversations: %w", err)
@@ -141,11 +144,15 @@ func (r *Postgres) ListMessages(ctx context.Context, userID, conversationID stri
 	if err != nil {
 		return service.Page[service.Message]{}, fmt.Errorf("count messages: %w", err)
 	}
+	pageSize, offset, err := paginationInt32(options.Page, options.PageSize)
+	if err != nil {
+		return service.Page[service.Message]{}, fmt.Errorf("list messages pagination: %w", err)
+	}
 	rows, err := r.queries.ListMessagesForConversation(ctx, sqlc.ListMessagesForConversationParams{
 		ConversationID: conversationID,
 		ExternalUserID: userID,
-		PageSize:       int32(options.PageSize),
-		PageOffset:     int32((options.Page - 1) * options.PageSize),
+		PageSize:       pageSize,
+		PageOffset:     offset,
 	})
 	if err != nil {
 		return service.Page[service.Message]{}, fmt.Errorf("list messages: %w", err)

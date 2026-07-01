@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
+	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/modelendpoint"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/platform/httpclient"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/service"
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/service/agent"
@@ -48,9 +48,9 @@ type Client struct {
 }
 
 func New(cfg Config) (*Client, error) {
-	parsed, err := url.Parse(cfg.Endpoint)
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return nil, errors.New("model endpoint must be an absolute http(s) URL")
+	endpoint, err := modelendpoint.NormalizeAIGatewayChatEndpoint(cfg.Endpoint)
+	if err != nil {
+		return nil, err
 	}
 	if cfg.Model == "" {
 		return nil, errors.New("model is required")
@@ -62,7 +62,7 @@ func New(cfg Config) (*Client, error) {
 		return nil, errors.New("model timeout must be positive")
 	}
 	return &Client{
-		endpoint:  cfg.Endpoint,
+		endpoint:  endpoint,
 		model:     cfg.Model,
 		profileID: cfg.ProfileID,
 		parallel:  cfg.ParallelToolCalls,

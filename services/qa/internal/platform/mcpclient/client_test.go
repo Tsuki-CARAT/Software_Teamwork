@@ -3,7 +3,6 @@ package mcpclient
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,30 +12,67 @@ import (
 	"github.com/Sakayori-Iroha-168/Software_Teamwork/services/qa/internal/platform/mcpclient/testserver"
 )
 
-func TestMCPHelperProcess(t *testing.T) {
-	if os.Getenv("QA_MCP_HELPER_PROCESS") != "1" {
-		return
-	}
-	if err := testserver.EchoServer().Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		os.Exit(2)
-	}
-	os.Exit(0)
-}
-
 func TestStdioClientLifecycleAndToolCall(t *testing.T) {
-	t.Setenv("QA_MCP_HELPER_PROCESS", "1")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	client, err := Connect(ctx, Config{
-		Transport: TransportStdio,
-		Command:   os.Args[0],
-		Args:      []string{"-test.run=TestMCPHelperProcess"},
+		Transport:      TransportStdio,
+		Command:        "go",
+		Args:           []string{"run", "./testserver/cmd/echo"},
+		AllowTestStdio: true,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer client.Close()
 	assertEchoClient(t, ctx, client)
+}
+
+func TestStdioClientRejectsUnsafeCommand(t *testing.T) {
+	_, err := buildTransport(Config{
+		Transport: TransportStdio,
+		Command:   "go",
+		Args:      []string{"run", "./testserver/cmd/echo"},
+	})
+	if err == nil {
+		t.Fatal("expected runtime stdio transport to be rejected")
+	}
+	_, err = buildTransport(Config{
+		Transport:      TransportStdio,
+		Command:        "python -c",
+		Args:           []string{"print('unsafe')"},
+		AllowTestStdio: true,
+	})
+	if err == nil {
+		t.Fatal("expected unsafe command to be rejected")
+	}
+	_, err = buildTransport(Config{
+		Transport:      TransportStdio,
+		Command:        "sh",
+		Args:           []string{"-c", "echo pwned"},
+		AllowTestStdio: true,
+	})
+	if err == nil {
+		t.Fatal("expected non-allowlisted command to be rejected")
+	}
+	_, err = buildTransport(Config{
+		Transport:      TransportStdio,
+		Command:        "go",
+		Args:           []string{"run", "server.go\n--flag"},
+		AllowTestStdio: true,
+	})
+	if err == nil {
+		t.Fatal("expected unsafe argument to be rejected")
+	}
+	_, err = buildTransport(Config{
+		Transport:      TransportStdio,
+		Command:        "python3",
+		Args:           []string{"server.py"},
+		AllowTestStdio: true,
+	})
+	if err == nil {
+		t.Fatal("expected non-allowlisted command spec to be rejected")
+	}
 }
 
 func TestStreamableHTTPClientAddsTokenAndCallsTool(t *testing.T) {

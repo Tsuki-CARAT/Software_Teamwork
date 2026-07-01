@@ -8,6 +8,9 @@ on:
       - 'apps/web/package.json'
       - 'bun.lock'
 
+permissions:
+  contents: read
+
 jobs:
   check-types:
     runs-on: ubuntu-latest

@@ -33,6 +33,8 @@
 | `check-api-types.yml` | 前端 Gateway 类型漂移 | 在 `apps/web` 执行 `bun run api:generate`，本地等价命令为 `bun run --cwd apps/web api:generate`，并要求 generated diff 干净。 |
 | `commitlint.yml` / `pr-guard.yml` | 协作规则 | 检查提交格式、PR body、issue 关联和 base 更新要求。 |
 
+所有 GitHub Actions workflow 都应显式声明最小 `permissions`。只读取仓库内容的校验类 workflow，例如 API type drift check，应使用 `contents: read`，不得依赖默认 token 权限。
+
 当前可作为 required checks 的优先候选是 Frontend、Go service tests、goose migration apply、Parser Service、Docker/Compose config、Gateway contract/API drift 和 API type drift。Parser 真实 PaddleOCR 模型 smoke、完整 DB integration jobs 和后端跨服务 E2E smoke 仍未落地；在 CI 提供稳定依赖前只能作为 PR 前建议或缺口登记。
 
 ## 本地命令矩阵
@@ -56,6 +58,7 @@
 | Parser 契约 / 文档 / runtime | 检查 `docs/services/parser/api/internal.openapi.yaml`、`services/parser/api/openapi.yaml`（实现本地副本）与 `docs/services/parser/README.md`、Knowledge ingestion 文档一致；如改 runtime，执行 `cd services/parser && uv run ruff check . && uv run pytest && uv run python -m compileall src tests`，并说明是否仅覆盖 fake OCR backend。触碰 PaddleOCR runtime 时，在具备模型环境下追加 `PARSER_PADDLEOCR_SMOKE=1 PARSER_PADDLEOCR_ALLOW_DOWNLOAD=1 uv run pytest -m paddleocr_smoke -s`。 |
 | AI Gateway provider adapter | `cd services/ai-gateway && go test ./...`；尽量加 fake provider case 和真实 provider smoke 记录。 |
 | Document worker/job | `cd services/document && go test ./...`；如改 repository，设置 `DOCUMENT_TEST_DATABASE_URL` 跑 repository integration tests。 |
+| Code Scanning / 安全告警 | 按告警影响范围运行对应服务全量 `go test ./...` 和 `go build ./cmd/server`；QA 额外 `go build ./cmd/agent`。PR body 必须列出 alert 编号、规则 ID、文件位置、验证命令和剩余风险。命令执行、URL trust、allocation upper bound、integer conversion、credential hashing 和 workflow permissions 都需要有 focused unit tests 或静态验证记录。 |
 
 ## 后端测试层级
 

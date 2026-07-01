@@ -57,7 +57,7 @@ func TestCompleteSendsFunctionToolsAndParsesToolCalls(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(Config{Endpoint: server.URL, Token: "test-token", TokenHeader: "X-Service-Token", Model: "test", ProfileID: "profile-chat", MaxTokens: 100, Timeout: time.Second})
+	client, err := New(Config{Endpoint: server.URL + "/internal/v1/chat/completions", Token: "test-token", TokenHeader: "X-Service-Token", Model: "test", ProfileID: "profile-chat", MaxTokens: 100, Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,12 +79,71 @@ func TestCompleteSendsFunctionToolsAndParsesToolCalls(t *testing.T) {
 	}
 }
 
+func TestNewRejectsUntrustedAIGatewayEndpoint(t *testing.T) {
+	cases := []string{
+		"https://public.example.test/internal/v1/chat/completions",
+		"http://169.254.169.254/internal/v1/chat/completions",
+		"http://ai-gateway.example.test/internal/v1/chat/completions",
+		"http://user:pass@ai-gateway/internal/v1/chat/completions",
+		"http://ai-gateway/internal/v1/model-profiles",
+		"http://ai-gateway/internal/v1/chat/completions?redirect=http://example.test",
+	}
+	for _, endpoint := range cases {
+		t.Run(endpoint, func(t *testing.T) {
+			if _, err := New(Config{Endpoint: endpoint, Model: "test", MaxTokens: 100, Timeout: time.Second}); err == nil {
+				t.Fatalf("New() accepted endpoint %q", endpoint)
+			}
+		})
+	}
+}
+
+func TestNewAcceptsLocalAndServiceAIGatewayEndpoints(t *testing.T) {
+	cases := []string{
+		"http://localhost:8086/internal/v1/chat/completions",
+		"http://127.0.0.1:8086/internal/v1/chat/completions",
+		"http://[::1]:8086/internal/v1/chat/completions",
+		"http://ai-gateway:8086/internal/v1/chat/completions",
+	}
+	for _, endpoint := range cases {
+		t.Run(endpoint, func(t *testing.T) {
+			if _, err := New(Config{Endpoint: endpoint, Model: "test", MaxTokens: 100, Timeout: time.Second}); err != nil {
+				t.Fatalf("New() rejected endpoint %q: %v", endpoint, err)
+			}
+		})
+	}
+}
+
+func TestNewRejectsDirectProviderEscapeEndpoints(t *testing.T) {
+	cases := []string{
+		"https://public.example.test/v1/chat/completions",
+		"https://public.example.test/internal/v1/chat/completions",
+		"http://169.254.169.254/latest/meta-data",
+		"http://10.0.0.5/internal/v1/chat/completions",
+		"http://user:pass@public.example.test/v1/chat/completions",
+		"http://ai-gateway/internal/v1/chat/completions?redirect=http://example.test",
+		"http://ai-gateway/internal/v1/chat/completions#fragment",
+	}
+	for _, endpoint := range cases {
+		t.Run(endpoint, func(t *testing.T) {
+			_, err := New(Config{
+				Endpoint:  endpoint,
+				Model:     "test",
+				MaxTokens: 100,
+				Timeout:   time.Second,
+			})
+			if err == nil {
+				t.Fatalf("New() accepted unsafe endpoint %q", endpoint)
+			}
+		})
+	}
+}
+
 func TestCompleteRejectsDependencyErrorBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "provider secret detail api_key=sk-test prompt=hello", http.StatusBadGateway)
 	}))
 	defer server.Close()
-	client, err := New(Config{Endpoint: server.URL, TokenHeader: "X-Service-Token", Model: "test", MaxTokens: 100, Timeout: time.Second})
+	client, err := New(Config{Endpoint: server.URL + "/internal/v1/chat/completions", TokenHeader: "X-Service-Token", Model: "test", MaxTokens: 100, Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +163,7 @@ func TestCompleteMapsGatewayValidationError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":{"message":"full prompt must stay hidden","type":"invalid_request_error","code":"bad_request"}}`))
 	}))
 	defer server.Close()
-	client, err := New(Config{Endpoint: server.URL, TokenHeader: "X-Service-Token", Model: "test", MaxTokens: 100, Timeout: time.Second})
+	client, err := New(Config{Endpoint: server.URL + "/internal/v1/chat/completions", TokenHeader: "X-Service-Token", Model: "test", MaxTokens: 100, Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +198,7 @@ data: [DONE]
 	}))
 	defer server.Close()
 
-	client, err := New(Config{Endpoint: server.URL, TokenHeader: "X-Service-Token", Model: "test", MaxTokens: 100, Timeout: time.Second, Stream: true})
+	client, err := New(Config{Endpoint: server.URL + "/internal/v1/chat/completions", TokenHeader: "X-Service-Token", Model: "test", MaxTokens: 100, Timeout: time.Second, Stream: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +244,7 @@ func TestCompleteRejectsInterruptedStreamWithPartialDelta(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(Config{Endpoint: server.URL, TokenHeader: "X-Service-Token", Model: "test", MaxTokens: 100, Timeout: time.Second, Stream: true})
+	client, err := New(Config{Endpoint: server.URL + "/internal/v1/chat/completions", TokenHeader: "X-Service-Token", Model: "test", MaxTokens: 100, Timeout: time.Second, Stream: true})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,12 +25,9 @@ type ChatClient struct {
 }
 
 func NewChatClient(baseURL, serviceToken, defaultProfileID, defaultModel string, httpClient *http.Client) (*ChatClient, error) {
-	parsed, err := url.Parse(strings.TrimSpace(baseURL))
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return nil, errors.New("DOCUMENT_AI_GATEWAY_URL must be an absolute http(s) URL")
-	}
-	if parsed.User != nil {
-		return nil, errors.New("DOCUMENT_AI_GATEWAY_URL must not contain credentials")
+	normalized, err := validateAIGatewayBaseURL(baseURL)
+	if err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(defaultProfileID) == "" {
 		return nil, errors.New("DOCUMENT_AI_GATEWAY_PROFILE_ID is required")
@@ -42,7 +39,7 @@ func NewChatClient(baseURL, serviceToken, defaultProfileID, defaultModel string,
 		httpClient = &http.Client{Timeout: defaultTimeout}
 	}
 	return &ChatClient{
-		baseURL:          strings.TrimRight(parsed.String(), "/"),
+		baseURL:          normalized,
 		serviceToken:     strings.TrimSpace(serviceToken),
 		defaultProfileID: strings.TrimSpace(defaultProfileID),
 		defaultModel:     strings.TrimSpace(defaultModel),

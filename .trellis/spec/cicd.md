@@ -699,6 +699,94 @@ service:
 
 ---
 
+## Scenario: GitHub Actions Minimum Permissions
+
+### 1. Scope / Trigger
+
+- Trigger: adding or modifying a GitHub Actions workflow, or fixing
+  `actions/missing-workflow-permissions` / equivalent security alerts.
+- Applies to every workflow under `.github/workflows/*.yml`.
+
+### 2. Signatures
+
+- Read-only repository workflows declare:
+
+```yaml
+permissions:
+  contents: read
+```
+
+- Workflows that need additional scopes must list each scope explicitly at the
+  workflow or job level and document the reason in the PR.
+
+### 3. Contracts
+
+- Do not rely on GitHub's default token permissions.
+- Prefer the narrowest scope that lets the workflow run.
+- Workflows that only check out repository content, run tests, parse files, or
+  compare generated artifacts normally need only `contents: read`.
+- Pull request labeling, issue comments, package pushes, deployments, OIDC, or
+  status writes require explicit additional permissions and must stay tied to
+  the job that needs them when practical.
+- Do not add write scopes to silence a failing workflow without proving the
+  command that needs the scope.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Workflow omits top-level and job-level `permissions` | Add the minimum explicit permissions. |
+| Workflow uses `actions/checkout` only | Use `contents: read`. |
+| Workflow writes labels or comments | Add only the required write scope, for example `issues: write` or `pull-requests: write`. |
+| Workflow publishes packages or images | Add the package/deployment scope only on the publishing job. |
+| Code scanning flags missing permissions | Fix the workflow YAML; do not suppress CodeQL or remove the workflow. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: an API type drift workflow checks out code and declares
+  `permissions: { contents: read }`.
+- Base: a labeling workflow has `contents: read`, `issues: write`, and
+  `pull-requests: write` because the script applies labels.
+- Bad: a read-only test workflow uses broad write permissions or omits
+  permissions entirely.
+
+### 6. Tests Required
+
+- Parse changed workflows as YAML.
+- Run `actionlint` for changed workflows when available locally.
+- For embedded JavaScript in `github-script`, run `node --check` inside an async
+  wrapper when the script body changed.
+- Record the exact workflow permission rationale in the PR body for
+  security-alert work.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```yaml
+name: API Types Check
+on: pull_request
+jobs:
+  check:
+    runs-on: ubuntu-latest
+```
+
+#### Correct
+
+```yaml
+name: API Types Check
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+```
+
+---
+
 ## Docker Build
 
 Every runtime service should have its own Dockerfile:

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"time"
 )
@@ -407,6 +408,9 @@ func (s *ResourceService) CancelResponseRun(ctx context.Context, userID, id stri
 	return run, err
 }
 func (s *ResourceService) ListStreamEvents(ctx context.Context, userID, sessionID, runID string, after int) ([]StreamEvent, error) {
+	if after < 0 || after > math.MaxInt32 {
+		return nil, ValidationError(map[string]string{"afterEventSeq": "must be between 0 and 2147483647"})
+	}
 	return s.repository.ListStreamEvents(ctx, userID, sessionID, runID, after)
 }
 func (s *ResourceService) ListMessageCitations(ctx context.Context, userID, id string) ([]Citation, error) {

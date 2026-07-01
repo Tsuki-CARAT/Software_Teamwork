@@ -22,13 +22,14 @@
 | [Discussion #48 决策同步清单](requirements-analysis/decision-sync-checklist.md) | 整体需求分析和 API 契约中原先未定稿问题的确认结果。 |
 | [服务边界矩阵](architecture/service-boundaries.md) | `gateway`、`auth`、`file`、`knowledge`、`qa`、`document`、`ai-gateway` 的职责边界、公开契约状态和缺失契约登记。 |
 | [当前能力矩阵](architecture/current-capability-matrix.md) | 根据当前 `develop`、今日 issue/PR 和实现说明汇总已实现、部分实现、占位和缺失能力。 |
+| [系统链路条件覆盖文档](architecture/system-link-condition-coverage.md) | 按主要用户、管理员和系统后台链路记录跨服务参与方、正常路径、条件分支、状态输出和当前实现缺口。 |
 | [技术选型基线](architecture/technology-decisions.md) | 后端数据库访问、迁移、日志、HTTP、配置、队列、认证、前端 API client、测试、CI、观测和 DOCX/MCP 等工程技术选型。 |
 | [Gateway 服务规划](services/gateway/README.md) | Gateway 的设计原则、公开 API、认证上下文、响应约定和后续扩展。 |
 | [Gateway 实现说明](services/gateway/docs/implementation.md) | `services/gateway/` 当前实现状态、契约对齐、缺口和最近检查记录。 |
 | [Auth 服务接口文档](services/auth/README.md) | 用户、会话、权限上下文和 auth 内部服务接口草案。 |
 | [Auth 实现说明](services/auth/docs/implementation.md) | `services/auth/` 当前实现状态、契约对齐、缺口和最近检查记录。 |
 | [File 服务接口文档](services/file/README.md) | 后端内部基础文件对象、元数据、原文件内容读取和 file 内部服务接口草案。 |
-| [File 数据模型文档](services/file/docs/data-models.md) | File 模块基础文件对象元数据、对象存储引用、删除清理和服务间 file reference 约束。 |
+| [File 数据模型文档](services/file/docs/data-models.md) | File 模块基础文件对象元数据、对象存储引用、删除清理和服务间 `file_ref` 约束。 |
 | [File 实现说明](services/file/docs/implementation.md) | `services/file/` 当前实现状态、契约对齐、缺口和最近检查记录。 |
 | [Knowledge 服务接口文档](services/knowledge/README.md) | 知识库、文档处理状态、切片、向量索引和检索接口契约。 |
 | [Knowledge 数据模型文档](services/knowledge/docs/data-models.md) | Knowledge 模块知识库、文档、处理任务、切片、Qdrant payload 和运行时配置逻辑模型。 |

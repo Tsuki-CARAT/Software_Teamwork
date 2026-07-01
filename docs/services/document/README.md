@@ -219,7 +219,9 @@ outline_generation | outline_regeneration | content_generation | content_regener
 
 ### QA 与 MCP 工具
 
-QA 后续可注册 Document MCP 工具，例如：
+Document 当前已在 `services/document/internal/service/mcp_tools.go` 提供服务内 MCP 工具适配层。该适配层接收可信 `RequestContext`，复用现有 Document service 能力，记录 `requestSource=mcp` 和 `toolName=<tool>` 的安全操作日志；远程 MCP server 包装和 QA 端到端 smoke 仍待共享 MCP 联调任务补齐。
+
+当前工具包括：
 
 | MCP 工具 | Gateway 资源 |
 | --- | --- |
@@ -227,13 +229,13 @@ QA 后续可注册 Document MCP 工具，例如：
 | `regenerate_report_outline` | `POST /reports/{reportId}/jobs`，`jobType=outline_regeneration` |
 | `generate_report_text` | `POST /reports/{reportId}/jobs`，`jobType=content_generation` |
 | `regenerate_report_text` | `POST /reports/{reportId}/jobs`，`jobType=content_regeneration` |
-| `regenerate_report_section` | `POST /reports/{reportId}/sections/{sectionId}/versions` |
+| `regenerate_report_section` | `POST /reports/{reportId}/jobs`，`jobType=section_regeneration` |
 | `get_generation_status` | `GET /report-jobs/{jobId}` |
 | `get_template_schema` | `GET /report-templates/{reportTemplateId}/structure` |
 | `export_report_docx` | `POST /report-files` |
 | `get_report_result` | `GET /reports/{reportId}`、`GET /report-files/{reportFileId}` |
 
-工具内部不得绕过 gateway 权限边界直连数据库、MinIO、Qdrant 或 provider。工具响应只返回安全摘要、业务资源 ID、进度和错误码，不返回 prompt、provider 原始错误、内部 URL、对象存储路径或完整工具私有参数。
+工具层不得绕过 Document service 边界直连数据库、MinIO、Qdrant 或 provider。工具响应只返回安全摘要、业务资源 ID、进度和错误码，不返回 prompt、provider 原始错误、内部 URL、对象存储路径、File Service 内部引用或完整工具私有参数。`export_report_docx` 只走当前基础 DOCX 导出路径，不代表 Pandoc/LibreOffice 富 DOCX 已可用。
 
 ## 错误码约定
 

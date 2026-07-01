@@ -27,11 +27,11 @@
 | 项目 | 状态 | 说明 |
 | --- | --- | --- |
 | 文档状态 | active | README、需求、数据模型、前端 API 设计和 OpenAPI 存在。 |
-| 代码状态 | partial | Go service、PostgreSQL repository、`pgx/v5@v5.9.2`、模板/材料/报告/大纲/章节 API、report jobs/attempts/events、report files/content、基础内置 DOCX 导出、asynq worker 状态机、report settings、statistics、operation logs 和 `summer_peak_inspection` 基础 AI 大纲/正文生成编排已实现；剩余缺口为 Document MCP tools、更多报告类型生成策略和 Pandoc/LibreOffice 富 DOCX 工具链。 |
+| 代码状态 | partial | Go service、PostgreSQL repository、`pgx/v5@v5.9.2`、模板/材料/报告/大纲/章节 API、report jobs/attempts/events、report files/content、基础内置 DOCX 导出、asynq worker 状态机、report settings、statistics、operation logs、`summer_peak_inspection` 基础 AI 大纲/正文生成编排和服务内 Document MCP 工具适配层已实现；剩余缺口为远程 MCP server/QA 端到端 smoke、更多报告类型生成策略和 Pandoc/LibreOffice 富 DOCX 工具链。 |
 | 契约对齐 | partial | Gateway active document paths 有 43 个；当前 Document active routes 已由服务处理。report job 请求体已按 gateway 的 `target/requirements/materialIds/options` 形态接入；report file content 只有在文件 `succeeded` 且 File Service 已保存内容后可读取。 |
 | 数据持久化 | postgres | runtime 使用 PostgreSQL；模板/材料底层文件通过 File Service client。 |
 | 测试状态 | partial | service、HTTP、repository tests 存在；集成测试依赖 `DOCUMENT_TEST_DATABASE_URL`。 |
-| 建议动作 | 补实现 / 验证 | 优先补 Document MCP tools、AI Gateway/Knowledge/File Service 跨服务 smoke、更多报告类型生成策略和 Pandoc/LibreOffice 富 DOCX 工具链。 |
+| 建议动作 | 补实现 / 验证 | 优先补 Document MCP 远程包装或 QA 端到端 smoke、AI Gateway/Knowledge/File Service 跨服务 smoke、更多报告类型生成策略和 Pandoc/LibreOffice 富 DOCX 工具链。 |
 
 ## 3. 已实现
 
@@ -50,6 +50,7 @@
 | report files / content | `internal/http/report_files.go`、`internal/service/report_file_service.go`、`internal/worker/worker.go` | Gateway / Document OpenAPI | report file service/http/worker tests | `POST /report-files` 创建文件元数据和异步任务；`report_file_creation` worker 使用内置 `SimpleDOCXGenerator` 从已保存章节生成基础 DOCX，上传 File Service 后 content endpoint 可读取。 |
 | report settings | `internal/http/admin_handlers.go`、`internal/service/admin_service.go`、`internal/repository/admin.go` | Gateway / Document OpenAPI | HTTP/service/repository tests | 持久化 AI Gateway profile 引用、默认模板和文件默认值；`PATCH` 仅 admin/super_admin。 |
 | statistics / operation logs | `internal/http/admin_handlers.go`、`internal/service/admin_service.go`、`internal/repository/admin.go` | Gateway / Document OpenAPI | HTTP/service/repository tests | 支持概览、每日趋势和操作日志过滤；日志写入路径做敏感字段脱敏。 |
+| Document MCP tool adapter | `internal/service/mcp_tools.go` | Document README / requirements | MCP tool service tests | 提供 `generate_report_outline`、`regenerate_report_outline`、`generate_report_text`、`regenerate_report_text`、`regenerate_report_section`、`get_generation_status`、`get_template_schema`、`export_report_docx`、`get_report_result`；工具层复用现有 service，不直连 repository/File/MinIO/Qdrant/provider，输出和操作日志均为安全摘要。 |
 | AI Gateway profile client | `internal/platform/aigateway/profile_client.go`、`cmd/server/main.go` | AI Gateway internal API | client/config tests | Document 只校验并引用 profile，不保存 provider key。 |
 | PostgreSQL repository | `internal/repository`、`migrations/0001_create_report_generation_tables.sql` | 数据模型 | repository tests | runtime 使用 `pgx/v5`。 |
 | File Service client | `internal/platform/fileclient` | File/Document 边界 | fileclient tests | multipart 创建 file，delete cleanup。 |
@@ -58,7 +59,7 @@
 
 | 缺口 | 文档来源 | 影响范围 | 建议任务 |
 | --- | --- | --- | --- |
-| Document MCP tools | Document README / requirements | QA / tool integration | 注册工具、权限校验、参数校验、脱敏输出和调用链路仍未实现。 |
+| Document MCP remote server / QA end-to-end smoke | Document README / requirements / #125 | QA / tool integration | 服务内工具适配层已实现；远程 MCP server 包装、QA Host 真实调用和跨服务 smoke 仍需共享联调任务补齐。 |
 | 更多报告类型生成策略 | Document README / requirements | worker / report content | 当前基础 AI 闭环覆盖 `summer_peak_inspection`；`coal_inventory_audit` 仍需补业务 prompt、模板和验收样例后再开放。 |
 | Pandoc / LibreOffice rich DOCX generation | Document README / 技术基线 | rich DOCX | 当前只提供内置 Go 基础 DOCX；落地富 DOCX 前不得承诺 Pandoc/LibreOffice 转换已可用。 |
 
@@ -69,7 +70,7 @@
 | Active document paths | Gateway OpenAPI 将 jobs/files/statistics/logs/settings 设为 active | jobs/attempts/events、settings/statistics/logs、report files/content 和基础 AI 大纲/正文生成已实现；content 在文件未完成或缺少 File Service 内容时返回未就绪错误 | 前端可联调基础 AI 生成和基础文件导出，但不能把文件导出理解为富 DOCX | 补 AI Gateway + Knowledge + File Service + Redis 的跨服务 smoke，保留 content 未就绪错误语义。 |
 | Redis/asynq | README 要求使用 asynq over Redis 执行报告任务 | `cmd/server` 已创建 asynq client/worker，任务创建会入队并持久化 task id；文件生成 job 执行基础 DOCX 导出，生成类 job 调用 AI Gateway chat executor | 运行时需要 Redis 和 AI Gateway；Knowledge 检索为可选依赖 | 补跨服务 smoke 和更多报告类型。 |
 | AI Gateway/Pandoc/LibreOffice | README 描述生成和导出依赖 | AI Gateway chat 已用于基础大纲/正文生成；report file creation 当前使用内置 Go 生成器，不调用 Pandoc/LibreOffice | 部署方仍不能期待富 DOCX 转换；AI Gateway profile/可用性决定生成任务是否成功 | 在 implementation 中标明 AI 生成已落地、富 DOCX 未落地。 |
-| Document MCP tools | README/requirements 描述后续可注册 Document MCP 工具 | 当前没有 Document MCP tool registry、handler 或 QA 调用链路 | 后续排期容易漏掉 MCP tools，或误以为 README 中的工具已可用 | 在本文未实现任务表单列；拆实现任务。 |
+| Document MCP tools | README/requirements 描述可注册 Document MCP 工具 | 当前有服务内 tool registry/adapter 和单元测试；尚无远程 MCP server 包装或 QA 端到端 smoke | 如果直接对外宣称完整 MCP 集成，可能掩盖 #125 跨服务 smoke 缺口 | 文档明确服务内适配层已实现、远程包装和 QA smoke 待补。 |
 | Service path prefix | Gateway public paths 是 `/api/v1/report-*` | Document service 本地 routes 无 `/internal/v1` 前缀，gateway 默认剥离 `/api/v1` | 这与 gateway proxy 逻辑一致但易误解 | README/implementation 明确 document local path 形态。 |
 | `go-redis` 传递依赖版本 | 技术基线固定直接 Redis client 为 `go-redis/v9@v9.21.0` | Document 通过 `asynq v0.26.0` 间接带入 `go-redis/v9@v9.14.1`；本次版本修复不改非 Docker 代码依赖 | 文档基线和锁定依赖存在出入，后续队列依赖升级时可能被忽略 | 下次升级 asynq 或调整 worker queue 依赖时优先消除该出入；不能消除时继续在本文记录原因。 |
 
@@ -106,7 +107,7 @@
 
 | 任务 | 类型 | 优先级 | 依据 | 说明 |
 | --- | --- | --- | --- | --- |
-| 实现 Document MCP tools | 新任务 | P0 | README / requirements 已保留工具目标 | 注册 `generate_report_outline`、`generate_report_text`、`get_generation_status`、`get_report_result`、`export_report_docx` 等工具，并覆盖权限和脱敏输出。 |
+| 补 Document MCP 远程包装和 QA smoke | 测试 / runbook | P0 | 服务内 MCP 工具适配层已实现，#125 仍未关闭 | 将服务内工具适配层接入约定的 MCP transport 或 QA Host，并用真实请求上下文验证权限、脱敏输出和操作日志。 |
 | 补更多报告类型生成策略 | 新任务 | P1 | 需求覆盖两类固定报告 | 在 `coal_inventory_audit` 的模板、prompt 和样例验收准备好后接入 AI 生成。 |
 | 补 AI Gateway / Knowledge 跨服务 smoke | 测试 / runbook | P1 | 基础 AI 生成已在服务内闭环 | 用可控 AI Gateway fixture 和 Knowledge fixture 验证请求头、任务进度、脱敏错误和 partial_succeeded。 |
 | 补 report files/content 跨服务 smoke | 测试 / runbook | P1 | 基础 DOCX 导出已在服务内闭环 | 用 PostgreSQL、Redis、File Service 和 document worker 验证 `POST /report-files` 到 content endpoint 的完整链路。 |
@@ -116,6 +117,7 @@
 
 | 日期 | 检查人/工具 | 代码基准 | 结论 |
 | --- | --- | --- | --- |
+| 2026-07-01 | Codex C-09 implementation | working tree | Document 新增服务内 MCP 工具适配层和测试，覆盖 9 个工具的 schema、参数校验、现有 service 调用、安全结果摘要、`requestSource=mcp`/`toolName` 操作日志和基础 DOCX 导出边界；远程 MCP server/QA 端到端 smoke 仍依赖 #125。 |
 | 2026-06-30 | Codex C-005 implementation | working tree | Document 已补 `summer_peak_inspection` 基础 AI 大纲/正文生成编排、AI Gateway chat client、可选 Knowledge 检索 client、生成任务 payload 持久化和 OpenAPI/状态文档同步；Document MCP tools、更多报告类型和 Pandoc/LibreOffice 富 DOCX 仍是缺口。 |
 | 2026-06-30 | Codex full-day audit | `develop@92d3afc` | 复核今日 PR/issue：Document 已包含 report jobs/attempts/events、基础 DOCX report file creation、settings/statistics/logs、`pgx/v5@v5.9.2` 和安全依赖更新；#101 真实大纲/正文生成、#307 富 DOCX worker toolchain、Document MCP tools 和跨服务 content smoke 当时仍待补齐。 |
 | 2026-06-30 | Codex PR #265 review follow-up | working tree | 当时 Document 状态文档已与 report files/content 和基础内置 DOCX 导出对齐；生成编排、Document MCP tools 和 Pandoc/LibreOffice 富 DOCX 仍待后续任务。 |

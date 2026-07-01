@@ -11,8 +11,10 @@ statistics, and operation logs. DOCX export currently uses the in-process Go
 `SimpleDOCXGenerator`. Basic AI outline and section-content orchestration is
 implemented for the fixed `summer_peak_inspection` report type through AI
 Gateway chat calls, with optional Knowledge retrieval context when configured
-and requested. MCP tools and the Pandoc/LibreOffice rich DOCX conversion
-toolchain remain future work.
+and requested. A service-local Document MCP tool adapter is implemented for
+safe report generation, status, template schema, result, and basic DOCX export
+tool calls. A remote MCP server/QA end-to-end smoke remains follow-up work. The
+Pandoc/LibreOffice rich DOCX conversion toolchain remains future work.
 
 ## Local Configuration
 
@@ -131,6 +133,31 @@ worker dependency and is not installed in the current service image.
 | `GET` | `/report-operation-logs` | `listReportOperationLogs` | Implemented |
 | `GET` | `/report-settings` | `getReportSettings` | Implemented |
 | `PATCH` | `/report-settings` | `updateReportSettings` | Implemented; admin/super_admin only |
+
+## MCP Tool Adapter
+
+`internal/service/mcp_tools.go` exposes a Document-owned service-layer tool
+adapter with these stable tool names:
+
+- `generate_report_outline`
+- `regenerate_report_outline`
+- `generate_report_text`
+- `regenerate_report_text`
+- `regenerate_report_section`
+- `get_generation_status`
+- `get_template_schema`
+- `export_report_docx`
+- `get_report_result`
+
+The adapter accepts a trusted `RequestContext`, validates JSON-object
+arguments, calls existing Document services, returns only safe summaries and
+business IDs, and records operation logs with `requestSource=mcp` and
+`toolName=<tool>`. It does not directly access repositories, File object keys,
+MinIO, Qdrant, or model providers.
+
+`export_report_docx` uses the current basic DOCX report-file path. It must not
+be treated as Pandoc/LibreOffice rich DOCX support. A remote MCP server wrapper
+and cross-service QA smoke are still pending on the shared MCP smoke work.
 
 ## Migrations
 

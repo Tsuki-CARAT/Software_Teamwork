@@ -398,4 +398,4 @@ document_chunks
 
 如果 gateway 公开契约没有这些字段，服务本地可先保留内部字段，但 browser-facing API 必须等 gateway OpenAPI 接收后再暴露。
 
-当前 Go baseline 和早期 migration 中如果仍存在 `file_id` 命名，应视为兼容期实现细节；目标数据模型统一使用 `file_ref` 表达不透明的内部 file reference。
+当前 Go baseline 和早期 migration 中如果仍存在 `file_id` 命名，应视为兼容期实现细节；目标数据模型统一使用 `file_ref` 表达不透明的内部文件引用。

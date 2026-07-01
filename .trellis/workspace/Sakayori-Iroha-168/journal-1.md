@@ -38,3 +38,36 @@ Clarified Gateway OpenAPI as the stable public contract, reduced duplicated serv
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Issue 354 storage boundary docs cleanup
+
+**Date**: 2026-07-01
+**Task**: Issue 354 storage boundary docs cleanup
+**Branch**: `Special/docs/sync-trellis-spec-docs`
+
+### Summary
+
+Cleaned Knowledge/Document/File storage-boundary docs so owner services use opaque file_ref and File Service owns bucket/object key/storage internals.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `10556b0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

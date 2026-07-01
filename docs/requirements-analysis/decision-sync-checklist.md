@@ -41,12 +41,12 @@
 
 | 编号 | 原问题 | 同步结果 |
 | --- | --- | --- |
-| K1 | 知识库删除是软删除还是硬删除？ | 首期软删除；删除动作标记资源为 `deleted`，Qdrant 向量和 MinIO 对象由后台生命周期任务清理。 |
+| K1 | 知识库删除是软删除还是硬删除？ | 首期软删除；删除动作标记资源为 `deleted`，Qdrant 向量和底层文件对象清理由后台生命周期任务通过内部 `file_ref` 协调处理。 |
 | K2 | embedding 维度变化后如何处理 Qdrant collection？ | 采用版本化 collection；embedding 维度或模型族变化时创建新 collection，后台重建索引，旧 collection 保留到切换完成后清理。 |
 | K3 | 文档处理失败后保留几次错误历史？ | PostgreSQL job 保存最近 10 次尝试摘要，包含阶段、错误码、错误信息、开始/结束时间和耗时。 |
 | K4 | 文档标签是自由键值对还是预定义字典？ | 首期自由键值对；键和值都按字符串保存，管理端可后续增加字典约束。 |
 | K5 | 队列失败重试如何处理？ | `asynq` over Redis 负责队列投递、调度和执行；PostgreSQL job 是权威状态。任务最多自动重试 3 次，超过后进入 `failed`，由手动 retry API 重新排队。 |
-| K6 | 原始文件和生成文件放在哪些 bucket？ | 首期拆为 `source-files`、`templates`、`generated-reports` 三类 bucket，实际 bucket 名通过部署环境变量配置。 |
+| K6 | 原始文件和生成文件放在哪些 bucket？ | Owner service 不依赖 bucket 分类；只保存不透明 `file_ref`。Bucket、object key、storage backend 和凭据由 File Service 独占。 |
 
 ### 3.2 智能问答
 

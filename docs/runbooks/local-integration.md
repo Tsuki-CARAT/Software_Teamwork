@@ -8,7 +8,7 @@
 
 | 范围 | 当前状态 | 说明 |
 | --- | --- | --- |
-| 根级本地/演示 Compose | partial | `deploy/docker-compose.yml` 已提供共享 PostgreSQL、Redis、Parser、服务 migration、`seed-local` / `seed-local-ai` 和基础服务串联；Compose 也会启动 Qdrant/MinIO 容器，并通过 `minio-init` 创建 `software-teamwork-local` bucket。默认 Knowledge 使用 in-memory vector index、File 容器使用 local storage；File 的 PostgreSQL + MinIO 路径通过显式 env-gated smoke 验证。现有 seed data 只覆盖本地登录、基础报告类型、示例知识库和 AI profile placeholder。 |
+| 根级本地/演示 Compose | partial | `deploy/docker-compose.yml` 已提供共享 PostgreSQL、Redis、Parser、服务 migration、`seed-local` / `seed-local-ai` 和基础服务串联；Compose 也会启动 Qdrant/MinIO 容器，并通过 `minio-init` 创建本地 File Service 内部 bucket `software-teamwork-local`。默认 Knowledge 使用 in-memory vector index、File 容器使用 local storage；File 的 PostgreSQL + MinIO 路径通过显式 env-gated smoke 验证。现有 seed data 只覆盖本地登录、基础报告类型、示例知识库和 AI profile placeholder。 |
 | QA 服务 Compose | partial | `services/qa/docker-compose.yml` 会启动 QA PostgreSQL、Auth PostgreSQL、Redis、Auth、QA 和 Gateway；不包含 Knowledge、Document、File、AI Gateway。 |
 | Document 服务 Compose | partial | `services/document/docker-compose.yml` 会启动 Document PostgreSQL、Redis、migration 和 Document；不包含 File、AI Gateway。 |
 | AI Gateway 本地运行 | root profile / host-run | 根级 `docker compose --profile ai` 会启动 AI Gateway、migration 和 placeholder profile seed；单独调试时也可 host-run，真实 provider smoke 仍需配置有效 provider key。 |
@@ -107,7 +107,7 @@ cd deploy
 docker compose --env-file .env.example up -d postgres minio minio-init migrate-file
 ```
 
-`minio-init` 使用 MinIO `mc` 客户端镜像创建 bucket `software-teamwork-local`；它不是第二个 MinIO server。默认本地配置：
+`minio-init` 使用 MinIO `mc` 客户端镜像创建 File Service 本地内部 bucket `software-teamwork-local`；它不是第二个 MinIO server，也不是 owner service 可以依赖的业务 bucket 分类。默认本地配置：
 
 ```text
 endpoint: localhost:9000

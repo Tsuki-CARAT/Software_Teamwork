@@ -17,7 +17,7 @@ RESTful 路径、统一响应和错误 envelope 以 [前后端集成契约](../.
 File Service 必须遵循 [技术选型基线](../../architecture/technology-decisions.md)。本服务只补充文件域特有约束：
 
 - 上传大小限制必须在 HTTP 层和 multipart 解析层同时生效。
-- 目标对象存储使用官方 MinIO Go SDK；当前 runtime 已有 memory/local/MinIO `ObjectStore` adapter，根级 Compose 已提供 MinIO server/mc 初始化和 `software-teamwork-local` bucket。`file` 服务封装 bucket、object key、etag、version id 和对象 URL，owner service 与前端都不得直接依赖这些内部字段。
+- 目标对象存储使用官方 MinIO Go SDK；当前 runtime 已有 memory/local/MinIO `ObjectStore` adapter，根级 Compose 已提供 MinIO server/mc 初始化和本地实现细节 bucket `software-teamwork-local`。`file` 服务封装 bucket、object key、etag、version id 和对象 URL，owner service 与前端都不得直接依赖这些内部字段。
 - 当前 `cmd/server` 在 `FILE_DATABASE_URL` 为空时使用 memory metadata repository；配置 `FILE_DATABASE_URL` 时接入 PostgreSQL repository，并要求 `FILE_INTERNAL_SERVICE_TOKEN` 或 `INTERNAL_SERVICE_TOKEN`。具体状态以 [实现说明](docs/implementation.md) 为准。
 - 对象物理清理可由 `asynq` worker 执行，任务类型使用 `file:object:purge`。PostgreSQL 中的文件状态、失败摘要、重试次数和最终结果仍是权威来源。
 - handler 测试重点覆盖 envelope、错误码、request id、multipart 边界和内容流响应；repository 测试覆盖 migration 后的 SQL 行为。
@@ -65,9 +65,9 @@ file service /internal/v1/files/**
 
 前端侧只调用 gateway 公开接口。gateway 将认证后的请求转发给 owner service，并统一处理响应 envelope、request id 和错误归一化。
 
-知识库文件上传、文档详情、文档标签、删除和原始文件流公开资源由 `knowledge` 拥有。`knowledge` 在服务边界内保存内部 file reference、知识库归属、处理状态和索引状态，并调用 `file` 读写底层原始文件对象。
+知识库文件上传、文档详情、文档标签、删除和原始文件流公开资源由 `knowledge` 拥有。`knowledge` 在服务边界内保存内部 `file_ref`、知识库归属、处理状态和索引状态，并调用 `file` 读写底层原始文件对象。
 
-报告模板、素材和导出文件公开资源由 `document` 拥有。`document` 保存 `reportTemplateId`、`materialId`、`reportFileId`、业务状态和 file reference，并通过内部 client 调用 `file` 完成对象写入、读取和删除。前端仍只看到 report 资源 ID 和 content 子资源，不接触 file 内部 ID、bucket、object key 或 MinIO URL。
+报告模板、素材和导出文件公开资源由 `document` 拥有。`document` 保存 `reportTemplateId`、`materialId`、`reportFileId`、业务状态和内部 `file_ref`，并通过内部 client 调用 `file` 完成对象写入、读取和删除。前端仍只看到 report 资源 ID 和 content 子资源，不接触 file 内部 ID、bucket、object key 或 MinIO URL。
 
 ## 公开能力复用边界
 
@@ -174,7 +174,7 @@ JSON 成功、分页和错误响应遵循 [前后端集成契约](../../architec
 - MinIO 存储原始文件对象；bucket 名和 object key 是 `file` 服务内部实现细节。
 - Object key、bucket、内部对象 URL、MinIO 错误和 access key 不得进入前端响应。
 - 上传文件名必须做展示层安全处理，不能直接用于 object key。
-- 文件删除应优先保证 owner service 无法再通过 file reference 读取；物理删除失败时应有可重试的清理机制。
+- 文件删除应优先保证 owner service 无法再通过内部 `file_ref` 读取；物理删除失败时应有可重试的清理机制。
 
 ## 错误码约定
 

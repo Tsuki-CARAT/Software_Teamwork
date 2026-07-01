@@ -17,7 +17,7 @@
 
 - `knowledge` 是 Qdrant 的唯一业务写入方。
 - `qa`、`document` 只能通过本契约的知识查询资源复用知识能力，不能直接写 Qdrant。
-- 原始文件存储在 File/MinIO 边界；Parser 返回规范化 parsed content，不保存知识业务状态、object key、bucket、内部 URL 或持久化解析产物。
+- 原始文件存储在 File Service 边界；Knowledge 只保存不透明 `file_ref`，不得依赖或暴露 bucket、object key、MinIO URL、签名 URL、存储 backend 或凭据。Parser 返回规范化 parsed content，不保存知识业务状态、`file_ref`、object key、bucket、内部 URL 或持久化解析产物。
 - Knowledge 负责保存业务元数据、chunks、processing jobs 和 Qdrant 索引事实。
 - Redis 用于异步任务队列、短期任务状态辅助和缓存；PostgreSQL 保存可追溯业务状态，不把 Redis 作为长期业务真相。
 
@@ -401,8 +401,8 @@ DELETE /api/v1/knowledge-bases/{knowledgeBaseId}
 规则：
 
 - 删除前必须校验权限。
-- 首期采用软删除；Qdrant 向量、MinIO 文件引用和后台清理由生命周期任务处理。
-- 删除知识库时应处理 PostgreSQL 元数据、Qdrant 向量、MinIO 文件引用的生命周期。
+- 首期采用软删除；Qdrant 向量、内部 `file_ref` 和后台清理由生命周期任务处理。
+- 删除知识库时应处理 PostgreSQL 元数据、Qdrant 向量和内部 `file_ref` 的生命周期；bucket、object key 和底层对象删除策略由 File Service 独占。
 
 ### 4.6 创建知识库删除任务
 
@@ -540,7 +540,7 @@ DELETE /api/v1/documents/{documentId}
 
 - 删除文档必须同步标记 Qdrant 向量生命周期。
 - 如果历史问答引用了该文档，引用详情应返回“原文已删除或无权限访问”的 fallback。
-- 首期不立即硬删原始 MinIO 对象；通过 `file` service 生命周期和后台清理策略处理。
+- 首期不立即要求硬删底层文件对象；通过内部 `file_ref` 交由 `file` service 生命周期和后台清理策略处理。
 - 首期删除只做软删除，原始文件对象保留到后台生命周期任务确认无引用后清理。
 
 ### 5.6 创建文档删除任务
@@ -628,7 +628,7 @@ GET /api/v1/documents/{documentId}/content
 规则：
 
 - 必须先校验文档访问权限。
-- 不得返回内部 MinIO object key 或内部存储 URL。
+- 不得返回 `file_ref`、file 内部 ID、bucket、object key、MinIO URL、签名 URL 或内部存储 URL。
 - 审计日志首期暂缓，后续可接入独立审计服务。
 
 ## 6. 文档处理任务 API
@@ -794,7 +794,7 @@ POST /api/v1/knowledge-queries
 规则：
 
 - 必须过滤用户无权限访问的知识库和文档。
-- browser-facing API 返回 `contentPreview`，不得返回原始向量、完整 Qdrant payload、prompt、object key 或 provider 原始响应体。
+- browser-facing API 返回 `contentPreview`，不得返回原始向量、完整 Qdrant payload、prompt、`file_ref`、bucket、object key、MinIO URL、签名 URL 或 provider 原始响应体。
 - `qa` 和 `document` 应通过该接口复用检索能力。
 - 检索建模为创建 `knowledge-query` 资源，不使用 `search` 动作路径。
 
@@ -1015,7 +1015,7 @@ GET /api/v1/knowledge-statistics/overview
 | --- | --- | --- |
 | 知识库元数据 | PostgreSQL | `knowledge` |
 | 文档元数据和状态 | PostgreSQL | `knowledge` |
-| 文件对象和内容读取授权 | MinIO + PostgreSQL 元数据；bucket 首期分为 `source-files`、`templates`、`generated-reports` | `file` |
+| 文件对象和内容读取授权 | File Service 内部元数据和对象存储；Knowledge 只保存不透明 `file_ref`，bucket、object key、storage backend 和凭据由 File Service 独占 | `file` |
 | 切片元数据 | PostgreSQL | `knowledge` |
 | 向量和检索 payload | Qdrant | `knowledge` |
 | 处理任务状态 | PostgreSQL 持久化，`asynq` over Redis 队列和短期状态辅助；自动重试最多 3 次 | `knowledge` |
@@ -1027,10 +1027,10 @@ GET /api/v1/knowledge-statistics/overview
 | --- | --- |
 | K1 | 首期采用角色级 RBAC 和知识库可见性，不做组织/电厂/专业多维权限。 |
 | K2 | 报告支撑材料是独立资源，复用 `file` service 和必要的 `knowledge` 检索能力。 |
-| K3 | 文档删除首期按软删除设计；Qdrant 和 MinIO 清理在后台生命周期任务中处理。 |
+| K3 | 文档删除首期按软删除设计；Qdrant 清理和底层文件对象清理由后台生命周期任务通过内部 `file_ref` 协调处理。 |
 | K4 | 文档解析/OCR 首期使用外部 HTTP 解析服务，通过 `parser.baseUrl`、`apiKey`、`timeoutSeconds`、`maxConcurrency` 配置。 |
 | K5 | 异步任务采用 `asynq` over Redis + PostgreSQL 持久化状态。 |
 | K6 | embedding 维度或模型族变化后创建版本化 Qdrant collection，并通过后台任务重建索引。 |
 | K7 | 任务自动重试最多 3 次，PostgreSQL job 保留最近 10 次尝试摘要。 |
-| K8 | MinIO bucket 首期拆为 `source-files`、`templates`、`generated-reports` 三类，实际名称由部署配置决定。 |
+| K8 | Owner service 不依赖 bucket 分类或 object key 规则；File Service 独占 bucket、object key、storage backend 和凭据，当前本地 Compose 单 bucket `software-teamwork-local` 只是本地实现细节。 |
 | K9 | 审计日志首期暂缓，不作为知识管理 API 的强制验收项；首期保留配置变更、任务失败和删除结果等排查字段。 |

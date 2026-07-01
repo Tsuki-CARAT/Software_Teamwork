@@ -260,7 +260,7 @@ Document 相关接口使用项目统一错误码：
 - Redis 只通过 `asynq` 承载任务队列和短期协调；PostgreSQL 中的 `ReportJob`、`ReportJobAttempt`、`ReportEvent` 是权威业务状态。
 - 任务最多自动重试 3 次，失败后保留最近尝试摘要；手动重试通过 `report-jobs/{jobId}/attempts` 创建新资源。
 - 当前大纲/正文生成由 worker 通过 AI Gateway chat 完成，不保存 provider base URL/API key，不直连 provider；当前 DOCX 创建由 worker 调用内置 `SimpleDOCXGenerator` 完成，生成后通过 file 服务保存底层对象；Pandoc/LibreOffice 类工具链落地后必须同步更新 Dockerfile、部署和技术基线。
-- 服务日志和指标不得记录 prompt 全文、文档全文、file reference、object key、token、API key 或 provider 原始响应体。
+- 服务日志和指标不得记录 prompt 全文、文档全文、`file_ref`、object key、token、API key 或 provider 原始响应体。
 - 模板文件首期限定 DOCX；模板结构、默认章节和材料映射以数据库配置为权威，不从 DOCX 自动解析。
 - 首期 AI 生成闭环覆盖 `summer_peak_inspection`；新增报告类型或更复杂的检索/流式事件前必须确保 OpenAPI、状态枚举和错误处理已同步。
 - 契约测试应覆盖 active document operations 的 response envelope、字段命名、错误码、request id、权限边界和文件内容接口。

@@ -120,7 +120,7 @@
 - 首期异步任务采用 `asynq` over Redis + PostgreSQL 持久化状态。
 - OCR 和文档解析首期使用内部 Parser HTTP 服务跑通 pipeline；Parser runtime 独立部署并预留 PaddleOCR 后端，通过 `parser.baseUrl`、`apiKey`、`timeoutSeconds`、`maxConcurrency` 配置，任务失败最多自动重试 3 次。
 - LLM、Embedding、Rerank 等模型调用统一经 `ai-gateway`，各业务服务首期只需按 OpenAI-compatible API 调用单一可用供应商。
-- MinIO bucket 首期按 `source-files`、`templates`、`generated-reports` 三类拆分；具体 bucket 名可由部署环境变量配置。
+- Owner service 只保存不透明 `file_ref`；bucket、object key、storage backend 和凭据由 File Service 独占。根级本地 Compose 的 `software-teamwork-local` bucket 只是 File Service 本地实现细节，不是业务分类契约。
 
 ## 7. 核心数据对象
 

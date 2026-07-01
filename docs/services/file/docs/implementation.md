@@ -63,10 +63,10 @@
 
 | 出入点 | 文档要求 | 当前实现 | 风险 | 建议处理 |
 | --- | --- | --- | --- | --- |
-| 生产对象存储 | 文档要求 File Service 封装 MinIO | 已有 MinIO adapter；根级 Compose 已固定 MinIO server/mc 镜像并初始化 `software-teamwork-local` bucket；File 联合 smoke 需显式 env 启用 | 普通 CI 不跑真实对象存储；跨服务链路仍需 #125/#289 等任务覆盖 | 使用 env-gated smoke 记录本机验证结果，不把根级 Compose 误写成完整 E2E。 |
+| 生产对象存储 | 文档要求 File Service 封装 MinIO | 已有 MinIO adapter；根级 Compose 已固定 MinIO server/mc 镜像并初始化本地实现细节 bucket `software-teamwork-local`；File 联合 smoke 需显式 env 启用 | 普通 CI 不跑真实对象存储；跨服务链路仍需 #125/#289 等任务覆盖 | 使用 env-gated smoke 记录本机验证结果，不把根级 Compose 误写成完整 E2E。 |
 | 服务 OpenAPI 与代码路由 | `docs/services/file/api/internal.openapi.yaml` 只声明 `/internal/v1/files/**` | 代码还暴露 knowledge-document 兼容路由；`services/file/api/openapi.yaml` 是实现本地副本 | 调用方可能继续依赖错误 owner 边界 | 保留短期兼容但在 implementation 中登记退出条件；不要扩展兼容路由。 |
 | 配置说明 | 早期实现说明列出 `FILE_DATABASE_URL`、MinIO、Redis 等 | runtime 已解析 `FILE_DATABASE_URL`、service token 和 MinIO 配置；Redis/异步清理仍未落地 | 部署若只配置 Redis 仍不会启用异步清理 | README 和 implementation 只把已接入项写成 runtime 能力，未落地项放在缺口。 |
-| file reference 边界 | File 不保存业务字段 | 兼容 document 路由仍保存 `knowledgeBaseId` 和 tags | 与 owner service 边界冲突 | 迁移 knowledge 上传链路到 `/internal/v1/files`，逐步删除兼容业务字段。 |
+| `file_ref` 边界 | File 不保存业务字段 | 兼容 document 路由仍保存 `knowledgeBaseId` 和 tags | 与 owner service 边界冲突 | 迁移 knowledge 上传链路到 `/internal/v1/files`，逐步删除兼容业务字段。 |
 
 ## 6. MVP / mock / memory backend / 占位
 
@@ -75,7 +75,7 @@
 | memory repository | handler tests 和无 DB 本地运行 | 部署/真实联调统一配置 `FILE_DATABASE_URL` 后，memory 仅保留测试和早期本地用途 | PostgreSQL runtime 已接入；仍需部署联调 |
 | memory object store | 单元测试和无文件系统本地运行 | local/MinIO smoke 成为默认验证路径 | MinIO adapter / smoke 任务 |
 | local object store | 本地持久化 smoke | MinIO adapter 可在 Compose/部署中使用 | MinIO adapter / smoke 任务 |
-| MinIO object store | 持久对象存储 adapter，可接已有 MinIO/S3 兼容端点；根级 Compose 提供本地 MinIO 和 bucket 初始化 | 真实依赖 smoke 成为 PR/联调时的显式验证项；完整跨服务 E2E 仍由 #125/#289 等任务承接 | #286 / 跨服务 smoke 任务 |
+| MinIO object store | 持久对象存储 adapter，可接已有 MinIO/S3 兼容端点；根级 Compose 提供本地 MinIO 和 File Service 内部 bucket 初始化 | 真实依赖 smoke 成为 PR/联调时的显式验证项；完整跨服务 E2E 仍由 #125/#289 等任务承接 | #286 / 跨服务 smoke 任务 |
 | knowledge-document 兼容路由 | 兼容早期 knowledge/file 联调 | Knowledge 只调用 `/internal/v1/files/**` 且无调用方依赖旧路由 | 兼容路由退出任务 |
 
 ## 7. 运行与配置
@@ -86,7 +86,7 @@
 | 环境变量 | `FILE_HTTP_ADDR`、`FILE_MAX_UPLOAD_BYTES`、`FILE_STORAGE_BACKEND`、`FILE_LOCAL_STORAGE_DIR`、`FILE_MINIO_ENDPOINT`、`FILE_MINIO_ACCESS_KEY`、`FILE_MINIO_SECRET_KEY`、`FILE_MINIO_BUCKET`、`FILE_MINIO_USE_SSL`、`FILE_MINIO_REGION`、`FILE_MINIO_TIMEOUT`、`FILE_DATABASE_URL`、`FILE_INTERNAL_SERVICE_TOKEN`、`INTERNAL_SERVICE_TOKEN`、`FILE_SHUTDOWN_TIMEOUT` | Redis 尚未被 runtime 使用。 |
 | PostgreSQL / migration | `migrations/0001_create_file_objects.sql`、`sqlc.yaml`、`queries/file_objects.sql`、runtime repository | sqlc 生成代码未落地；真实 PostgreSQL smoke 需要本地 DB。 |
 | Redis / queue | 未使用 | 清理 worker 未实现。 |
-| Object storage / vector store / AI provider | memory/local/MinIO object store；根级 Compose 启动 MinIO 并通过 `minio-init` 初始化 `software-teamwork-local` bucket | File 不涉及 vector/AI provider；File 容器在根级 Compose 中仍默认 `local` storage，MinIO 路径通过显式 smoke 验证。 |
+| Object storage / vector store / AI provider | memory/local/MinIO object store；根级 Compose 启动 MinIO 并通过 `minio-init` 初始化本地 File Service 内部 bucket `software-teamwork-local` | File 不涉及 vector/AI provider；File 容器在根级 Compose 中仍默认 `local` storage，MinIO 路径通过显式 smoke 验证。 |
 
 ## 8. 测试与验证
 

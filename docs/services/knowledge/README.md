@@ -142,7 +142,7 @@ seeded `document_chunks` 和 fake vector hit 替代真实 worker/Qdrant，只要
 
 ## 与 File Service 的边界
 
-知识库文档上传入口由 `knowledge` 拥有，精确 method、path 和 multipart schema 以 Gateway OpenAPI 为准。Knowledge Service 负责接收 gateway 转发的 multipart、创建知识库文档资源、保存内部 file reference、维护处理状态、chunks、embedding、Qdrant 索引和检索。Knowledge 可在服务边界内调用 File Service 的 `/internal/v1/files/**` 基础接口保存和读取底层原始文件对象，并调用 Parser Service 的 `/internal/v1/parsed-documents` 将 raw bytes 转成规范化 parsed content；File Service 不保存 `knowledgeBaseId`、文档处理状态、chunks 或索引状态，Parser Service 不保存业务状态、chunks、embedding 或 Qdrant point。gateway 不能直接解析文件或操作 Qdrant。
+知识库文档上传入口由 `knowledge` 拥有，精确 method、path 和 multipart schema 以 Gateway OpenAPI 为准。Knowledge Service 负责接收 gateway 转发的 multipart、创建知识库文档资源、保存内部 `file_ref`、维护处理状态、chunks、embedding、Qdrant 索引和检索。Knowledge 可在服务边界内调用 File Service 的 `/internal/v1/files/**` 基础接口保存和读取底层原始文件对象，并调用 Parser Service 的 `/internal/v1/parsed-documents` 将 raw bytes 转成规范化 parsed content；File Service 不保存 `knowledgeBaseId`、文档处理状态、chunks 或索引状态，Parser Service 不保存业务状态、chunks、embedding 或 Qdrant point。gateway 不能直接解析文件或操作 Qdrant。
 
 ## 错误码约定
 

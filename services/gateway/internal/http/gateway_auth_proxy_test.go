@@ -875,6 +875,109 @@ func TestProxySanitizesDownstreamErrorEnvelope(t *testing.T) {
 	}
 }
 
+func TestProxyMapsDownstreamErrorCodes(t *testing.T) {
+	cases := []struct {
+		name           string
+		downstreamCode int
+		wantCode       int
+		wantErrorCode  string
+		bodyMustAbsent string // non-empty: assert gateway body does NOT contain this string
+	}{
+		{
+			name:           "downstream 500 yields 502 dependency_error",
+			downstreamCode: http.StatusInternalServerError,
+			wantCode:       http.StatusBadGateway,
+			wantErrorCode:  "dependency_error",
+			bodyMustAbsent: "internal server error from upstream",
+		},
+		{
+			name:           "downstream 503 yields 502 dependency_error",
+			downstreamCode: http.StatusServiceUnavailable,
+			wantCode:       http.StatusBadGateway,
+			wantErrorCode:  "dependency_error",
+			bodyMustAbsent: "service unavailable from upstream",
+		},
+		{
+			name:          "downstream 403 yields 403 forbidden",
+			downstreamCode: http.StatusForbidden,
+			wantCode:      http.StatusForbidden,
+			wantErrorCode: "forbidden",
+		},
+		{
+			name:          "downstream 409 yields 409 conflict",
+			downstreamCode: http.StatusConflict,
+			wantCode:      http.StatusConflict,
+			wantErrorCode: "conflict",
+		},
+		{
+			name:          "downstream 429 yields 429 rate_limited",
+			downstreamCode: http.StatusTooManyRequests,
+			wantCode:      http.StatusTooManyRequests,
+			wantErrorCode: "rate_limited",
+		},
+		{
+			// covers the 401 branch in downstreamErrorCode when a business service (not auth)
+			// returns 401 — gateway transparently passes it through as unauthorized.
+			name:          "downstream 401 yields 401 unauthorized",
+			downstreamCode: http.StatusUnauthorized,
+			wantCode:      http.StatusUnauthorized,
+			wantErrorCode: "unauthorized",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hasher := testHasher(t)
+			store := newMemorySessionStore()
+			accessToken := "valid-token"
+			store.putToken(t, hasher, accessToken, service.SessionCacheEntry{
+				SessionID:   "sess_1",
+				UserID:      "usr_1",
+				Username:    "alice",
+				Roles:       []string{"analyst"},
+				Permissions: []string{"knowledge:read"},
+				TokenType:   "Bearer",
+				ExpiresAt:   time.Now().Add(time.Hour).UTC(),
+			})
+
+			downstreamBody := "internal server error from upstream"
+			if tc.downstreamCode == http.StatusServiceUnavailable {
+				downstreamBody = "service unavailable from upstream"
+			}
+			downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.downstreamCode)
+				_, _ = io.WriteString(w, downstreamBody)
+			}))
+			defer downstream.Close()
+
+			server := newGatewayTestServer(t, gatewayDeps{
+				store:         store,
+				hasher:        hasher,
+				ownerBaseURLs: map[string]string{"knowledge": downstream.URL},
+			})
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/knowledge-bases", nil)
+			req.Header.Set("Authorization", "Bearer "+accessToken)
+			req.Header.Set("X-Request-Id", "req_error_map")
+			res := httptest.NewRecorder()
+
+			server.ServeHTTP(res, req)
+
+			if res.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d, body = %s", res.Code, tc.wantCode, res.Body.String())
+			}
+			raw := res.Body.String()
+			if tc.bodyMustAbsent != "" && strings.Contains(raw, tc.bodyMustAbsent) {
+				t.Fatalf("gateway response body leaked downstream content %q: %s", tc.bodyMustAbsent, raw)
+			}
+			var body errorBody
+			decodeJSON(t, res.Body, &body)
+			if body.Error.Code != tc.wantErrorCode {
+				t.Fatalf("error.code = %q, want %q", body.Error.Code, tc.wantErrorCode)
+			}
+		})
+	}
+}
+
 type gatewayDeps struct {
 	auth          gatewayhttp.AuthClient
 	store         service.SessionStore

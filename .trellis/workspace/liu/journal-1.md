@@ -793,3 +793,36 @@ Addressed PR #350 review feedback by locking and validating the current report s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 24: PR 350 section write concurrency guards
+
+**Date**: 2026-07-01
+**Task**: PR 350 section write concurrency guards
+**Branch**: `PrimeTeam/feat/report-section-versions`
+
+### Summary
+
+Closed latest PR review findings by locking report/section rows for manual section writes, preserving stale AI conflict status, updating backend spec, and verifying document service checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7108a3e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

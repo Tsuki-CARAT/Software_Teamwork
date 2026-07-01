@@ -713,6 +713,9 @@ func TestReportGenerationServicePreservesConcurrentSectionEditBeforeSuccessfulWr
 	if got.Content != "manual edit during generation" || got.Version != 2 || got.ContentSource != ContentSourceManual || !got.ManualEdited {
 		t.Fatalf("concurrent section edit was overwritten: %+v", got)
 	}
+	if got.GenerationStatus != JobStatusRunning || got.LastJobID != "job-1" {
+		t.Fatalf("stale generated response changed current generation status: %+v", got)
+	}
 	if len(got.Tables) != 1 || got.Tables[0]["name"] != "manual table" {
 		t.Fatalf("concurrent section tables were overwritten: %+v", got.Tables)
 	}

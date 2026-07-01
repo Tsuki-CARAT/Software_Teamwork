@@ -92,11 +92,19 @@ func (r *PostgresRepository) ListReports(ctx context.Context, filter service.Rep
 }
 
 func (r *PostgresRepository) GetReportByID(ctx context.Context, id string) (service.Report, error) {
+	return r.getReportByID(ctx, id, false)
+}
+
+func (r *PostgresRepository) GetReportByIDForUpdate(ctx context.Context, id string) (service.Report, error) {
+	return r.getReportByID(ctx, id, true)
+}
+
+func (r *PostgresRepository) getReportByID(ctx context.Context, id string, lockForUpdate bool) (service.Report, error) {
 	reportID, err := parseUUID(id)
 	if err != nil {
 		return service.Report{}, service.NewError(service.CodeValidation, "invalid report id", err)
 	}
-	row := r.db.QueryRow(ctx, `
+	query := `
 		SELECT
 			id::text, report_name, report_type, COALESCE(template_id::text, ''), topic,
 			COALESCE(specialty, ''), COALESCE(plant_or_business_object, ''),
@@ -105,7 +113,11 @@ func (r *PostgresRepository) GetReportByID(ctx context.Context, id string) (serv
 			COALESCE(latest_report_file_id::text, ''), generated_at, exported_at,
 			created_at, updated_at, deleted_at
 		FROM reports
-		WHERE id = $1`, reportID)
+		WHERE id = $1`
+	if lockForUpdate {
+		query += " FOR UPDATE"
+	}
+	row := r.db.QueryRow(ctx, query, reportID)
 	report, err := scanReport(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

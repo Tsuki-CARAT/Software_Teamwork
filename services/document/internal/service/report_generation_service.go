@@ -289,6 +289,9 @@ func (s *ReportGenerationService) executeContentGeneration(ctx context.Context, 
 			}
 			return nil
 		}); err != nil {
+			if appErr, ok := Classify(err); ok && appErr.Code == CodeConflict {
+				return ReportGenerationExecutionResult{}, err
+			}
 			s.markSectionGenerationFailed(ctx, sectionID, payload.JobID)
 			return ReportGenerationExecutionResult{}, err
 		}

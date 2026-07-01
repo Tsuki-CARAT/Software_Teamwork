@@ -745,13 +745,19 @@ outline generation -> parse AI response outside transaction -> transaction inser
 - Deleted reports are not valid section-version write targets. A report with
   `ReportStatusDeleted` or non-nil `DeletedAt` must return `409 conflict`
   before inserting `report_section_versions` or updating `report_sections`;
-  re-check the report state inside the write transaction before the insert and
-  current-section switch.
+  re-check and lock the report row inside the write transaction before the
+  insert and current-section switch.
 - The next version number must be greater than both `ReportSection.version` and
   every existing `ReportSectionVersion.version`.
 - Manual content or table edits through section save/update paths must create a
   `manual` section-version snapshot in the same transaction as the current
   section update.
+- Manual section update/save paths must lock and re-check the report row inside
+  the write transaction before mutating sections. For each existing section
+  they update, they must also re-read and lock the current section inside the
+  transaction, require same-report ownership, and reject
+  `generation_status = running` with `409 conflict` before writing content,
+  tables, version, source, manual-edit state, or manual section-version rows.
 - AI generation may call the model outside the database transaction, but the
   final generated content update plus `report_section_versions` insert must run
   in one short `WithinGenerationTx` operation.
@@ -768,6 +774,10 @@ outline generation -> parse AI response outside transaction -> transaction inser
   full `report_sections` snapshot over `content`, `tables_json`, `version`,
   `content_source`, or `manual_edited`, and should require `last_job_id` to
   still match the failed generation job before marking `failed`.
+- A generated-section success transaction returning `409 conflict` because the
+  section changed or the job was superseded is not a generation persistence
+  failure. Return the conflict without marking the current section/job
+  `failed`; the stale AI response must leave the current section status intact.
 - Manual edit preservation defaults to true. `preserveUserEdits=false` is the
   public option; `preserveManualEdits=false` remains a backward-compatible
   alias. Only an explicit false value may overwrite manual edits.
@@ -780,6 +790,7 @@ outline generation -> parse AI response outside transaction -> transaction inser
 | Report is soft-deleted by status or `deleted_at` | `409 conflict`; do not create a version or mutate the current section |
 | Target section belongs to another report | `404 not_found` |
 | Target section has `generation_status = running` | `409 conflict`; do not create a version |
+| Manual update/save write transaction sees a deleted report or running section | `409 conflict`; do not mutate the current section or create a manual version |
 | Successful AI response finds a different `last_job_id`, non-running status, changed version, or changed manual-edit state | `409 conflict`; do not create a version or overwrite current section content |
 | Version insert succeeds but current-section switch fails | Roll back inserted version and return typed dependency/not-found error |
 | AI generated content update succeeds but version insert fails | Roll back the generated content switch; mark the section failed best-effort with a narrow, current-job-matched status update that preserves concurrent edits |
@@ -803,11 +814,17 @@ outline generation -> parse AI response outside transaction -> transaction inser
   transaction.
 - Rollback tests where current-section update fails after version insertion.
 - Manual edit snapshot tests for single-section update and bulk save.
+- Manual edit race tests for single-section update and bulk save must simulate
+  a report deleted after the entry check and a section becoming
+  `generation_status = running` after the entry check; both cases must return
+  `409 conflict`, preserve current section content/version/status, and create
+  no manual section-version row.
 - Generation tests for default preserve behavior, explicit
   `preserveUserEdits=false`, and rollback when version insertion fails.
 - Generation success-path tests must simulate a concurrent manual edit and a
   superseding generation job after the AI call but before the write transaction;
-  both cases must preserve the current section and create no stale AI version.
+  both cases must preserve the current section, preserve current generation
+  status, and create no stale AI version.
 - Generation rollback tests must simulate a concurrent section edit after the
   failed transaction rolls back and assert failure compensation preserves
   `content`, `tables`, `version`, `content_source`, and `manual_edited`.

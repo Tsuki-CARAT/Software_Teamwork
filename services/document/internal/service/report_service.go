@@ -14,6 +14,7 @@ type ReportRepository interface {
 
 	CreateReport(ctx context.Context, value Report) (Report, error)
 	GetReportByID(ctx context.Context, id string) (Report, error)
+	GetReportByIDForUpdate(ctx context.Context, id string) (Report, error)
 	ListReports(ctx context.Context, filter ReportListFilter) ([]Report, int, error)
 	UpdateReport(ctx context.Context, value Report) (Report, error)
 	SoftDeleteReport(ctx context.Context, id string, deletedAt time.Time) (Report, error)
@@ -579,6 +580,17 @@ func (s *ReportService) GetSection(ctx context.Context, reqCtx RequestContext, r
 	return section, nil
 }
 
+func requireWritableReportForUpdate(ctx context.Context, repo ReportRepository, reportID string) error {
+	report, err := repo.GetReportByIDForUpdate(ctx, reportID)
+	if err != nil {
+		return mapRepositoryReadError(err, "report not found")
+	}
+	if report.Status == ReportStatusDeleted || report.DeletedAt != nil {
+		return NewError(CodeConflict, "report has been deleted", nil)
+	}
+	return nil
+}
+
 func (s *ReportService) UpdateSection(ctx context.Context, reqCtx RequestContext, reportID, sectionID string, input UpdateSectionInput) (ReportSection, error) {
 	report, err := s.GetReport(ctx, reqCtx, reportID)
 	if err != nil {
@@ -599,19 +611,32 @@ func (s *ReportService) UpdateSection(ctx context.Context, reqCtx RequestContext
 	now := s.now()
 	var updated ReportSection
 	err = s.repo.WithinTx(ctx, func(txRepo ReportRepository) error {
-		nextVersion := section.Version + 1
+		if err := requireWritableReportForUpdate(ctx, txRepo, reportID); err != nil {
+			return err
+		}
+		currentSection, err := txRepo.GetReportSectionByIDForUpdate(ctx, sectionID)
+		if err != nil {
+			return mapRepositoryReadError(err, "report section not found")
+		}
+		if currentSection.ReportID != reportID {
+			return NewError(CodeNotFound, "report section not found", nil)
+		}
+		if currentSection.GenerationStatus == JobStatusRunning {
+			return NewError(CodeConflict, "section content generation is in progress", nil)
+		}
+
+		nextVersion := currentSection.Version + 1
 		if contentChanged {
 			existing, err := txRepo.ListReportSectionVersions(ctx, sectionID)
 			if err != nil {
 				return dependencyError("list report section versions", err)
 			}
-			nextVersion = nextReportSectionVersion(section, existing)
+			nextVersion = nextReportSectionVersion(currentSection, existing)
 		}
-		candidate := applySectionUpdate(section, input, now)
+		candidate := applySectionUpdate(currentSection, input, now)
 		if contentChanged {
 			candidate.Version = nextVersion
 		}
-		var err error
 		updated, err = txRepo.UpdateReportSection(ctx, candidate)
 		if err != nil {
 			return mapRepositoryReadError(err, "report section not found")
@@ -660,6 +685,9 @@ func (s *ReportService) SaveSections(ctx context.Context, reqCtx RequestContext,
 
 	saved := make([]ReportSection, 0, len(input.Sections))
 	err = s.repo.WithinTx(ctx, func(txRepo ReportRepository) error {
+		if err := requireWritableReportForUpdate(ctx, txRepo, reportID); err != nil {
+			return err
+		}
 		existing, err := txRepo.ListReportSections(ctx, reportID)
 		if err != nil {
 			return dependencyError("list report sections", err)
@@ -695,6 +723,13 @@ func (s *ReportService) SaveSections(ctx context.Context, reqCtx RequestContext,
 
 			section, ok := byID[sectionID]
 			if !ok || section.ReportID != reportID {
+				return NewError(CodeNotFound, "report section not found", nil)
+			}
+			section, err = txRepo.GetReportSectionByIDForUpdate(ctx, sectionID)
+			if err != nil {
+				return mapRepositoryReadError(err, "report section not found")
+			}
+			if section.ReportID != reportID {
 				return NewError(CodeNotFound, "report section not found", nil)
 			}
 			if section.GenerationStatus == JobStatusRunning {
@@ -1019,12 +1054,8 @@ func (s *ReportService) CreateSectionVersion(ctx context.Context, reqCtx Request
 	now := s.now()
 	var created ReportSectionVersion
 	err = s.repo.WithinTx(ctx, func(txRepo ReportRepository) error {
-		currentReport, err := txRepo.GetReportByID(ctx, reportID)
-		if err != nil {
-			return mapRepositoryReadError(err, "report not found")
-		}
-		if currentReport.Status == ReportStatusDeleted || currentReport.DeletedAt != nil {
-			return NewError(CodeConflict, "report has been deleted", nil)
+		if err := requireWritableReportForUpdate(ctx, txRepo, reportID); err != nil {
+			return err
 		}
 		currentSection, err := txRepo.GetReportSectionByIDForUpdate(ctx, sectionID)
 		if err != nil {

@@ -10,13 +10,15 @@ import (
 // fakeReportRepository is an in-memory ReportRepository used to unit test
 // ReportService business rules without standing up PostgreSQL.
 type fakeReportRepository struct {
-	reports          map[string]Report
-	outlines         map[string]ReportOutline
-	sections         map[string]ReportSection
-	sectionVersion   map[string][]ReportSectionVersion
-	operationLogs    []OperationLog
-	updateSectionErr error
-	beforeTx         func(*fakeReportRepository)
+	reports               map[string]Report
+	outlines              map[string]ReportOutline
+	sections              map[string]ReportSection
+	sectionVersion        map[string][]ReportSectionVersion
+	operationLogs         []OperationLog
+	updateSectionErr      error
+	beforeTx              func(*fakeReportRepository)
+	reportForUpdateCalls  int
+	sectionForUpdateCalls int
 }
 
 func newFakeReportRepository() *fakeReportRepository {
@@ -39,6 +41,11 @@ func (f *fakeReportRepository) GetReportByID(_ context.Context, id string) (Repo
 		return Report{}, NewError(CodeNotFound, "report not found", nil)
 	}
 	return report, nil
+}
+
+func (f *fakeReportRepository) GetReportByIDForUpdate(ctx context.Context, id string) (Report, error) {
+	f.reportForUpdateCalls++
+	return f.GetReportByID(ctx, id)
 }
 
 func (f *fakeReportRepository) ListReports(_ context.Context, filter ReportListFilter) ([]Report, int, error) {
@@ -134,6 +141,7 @@ func (f *fakeReportRepository) GetReportSectionByID(_ context.Context, id string
 }
 
 func (f *fakeReportRepository) GetReportSectionByIDForUpdate(ctx context.Context, id string) (ReportSection, error) {
+	f.sectionForUpdateCalls++
 	return f.GetReportSectionByID(ctx, id)
 }
 
@@ -199,7 +207,11 @@ func (f *fakeReportRepository) snapshot() fakeReportRepository {
 }
 
 func (f *fakeReportRepository) restore(snapshot fakeReportRepository) {
+	reportForUpdateCalls := f.reportForUpdateCalls
+	sectionForUpdateCalls := f.sectionForUpdateCalls
 	*f = snapshot
+	f.reportForUpdateCalls = reportForUpdateCalls
+	f.sectionForUpdateCalls = sectionForUpdateCalls
 }
 
 func newTestService() (*ReportService, *fakeReportRepository) {
@@ -683,6 +695,92 @@ func TestSaveSectionsPersistsExplicitSortOrder(t *testing.T) {
 	}
 }
 
+func TestSaveSectionsRechecksRunningStatusInsideTransaction(t *testing.T) {
+	svc, repo := newTestService()
+	report := mustCreateReport(t, svc, "owner-1")
+	actor := RequestContext{UserID: "owner-1"}
+
+	section, err := svc.CreateSection(context.Background(), actor, report.ID, CreateSectionInput{
+		Title:   "Intro",
+		Content: "original body",
+	})
+	if err != nil {
+		t.Fatalf("CreateSection() error = %v", err)
+	}
+	repo.beforeTx = func(f *fakeReportRepository) {
+		current := f.sections[section.ID]
+		current.GenerationStatus = JobStatusRunning
+		current.LastJobID = "job-1"
+		f.sections[section.ID] = current
+	}
+
+	newContent := "should not apply"
+	_, err = svc.SaveSections(context.Background(), actor, report.ID, SaveSectionsInput{
+		Sections: []SaveSectionInput{{
+			ID:      section.ID,
+			Content: &newContent,
+		}},
+	})
+	if code := errorCode(t, err); code != CodeConflict {
+		t.Fatalf("error code = %q, want %q", code, CodeConflict)
+	}
+	if repo.sectionForUpdateCalls != 1 {
+		t.Fatalf("transactional section lock calls = %d, want 1", repo.sectionForUpdateCalls)
+	}
+	current := repo.sections[section.ID]
+	if current.GenerationStatus != JobStatusRunning || current.LastJobID != "job-1" {
+		t.Fatalf("running generation state was overwritten: %+v", current)
+	}
+	if current.Content != section.Content || current.Version != section.Version {
+		t.Fatalf("section was modified despite transaction conflict: %+v", current)
+	}
+	if len(repo.sectionVersion[section.ID]) != 0 {
+		t.Fatalf("manual section versions were created despite transaction conflict: %+v", repo.sectionVersion[section.ID])
+	}
+}
+
+func TestSaveSectionsRechecksDeletedReportInsideTransaction(t *testing.T) {
+	svc, repo := newTestService()
+	report := mustCreateReport(t, svc, "owner-1")
+	actor := RequestContext{UserID: "owner-1"}
+
+	section, err := svc.CreateSection(context.Background(), actor, report.ID, CreateSectionInput{
+		Title:   "Intro",
+		Content: "original body",
+	})
+	if err != nil {
+		t.Fatalf("CreateSection() error = %v", err)
+	}
+	repo.beforeTx = func(f *fakeReportRepository) {
+		current := f.reports[report.ID]
+		deletedAt := svc.now()
+		current.Status = ReportStatusDeleted
+		current.DeletedAt = &deletedAt
+		f.reports[report.ID] = current
+	}
+
+	newContent := "should not apply"
+	_, err = svc.SaveSections(context.Background(), actor, report.ID, SaveSectionsInput{
+		Sections: []SaveSectionInput{{
+			ID:      section.ID,
+			Content: &newContent,
+		}},
+	})
+	if code := errorCode(t, err); code != CodeConflict {
+		t.Fatalf("error code = %q, want %q", code, CodeConflict)
+	}
+	if repo.reportForUpdateCalls != 1 {
+		t.Fatalf("transactional report lock calls = %d, want 1", repo.reportForUpdateCalls)
+	}
+	current := repo.sections[section.ID]
+	if current.Content != section.Content || current.Version != section.Version {
+		t.Fatalf("section was modified after report deletion: %+v", current)
+	}
+	if len(repo.sectionVersion[section.ID]) != 0 {
+		t.Fatalf("manual section versions were created after report deletion: %+v", repo.sectionVersion[section.ID])
+	}
+}
+
 func TestCreateSectionPersistsExplicitSortOrder(t *testing.T) {
 	svc, _ := newTestService()
 	report := mustCreateReport(t, svc, "owner-1")
@@ -735,6 +833,82 @@ func TestUpdateSectionConflictsWhileGenerationRunning(t *testing.T) {
 	appErr, ok := Classify(err)
 	if !ok || appErr.Code != CodeConflict {
 		t.Fatalf("expected conflict while generation running, got %v", err)
+	}
+}
+
+func TestUpdateSectionRechecksRunningStatusInsideTransaction(t *testing.T) {
+	svc, repo := newTestService()
+	report := mustCreateReport(t, svc, "owner-1")
+	actor := RequestContext{UserID: "owner-1"}
+
+	section, err := svc.CreateSection(context.Background(), actor, report.ID, CreateSectionInput{
+		Title:   "Intro",
+		Content: "original body",
+	})
+	if err != nil {
+		t.Fatalf("CreateSection() error = %v", err)
+	}
+	repo.beforeTx = func(f *fakeReportRepository) {
+		current := f.sections[section.ID]
+		current.GenerationStatus = JobStatusRunning
+		current.LastJobID = "job-1"
+		f.sections[section.ID] = current
+	}
+
+	newContent := "should not apply"
+	_, err = svc.UpdateSection(context.Background(), actor, report.ID, section.ID, UpdateSectionInput{Content: &newContent})
+	if code := errorCode(t, err); code != CodeConflict {
+		t.Fatalf("error code = %q, want %q", code, CodeConflict)
+	}
+	if repo.sectionForUpdateCalls != 1 {
+		t.Fatalf("transactional section lock calls = %d, want 1", repo.sectionForUpdateCalls)
+	}
+	current := repo.sections[section.ID]
+	if current.GenerationStatus != JobStatusRunning || current.LastJobID != "job-1" {
+		t.Fatalf("running generation state was overwritten: %+v", current)
+	}
+	if current.Content != section.Content || current.Version != section.Version {
+		t.Fatalf("section was modified despite transaction conflict: %+v", current)
+	}
+	if len(repo.sectionVersion[section.ID]) != 0 {
+		t.Fatalf("manual section versions were created despite transaction conflict: %+v", repo.sectionVersion[section.ID])
+	}
+}
+
+func TestUpdateSectionRechecksDeletedReportInsideTransaction(t *testing.T) {
+	svc, repo := newTestService()
+	report := mustCreateReport(t, svc, "owner-1")
+	actor := RequestContext{UserID: "owner-1"}
+
+	section, err := svc.CreateSection(context.Background(), actor, report.ID, CreateSectionInput{
+		Title:   "Intro",
+		Content: "original body",
+	})
+	if err != nil {
+		t.Fatalf("CreateSection() error = %v", err)
+	}
+	repo.beforeTx = func(f *fakeReportRepository) {
+		current := f.reports[report.ID]
+		deletedAt := svc.now()
+		current.Status = ReportStatusDeleted
+		current.DeletedAt = &deletedAt
+		f.reports[report.ID] = current
+	}
+
+	newContent := "should not apply"
+	_, err = svc.UpdateSection(context.Background(), actor, report.ID, section.ID, UpdateSectionInput{Content: &newContent})
+	if code := errorCode(t, err); code != CodeConflict {
+		t.Fatalf("error code = %q, want %q", code, CodeConflict)
+	}
+	if repo.reportForUpdateCalls != 1 {
+		t.Fatalf("transactional report lock calls = %d, want 1", repo.reportForUpdateCalls)
+	}
+	current := repo.sections[section.ID]
+	if current.Content != section.Content || current.Version != section.Version {
+		t.Fatalf("section was modified after report deletion: %+v", current)
+	}
+	if len(repo.sectionVersion[section.ID]) != 0 {
+		t.Fatalf("manual section versions were created after report deletion: %+v", repo.sectionVersion[section.ID])
 	}
 }
 
@@ -861,6 +1035,9 @@ func TestCreateSectionVersionRechecksDeletedReportInsideTransaction(t *testing.T
 	}
 	if got := repo.sections[section.ID]; got.Content != section.Content || got.Version != section.Version {
 		t.Fatalf("section was modified after report deletion: %+v", got)
+	}
+	if repo.reportForUpdateCalls != 1 {
+		t.Fatalf("transactional report lock calls = %d, want 1", repo.reportForUpdateCalls)
 	}
 }
 

@@ -50,6 +50,8 @@
 | Dockerfile | 对变更的可构建 Dockerfile 执行 `DOCKER_BUILDKIT=1 docker build --file <Dockerfile> <context>`；中国网络优先使用 `deploy/.env.china.example` 或等价 build args。不 push 镜像。若本机 Docker daemon mirror 在 base image metadata 阶段返回 401/超时，应先按 Docker runbook 选择 registry rewrite 或修正 mirror，或在 PR 记录为环境阻断。 |
 | Compose | `docker compose -f <compose-file> config --quiet`；根级 Compose 额外跑 `--env-file deploy/.env.example` 和 `--profile ai`。 |
 | Knowledge repository / SQL | `cd services/knowledge && KNOWLEDGE_TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable' go test ./internal/repository -count=1`。 |
+| Knowledge ingestion real deps | 启动 PostgreSQL/File/Parser/Qdrant 后执行 `cd services/knowledge && KNOWLEDGE_INGESTION_SMOKE=1 ... go test ./internal/integration -run '^TestKnowledgeIngestionRealDepsSmoke$' -count=1 -v`；默认无 env 时跳过，不进入普通 CI required check。 |
+| Gateway -> Knowledge owner route | 启动 Gateway/Auth/Redis/Knowledge/File/Parser/PostgreSQL 后执行 `cd services/knowledge && GATEWAY_KNOWLEDGE_OWNER_SMOKE=1 ... go test ./internal/integration -run '^TestGatewayKnowledgeOwnerRouteSmoke$' -count=1 -v`；默认无 env 时跳过，不进入普通 CI required check。 |
 | migration | `go run github.com/pressly/goose/v3/cmd/goose@v3.27.1 -dir migrations postgres "$DATABASE_URL" up`。 |
 | Parser 契约 / 文档 / runtime | 检查 `docs/services/parser/api/internal.openapi.yaml`、`services/parser/api/openapi.yaml`（实现本地副本）与 `docs/services/parser/README.md`、Knowledge ingestion 文档一致；如改 runtime，执行 `cd services/parser && uv run ruff check . && uv run pytest && uv run python -m compileall src tests`，并说明是否仅覆盖 fake OCR backend。触碰 PaddleOCR runtime 时，在具备模型环境下追加 `PARSER_PADDLEOCR_SMOKE=1 PARSER_PADDLEOCR_ALLOW_DOWNLOAD=1 uv run pytest -m paddleocr_smoke -s`。 |
 | AI Gateway provider adapter | `cd services/ai-gateway && go test ./...`；尽量加 fake provider case 和真实 provider smoke 记录。 |
@@ -64,6 +66,8 @@
 | Migration apply | CI 使用 PostgreSQL 16 和 goose apply。 | 新增或修改 migration。 |
 | Contract tests | Gateway active API verifier、route coverage tests。 | OpenAPI、owner map、active path 和 RESTful path 规则。 |
 | Parser runtime tests | OpenAPI schema review、文档一致性检查、FastAPI handler/service tests、fake OCR backend 和可选 env-gated PaddleOCR model smoke。 | Parser API/runtime 变更；真实 PaddleOCR 模型、OCR 质量和部署资源需要具备模型环境后单独记录。 |
+| Knowledge ingestion real deps smoke | `KNOWLEDGE_INGESTION_SMOKE=1` 显式启用；使用真实 File Service、Parser Service、PostgreSQL 和 Qdrant，默认 local hashing embedding。 | 验证 Knowledge 上传 fixture、worker handler、解析、切片、embedding metadata、Qdrant point 写入和状态更新；不替代 retrieval/rerank/MCP/Gateway 总入口。 |
+| Gateway -> Knowledge owner route smoke | `GATEWAY_KNOWLEDGE_OWNER_SMOKE=1` 显式启用；使用真实 Gateway/Auth/session cache、Knowledge、File/Parser ready、PostgreSQL 和 Redis。 | 先验证无 Bearer token 的伪造 `X-User-*` 请求被 Gateway 拒绝，再验证 Gateway 创建 session 后能把 Auth context 注入 Knowledge owner route `GET /api/v1/knowledge-bases`；不替代完整 Gateway route matrix。 |
 | Cross-service smoke | 当前缺失统一脚本。 | Auth -> Gateway -> Domain、Document -> File/AI Gateway、QA -> Knowledge/AI Gateway 等链路。 |
 
 env-gated repository tests：
@@ -78,6 +82,50 @@ DOCUMENT_TEST_DATABASE_URL='postgres://document_app:document_app_dev@localhost:5
 cd services/knowledge
 KNOWLEDGE_TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable' go test ./internal/repository -count=1
 ```
+
+env-gated Knowledge ingestion real dependency smoke:
+
+```bash
+cd services/knowledge
+KNOWLEDGE_INGESTION_SMOKE=1 \
+KNOWLEDGE_TEST_DATABASE_URL='postgres://knowledge_app:knowledge_app_dev@127.0.0.1:5432/knowledge_system?sslmode=disable' \
+FILE_SERVICE_BASE_URL='http://127.0.0.1:8082' \
+KNOWLEDGE_SERVICE_TOKEN='local-dev-internal-service-token-change-me' \
+PARSER_SERVICE_BASE_URL='http://127.0.0.1:8087' \
+PARSER_SERVICE_TOKEN='local-dev-internal-service-token-change-me' \
+QDRANT_URL='http://127.0.0.1:6333' \
+EMBEDDING_PROVIDER=local_hashing \
+EMBEDDING_MODEL=local_hashing \
+EMBEDDING_DIMENSION=384 \
+go test ./internal/integration -run '^TestKnowledgeIngestionRealDepsSmoke$' -count=1 -v
+```
+
+The smoke creates and deletes `knowledge_smoke_*` PostgreSQL schemas,
+`knowledge_ingestion_smoke_*` Qdrant collections, and one uploaded File Service
+object. If it is skipped or cannot run, PR verification must state the missing
+dependency and residual risk.
+
+env-gated Gateway -> Knowledge owner route smoke:
+
+```bash
+cd services/knowledge
+GATEWAY_KNOWLEDGE_OWNER_SMOKE=1 \
+GATEWAY_BASE_URL='http://127.0.0.1:8080' \
+KNOWLEDGE_SERVICE_BASE_URL='http://127.0.0.1:8083' \
+FILE_SERVICE_BASE_URL='http://127.0.0.1:8082' \
+PARSER_SERVICE_BASE_URL='http://127.0.0.1:8087' \
+KNOWLEDGE_TEST_DATABASE_URL='postgres://knowledge_app:knowledge_app_dev@127.0.0.1:5432/knowledge_system?sslmode=disable' \
+KNOWLEDGE_REDIS_ADDR='127.0.0.1:6379' \
+GATEWAY_SMOKE_USERNAME='admin' \
+GATEWAY_SMOKE_PASSWORD='LocalDemoAdmin#12345' \
+go test ./internal/integration -run '^TestGatewayKnowledgeOwnerRouteSmoke$' -count=1 -v
+```
+
+Before using `docker compose up --no-build file parser knowledge`, ensure the
+Parser image exists locally. If `software-teamwork-local-parser:latest` is
+absent, pre-build Parser with the documented Docker mirror/registry overlay;
+otherwise Docker may fail immediately on the missing image or block on
+`python:3.12-slim` metadata from Docker Hub.
 
 ## 前端测试层级
 
@@ -122,7 +170,7 @@ KNOWLEDGE_TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/postgre
 1. Auth 创建会话，Gateway 写入 Redis session cache。
 2. Gateway 使用认证上下文代理一个 Knowledge/QA/Document active path。
 3. File 保存并读取一个基础 file object，业务服务响应不泄露 object key。
-4. Knowledge 调用 Parser `/internal/v1/parsed-documents`，解析结果只返回规范化 text/page/block 和脱敏 metadata，不泄露 object key、内部 URL 或 provider debug body。
+4. Knowledge ingestion 真实依赖 smoke 已验证一个 fixture 文档从 File -> Parser -> Knowledge worker -> Qdrant indexing；Gateway -> Knowledge owner route smoke 已验证 Auth/Gateway session 到 Knowledge owner route 的最小上下文注入；后续统一 E2E 应复用这些信号并补完整 Gateway/MCP/业务断言。
 5. AI Gateway 创建 chat、embedding、rerank profile，并通过 fake provider 完成三类调用。
 6. QA 创建 session/message，非流式和 SSE 路径都能保存 response run 和事件摘要。
 7. Document 创建 report/job，worker 推进 attempt/event；真实生成落地后再验证 AI Gateway 和 File Service。

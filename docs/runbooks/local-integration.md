@@ -12,7 +12,7 @@
 | QA 服务 Compose | partial | `services/qa/docker-compose.yml` 会启动 QA PostgreSQL、Auth PostgreSQL、Redis、Auth、QA 和 Gateway；不包含 Knowledge、Document、File、AI Gateway。 |
 | Document 服务 Compose | partial | `services/document/docker-compose.yml` 会启动 Document PostgreSQL、Redis、migration 和 Document；不包含 File、AI Gateway。 |
 | AI Gateway 本地运行 | root profile / host-run | 根级 `docker compose --profile ai` 会启动 AI Gateway、migration 和 placeholder profile seed；单独调试时也可 host-run，真实 provider smoke 仍需配置有效 provider key。 |
-| File / Knowledge 独立运行 | host-run | 需要手动准备各自依赖；File 已有 env-gated PostgreSQL + MinIO 联合 smoke，Knowledge 已有 ingestion worker、Parser Service client、embedding 和 Qdrant/in-memory vector index 写入，仍缺 content、knowledge-queries、retrieval/rerank 闭环和真实依赖端到端 smoke。 |
+| File / Knowledge 独立运行 | host-run / smoke | 需要手动准备各自依赖；File 已有 env-gated PostgreSQL + MinIO 联合 smoke，Knowledge 已有 env-gated ingestion 真实依赖 smoke，覆盖 File Service、Parser Service、PostgreSQL、local hashing embedding 和 Qdrant 写入。Knowledge retrieval/rerank、MCP 和完整 Gateway 端到端仍由后续任务覆盖。 |
 | Parser Runtime | partial | `services/parser/` 已提供 Python/FastAPI runtime、内部 HTTP API、Dockerfile、service-token auth、可选 PaddleOCR extra 和 env-gated 真实 PaddleOCR 模型 smoke；CI 仍只用 fake OCR backend 覆盖 lint/test/compile，不要求普通开发者安装模型。 |
 | 前端联调入口 | host-run | 前端只调用 public Gateway `/api/v1/**`；不要直连内部服务。 |
 
@@ -138,6 +138,140 @@ cd ../../deploy
 docker compose logs postgres migrate-file minio minio-init
 ```
 
+### Knowledge ingestion 真实依赖 smoke
+
+仅验证 Knowledge ingestion 主链路，不重复验证 File MinIO smoke、Parser 真实
+PaddleOCR 模型 smoke、AI Gateway 真实 provider smoke，也不替代 #125 的 MCP/跨服务
+总入口。普通 `go test ./...` 默认跳过该 smoke。
+
+先启动 PostgreSQL、File Service、Parser Service 和 Qdrant。中国大陆网络构建时先把
+`deploy/.env.china.example` 追加到本地 `.env`，不要把 `GOSUMDB=off` 当作默认修复：
+
+```bash
+cd deploy
+cp .env.example .env
+# 可选：中国大陆 Docker 构建 overlay
+# cat .env.china.example >> .env
+DOCKER_BUILDKIT=1 docker compose --env-file .env up -d --build postgres migrate-file file parser qdrant
+```
+
+再运行显式启用的 smoke：
+
+```bash
+cd ../services/knowledge
+KNOWLEDGE_INGESTION_SMOKE=1 \
+KNOWLEDGE_TEST_DATABASE_URL='postgres://knowledge_app:knowledge_app_dev@127.0.0.1:5432/knowledge_system?sslmode=disable' \
+FILE_SERVICE_BASE_URL='http://127.0.0.1:8082' \
+KNOWLEDGE_SERVICE_TOKEN='local-dev-internal-service-token-change-me' \
+PARSER_SERVICE_BASE_URL='http://127.0.0.1:8087' \
+PARSER_SERVICE_TOKEN='local-dev-internal-service-token-change-me' \
+QDRANT_URL='http://127.0.0.1:6333' \
+EMBEDDING_PROVIDER=local_hashing \
+EMBEDDING_MODEL=local_hashing \
+EMBEDDING_DIMENSION=384 \
+go test ./internal/integration -run '^TestKnowledgeIngestionRealDepsSmoke$' -count=1 -v
+```
+
+该测试会创建独立 PostgreSQL schema `knowledge_smoke_*`，创建 Qdrant collection
+`knowledge_ingestion_smoke_*`，上传一个 File Service 对象，直接调用 Knowledge
+worker handler 消费捕获到的 ingestion payload，并断言文档 ready、job succeeded、
+chunk/embedding metadata 已持久化、Qdrant point payload 可按 chunk id 读取。测试清理会
+删除 File 对象、Qdrant collection 和 PostgreSQL schema；如果进程被中断，按这些前缀手动
+清理残留。
+
+常见失败先按下面顺序查：
+
+```bash
+cd ../../deploy
+docker compose ps
+docker compose logs postgres migrate-file file parser qdrant
+```
+
+排查要点：
+
+- `KNOWLEDGE_INGESTION_SMOKE=1 requires ...`：缺必填 env；失败只列 key，不列值。
+- File `401 unauthorized`：确认 `KNOWLEDGE_SERVICE_TOKEN` 等于 Compose 的
+  `INTERNAL_SERVICE_TOKEN`。
+- Parser dependency error：确认 `PARSER_SERVICE_TOKEN` 和 Parser service token 一致，
+  且 Markdown/text fixture 不应触发真实 OCR 模型下载。
+- Qdrant `404` 或 collection not found：该 smoke 会创建 run-scoped collection；若仍失败，
+  检查 `QDRANT_URL` 是否指向 host 端口 `127.0.0.1:6333`。
+- Go module 下载失败：本地临时测试可按 Docker runbook 使用
+  `GO_DOCKER_GOPROXY=https://goproxy.cn,direct` 与
+  `GO_DOCKER_GOSUMDB=sum.golang.google.cn`，保持 checksum verification 开启。
+
+### Gateway -> Knowledge owner route smoke
+
+该 smoke 只验证 Gateway/Auth/session cache 到 Knowledge owner route 的最小真实链路：
+先确认 Parser、File、Knowledge、PostgreSQL 和 Redis ready，再通过 Gateway 创建 session，
+然后调用 `GET /api/v1/knowledge-bases`。它不验证上传、Parser 解析质量、Qdrant 检索、
+rerank、MCP 或前端流程。
+
+前置发现：如果本机没有 `software-teamwork-local-parser:latest`，下面这类命令会失败：
+
+```bash
+docker compose --env-file .env up -d --no-build file parser knowledge
+```
+
+原因是 `--no-build` 不能创建缺失的 Parser 镜像；如果改为 build，Parser Dockerfile 又可能
+在拉取 `python:3.12-slim` metadata 时被 Docker Hub 超时阻塞。处理顺序：
+
+1. 优先使用 `deploy/.env.china.example` 的显式 registry rewrite / Python package mirror。
+2. 预构建或预拉取 Parser 镜像，让 `software-teamwork-local-parser:latest` 进入本机缓存。
+3. 再使用 `--no-build` 启动已缓存镜像。
+
+推荐直接启动根级 gateway 依赖基线。Gateway Compose 服务还依赖 QA 和 Document health，
+所以只启动 `file parser knowledge gateway` 不一定足够：
+
+```bash
+cd deploy
+cp .env.example .env
+# 可选：中国大陆 Docker 构建 overlay
+# cat .env.china.example >> .env
+DOCKER_BUILDKIT=1 docker compose --env-file .env build parser
+DOCKER_BUILDKIT=1 docker compose --env-file .env up -d --build gateway
+```
+
+运行 smoke：
+
+```bash
+cd ../services/knowledge
+GATEWAY_KNOWLEDGE_OWNER_SMOKE=1 \
+GATEWAY_BASE_URL='http://127.0.0.1:8080' \
+KNOWLEDGE_SERVICE_BASE_URL='http://127.0.0.1:8083' \
+FILE_SERVICE_BASE_URL='http://127.0.0.1:8082' \
+PARSER_SERVICE_BASE_URL='http://127.0.0.1:8087' \
+KNOWLEDGE_TEST_DATABASE_URL='postgres://knowledge_app:knowledge_app_dev@127.0.0.1:5432/knowledge_system?sslmode=disable' \
+KNOWLEDGE_REDIS_ADDR='127.0.0.1:6379' \
+GATEWAY_SMOKE_USERNAME='admin' \
+GATEWAY_SMOKE_PASSWORD='LocalDemoAdmin#12345' \
+go test ./internal/integration -run '^TestGatewayKnowledgeOwnerRouteSmoke$' -count=1 -v
+```
+
+该测试会：
+
+- `GET /readyz` 检查 File、Parser 和 Knowledge。
+- 使用 `KNOWLEDGE_TEST_DATABASE_URL` ping Knowledge PostgreSQL。
+- 使用 `KNOWLEDGE_REDIS_ADDR` 发送 Redis `PING`。
+- 调用带伪造 `X-User-*` 但无 Bearer token 的 `GET /api/v1/knowledge-bases`，
+  断言 Gateway 返回 `401 unauthorized`。
+- `POST /api/v1/sessions` 创建真实 Gateway session。
+- 带 Bearer token 调用 `GET /api/v1/knowledge-bases`，同时发送一个伪造的
+  `X-User-Id`；Gateway 应忽略该伪造 header 并注入 Auth/session cache 中的上下文。
+
+常见失败：
+
+- `GATEWAY_KNOWLEDGE_OWNER_SMOKE=1 requires ...`：缺必填 env；失败只列 key，不列值。
+- `parser readyz request failed` 或 Docker 报缺 `software-teamwork-local-parser:latest`：
+  先按上面的 Parser 镜像构建/缓存前置条件处理。
+- Gateway session 返回 `401`：确认 `seed-local` 已完成，并使用
+  `.env.example` 中的 `admin` / `LocalDemoAdmin#12345` 或显式
+  `GATEWAY_SMOKE_USERNAME` / `GATEWAY_SMOKE_PASSWORD`。
+- Gateway Knowledge route 返回 `401`：Gateway session cache/Redis 可能不可用；查
+  `docker compose logs gateway redis auth`。
+- Gateway Knowledge route 返回 `502`：Knowledge owner route 或 service token 配置异常；
+  查 `docker compose logs gateway knowledge` 并用相同 `X-Request-Id` 搜索。
+
 ### QA + Auth + Gateway 局部环境
 
 ```bash
@@ -218,6 +352,8 @@ go run ./cmd/server
 | Gateway contract | `python3 scripts/verify_gateway_active_api.py` | active path、owner、security 和 owner map 不漂移。 |
 | Parser PaddleOCR model | `PARSER_PADDLEOCR_SMOKE=1 PARSER_PADDLEOCR_ALLOW_DOWNLOAD=1 uv run pytest -m paddleocr_smoke -s` | 只在本机具备 PaddleOCR extra 和可用模型下载/缓存时运行；验证真实模型加载和最小 fixture OCR 非空。 |
 | File PostgreSQL + MinIO | `FILE_MINIO_POSTGRES_SMOKE=1 ... go test ./internal/integration -run TestFileMinIOPostgresSmoke -count=1 -v` | 只在真实 PostgreSQL/MinIO 可用时运行；验证 upload、metadata、content read、delete 和清理状态。 |
+| Knowledge ingestion real deps | `KNOWLEDGE_INGESTION_SMOKE=1 ... go test ./internal/integration -run '^TestKnowledgeIngestionRealDepsSmoke$' -count=1 -v` | 只在 PostgreSQL/File/Parser/Qdrant 可用时运行；验证 fixture 上传、解析、切片、embedding、Qdrant point 写入和状态更新。 |
+| Gateway -> Knowledge owner route | `GATEWAY_KNOWLEDGE_OWNER_SMOKE=1 ... go test ./internal/integration -run '^TestGatewayKnowledgeOwnerRouteSmoke$' -count=1 -v` | 只在 Gateway/Auth/Redis/Knowledge/File/Parser/PostgreSQL 可用时运行；验证伪造 `X-User-*` 未认证请求被拒绝、Gateway session 与 Knowledge owner route auth context 注入。 |
 | 前端 Gateway 类型 | `bun run --cwd apps/web api:generate` 后检查 diff | 生成类型应与 Gateway OpenAPI 保持同步。 |
 
 ## 已知缺口
@@ -227,7 +363,7 @@ go run ./cmd/server
 | 根级跨服务 smoke 缺失 | 即使使用 `deploy/docker-compose.yml` 启动本地/演示基线，也不能自动证明 Auth/Gateway/File/Knowledge/QA/Document/AI Gateway 链路可用。 | #125 |
 | 跨服务契约测试和 E2E smoke 缺失 | 不能自动证明前端 -> Gateway -> 多服务链路可用。 | #125 |
 | Parser 真实 OCR smoke 不在普通 CI 中运行 | Parser 已有 env-gated 真实 PaddleOCR 模型 smoke，但 CI 仍使用 fake OCR backend；真实模型、OCR 质量和部署资源需要在具备模型的本地或部署环境手动记录。 | #125 |
-| Knowledge retrieval/rerank 与对象存储跨服务 smoke 缺失 | File 自身 PostgreSQL + MinIO smoke 已有；Knowledge 已有 Qdrant/in-memory vector index 写入和 File handoff，但 content、knowledge-queries、rerank、真实对象存储跨服务内容读取 smoke 仍缺。 | #152、#154、#289 |
+| Knowledge retrieval/rerank 与完整跨服务 smoke 缺失 | File 自身 PostgreSQL + MinIO smoke 已有；Knowledge ingestion 真实依赖 smoke 已覆盖 File/Parser/PostgreSQL/Qdrant 写入和状态更新，但 `knowledge-queries`、rerank、MCP/Gateway 总入口和真实 AI Gateway provider 仍需后续 smoke。 | #125、#152、#154 |
 | 生产部署基线缺失 | 当前 `deploy/docker-compose.yml` 是本地/演示基线，不能直接当生产部署。 | #150 |
 | Document 真实 AI 生成和富 DOCX 工具链未落地 | 报告 job 状态机和基础 DOCX 导出可用；真实大纲/正文生成、Pandoc/LibreOffice 富 DOCX 转换和跨服务内容读取 smoke 仍需补齐。 | #160、#223 |
 | Document 跨服务 smoke 仍缺失 | settings/statistics/logs 已在服务端落地，但管理端、Gateway、File Service、Document worker 串联 smoke 仍未一键化。 | #159、#221 |

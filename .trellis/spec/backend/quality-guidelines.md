@@ -486,6 +486,118 @@ func TestAIGatewaySmoke(t *testing.T) {
 }
 ```
 
+## Scenario: Gateway Owner Route Smoke
+
+### 1. Scope / Trigger
+
+- Trigger: adding or changing an env-gated smoke that proves Gateway can
+  authenticate through Auth/session cache and proxy a real owner-service route.
+- Applies to smoke tests for Gateway public `/api/v1/**` routes whose business
+  state is owned by Knowledge, QA, Document, AI Gateway admin routes, or another
+  backend owner service.
+
+### 2. Signatures
+
+- Gate name: `GATEWAY_<OWNER>_OWNER_SMOKE=1`, for example
+  `GATEWAY_KNOWLEDGE_OWNER_SMOKE=1`.
+- Command shape:
+
+```bash
+GATEWAY_KNOWLEDGE_OWNER_SMOKE=1 \
+GATEWAY_BASE_URL=http://127.0.0.1:8080 \
+<OWNER>_SERVICE_BASE_URL=http://127.0.0.1:<port> \
+GATEWAY_SMOKE_USERNAME=admin \
+GATEWAY_SMOKE_PASSWORD='local-password' \
+go test ./internal/integration -run '^TestGatewayKnowledgeOwnerRouteSmoke$' -count=1 -v
+```
+
+- The owner route must be called through Gateway, not by directly calling the
+  owner service.
+
+### 3. Contracts
+
+- With the gate unset, the smoke must skip before reading credentials, endpoints,
+  or dependency env.
+- With the gate enabled, missing env must fail with key names only.
+- The smoke must precheck the owner route's required runtime dependencies before
+  the Gateway assertion, such as owner service `/readyz`, PostgreSQL, Redis,
+  File, Parser, Qdrant, or AI Gateway depending on route scope.
+- The smoke must first call the Gateway route with spoofed `X-User-*` headers
+  and no Bearer token, then assert `401 unauthorized`.
+- The positive path must create a real Gateway session through
+  `POST /api/v1/sessions`, use the returned Bearer token, and call the owner
+  route through Gateway with a request id.
+- The positive path may also send a spoofed inbound `X-User-*` header; Gateway
+  must ignore it and inject authenticated context from Auth/session cache.
+- The smoke must not import Gateway/Auth internals or another service's
+  `internal` package. Use HTTP/TCP/database boundaries only.
+- Do not print passwords, bearer tokens, session hashes, service tokens, DSNs,
+  downstream raw bodies, document text, object keys, or vector payloads.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Smoke gate unset | `SKIP`; ordinary service `go test ./...` remains offline-safe. |
+| Required env missing | Fail before network I/O with actionable key names only. |
+| Parser/File/Redis/PostgreSQL or owner `/readyz` unavailable | Fail during precheck with the dependency name. |
+| Spoofed `X-User-*` headers without Bearer token | Gateway returns `401 unauthorized` with the request id. |
+| Gateway session creation fails | Fail without printing credentials or token material. |
+| Authenticated owner route returns non-2xx | Fail with status and request id, then inspect Gateway/owner logs by request id. |
+| Response envelope malformed | Fail on stable fields such as `data`, `page`, `requestId`, or owner-specific IDs. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: a smoke starts the documented local stack, checks owner dependencies,
+  rejects a spoofed unauthenticated request, creates a real session, calls the
+  public Gateway route, and asserts request-id propagation and a minimal stable
+  response shape.
+- Base: the smoke is documented but skipped locally because a required image or
+  seeded credential is unavailable; PR verification records the exact blocker.
+- Bad: a smoke directly calls the owner service with `X-User-Id`, trusts a
+  caller-supplied auth header, imports Gateway/Auth internals, or requires
+  ordinary CI to run the full local Compose stack.
+
+### 6. Tests Required
+
+- Run the targeted smoke with the gate unset and assert it reports `SKIP`.
+- When dependencies are available, run the enabled smoke and record the exact
+  command.
+- Confirm owner dependency prechecks run before the authenticated Gateway route.
+- Confirm the spoofed unauthenticated route returns `401`.
+- Run the changed service's `go test ./...` and `go build ./cmd/server` with the
+  gate unset.
+- Run Compose config parsing when the smoke docs reference local Compose
+  startup commands.
+- If the route depends on local images, document image build/cache prerequisites
+  and record missing-image blockers in PR verification.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```go
+func TestOwnerRouteSmoke(t *testing.T) {
+    req := newRequest("http://localhost:8083/internal/v1/knowledge-bases")
+    req.Header.Set("X-User-Id", "admin")
+    callOwnerDirectly(req)
+}
+```
+
+#### Correct
+
+```go
+func TestGatewayKnowledgeOwnerRouteSmoke(t *testing.T) {
+    if os.Getenv("GATEWAY_KNOWLEDGE_OWNER_SMOKE") != "1" {
+        t.Skip("set GATEWAY_KNOWLEDGE_OWNER_SMOKE=1 to run the smoke")
+    }
+    assertOwnerDependenciesReady(t)
+    assertGatewayRejectsSpoofedHeadersWithoutBearer(t)
+    token := createGatewaySession(t)
+    assertGatewayKnowledgeBases(t, token)
+}
+```
+
 ---
 
 ## Forbidden Patterns

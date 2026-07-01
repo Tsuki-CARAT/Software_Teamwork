@@ -155,3 +155,36 @@ Created the architecture link-flow condition coverage document, linked it from d
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Resolve Code Scanning alerts
+
+**Date**: 2026-07-01
+**Task**: Resolve Code Scanning alerts
+**Branch**: `Special/fix/code-scanning-alerts`
+
+### Summary
+
+Hardened QA command execution and MCP stdio startup, constrained AI Gateway URLs, added integer/allocation bounds, switched credential fingerprints to keyed HMAC, set workflow permissions, updated docs/specs, fixed the PR CodeQL stdio annotation, and validated affected Go services.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2fd3688` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -36,4 +36,5 @@ secret with a managed secret reference in a later slice.
 go test ./...
 go build ./cmd/server
 go run github.com/pressly/goose/v3/cmd/goose@v3.27.1 -dir migrations postgres "$AI_GATEWAY_DATABASE_URL" up
+AI_GATEWAY_TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5432/ai_gateway_test?sslmode=disable" go test ./internal/repository -run '^TestPostgresRepositoryDBSmoke$' -count=1 -v
 ```

@@ -721,8 +721,8 @@ func TestRealProviderSmoke_ExplicitEnvOnly(t *testing.T) {
 	server, repo := newTestServerWithProvidersAndRepo(t, provider.NewHTTPChatClient(httpClient), provider.NewHTTPClient(httpClient))
 
 	if chatModel := strings.TrimSpace(os.Getenv("AI_GATEWAY_REAL_CHAT_MODEL")); chatModel != "" {
+		registerProfile(t, server, realChatProfileBody(baseURL, chatModel, apiKey))
 		t.Run("chat", func(t *testing.T) {
-			registerProfile(t, server, realChatProfileBody(baseURL, chatModel, apiKey))
 			body := `{"model":` + jsonQuote(chatModel) + `,"messages":[{"role":"user","content":"Return the single word ok."}],"temperature":0}`
 			req := authedRequest(http.MethodPost, "/internal/v1/chat/completions", strings.NewReader(body))
 			req.Header.Set("X-Caller-Service", "qa")
@@ -734,6 +734,22 @@ func TestRealProviderSmoke_ExplicitEnvOnly(t *testing.T) {
 			}
 			if !strings.Contains(rec.Body.String(), `"object":"chat.completion"`) {
 				t.Fatalf("chat response missing chat.completion object: %s", rec.Body.String())
+			}
+		})
+		t.Run("chat_streaming", func(t *testing.T) {
+			body := `{"model":` + jsonQuote(chatModel) + `,"stream":true,"messages":[{"role":"user","content":"Return the single word ok."}],"temperature":0}`
+			req := authedRequest(http.MethodPost, "/internal/v1/chat/completions", strings.NewReader(body))
+			req.Header.Set("X-Caller-Service", "qa")
+			req.Header.Set("X-Request-Id", "real-chat-stream-smoke")
+			req.Header.Set("Accept", "text/event-stream")
+			rec := httptest.NewRecorder()
+			server.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("chat stream status = %d", rec.Code)
+			}
+			streamBody := rec.Body.String()
+			if !strings.Contains(streamBody, "data:") || !strings.Contains(streamBody, "[DONE]") {
+				t.Fatalf("chat stream response missing SSE data or done marker")
 			}
 		})
 	} else {
@@ -800,7 +816,7 @@ func TestRealProviderSmoke_ExplicitEnvOnly(t *testing.T) {
 }
 
 func realChatProfileBody(baseURL, model, apiKey string) string {
-	return `{"name":"real-chat-smoke","purpose":"chat","provider":"openai_compatible","baseUrl":` + jsonQuote(baseURL) + `,"model":` + jsonQuote(model) + `,"apiKey":` + jsonQuote(apiKey) + `,"enabled":true,"isDefault":true,"supportsStreaming":false,"timeoutMs":30000}`
+	return `{"name":"real-chat-smoke","purpose":"chat","provider":"openai_compatible","baseUrl":` + jsonQuote(baseURL) + `,"model":` + jsonQuote(model) + `,"apiKey":` + jsonQuote(apiKey) + `,"enabled":true,"isDefault":true,"supportsStreaming":true,"timeoutMs":30000}`
 }
 
 func realEmbeddingProfileBody(baseURL, model, apiKey string, dimensions int) string {

@@ -1,0 +1,6 @@
+{"file":"docs/architecture/frontend-backend-contract.md","reason":"Confirmed browser integration must use public Gateway contracts and the documented QA streaming event surface."}
+{"file":"docs/architecture/current-capability-matrix.md","reason":"Checked which QA, Knowledge, and citation capabilities are complete or partial so the UI does not invent unsupported backend behavior."}
+{"file":"docs/services/gateway/api/openapi.yaml","reason":"Used the public Gateway OpenAPI contract as the allowed browser-facing API source."}
+{"file":"docs/services/gateway/docs/active-api-owner-map.md","reason":"Verified API ownership and that QA browser calls should stay behind Gateway routes."}
+{"file":"docs/services/qa/docs/implementation.md","reason":"Used the QA SSE event contract for answer, citation, tool, reasoning, completion, heartbeat, and error handling."}
+{"file":"docs/services/knowledge/docs/implementation.md","reason":"Checked retrieval and source-detail limitations so citation and RAG degradation states remain honest."}

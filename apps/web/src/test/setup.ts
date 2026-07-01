@@ -30,29 +30,34 @@ function createTestStorage(): Storage {
   }
 }
 
+const localTestStorage = createTestStorage()
+const sessionTestStorage = createTestStorage()
+
 function installTestStorage() {
-  const local = createTestStorage()
-  const session = createTestStorage()
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
-    value: local,
+    value: localTestStorage,
   })
   Object.defineProperty(window, 'localStorage', {
     configurable: true,
-    value: local,
+    value: localTestStorage,
   })
   Object.defineProperty(globalThis, 'sessionStorage', {
     configurable: true,
-    value: session,
+    value: sessionTestStorage,
   })
   Object.defineProperty(window, 'sessionStorage', {
     configurable: true,
-    value: session,
+    value: sessionTestStorage,
   })
 }
 
+installTestStorage()
+
 beforeEach(() => {
   installTestStorage()
+  localTestStorage.clear()
+  sessionTestStorage.clear()
   resetApiClientForTests()
   vi.stubEnv('VITE_API_BASE_URL', 'http://127.0.0.1/api/v1')
 })

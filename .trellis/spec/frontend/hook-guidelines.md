@@ -48,6 +48,11 @@ features/knowledge/
 - Streaming hooks must support cancellation through `AbortController`.
 - Streaming hooks must expose enough state for UI: `status`, `content`, `progress`, `error`, and domain-specific payloads such as `citations` or generated sections.
 - Never assume a stream completes successfully. Handle partial content and user cancellation.
+- For QA SSE, `answer.completed` means answer generation finished, not that the
+  stream has reached EOF or final persistence succeeded. Continue consuming the
+  stream until EOF or a fatal `error` event; a fatal error after
+  `answer.completed` must override the completed UI state and keep retry
+  recovery available.
 - Never expose or cache private chain-of-thought, full prompts, raw MCP tool
   parameters/results, provider raw errors, internal URLs, or storage object keys.
 

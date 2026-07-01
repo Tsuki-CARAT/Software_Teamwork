@@ -1,0 +1,7 @@
+{"file":"CONTRIBUTING.md","reason":"Verified fork, develop base, PR target, push, and Conventional Commit requirements."}
+{"file":"docs/collaboration/frontend-workflow.md","reason":"Verified frontend Bun command form, fork PR flow, and required frontend PR checks."}
+{"file":"docs/collaboration/repository-settings.md","reason":"Checked PR Guard expectations for develop base, fork head, title, body, issue closing keyword, and up-to-date branch."}
+{"file":".github/pull_request_template.md","reason":"Checked required Chinese PR body sections and task archive checklist item."}
+{"file":".trellis/spec/frontend/index.md","reason":"Verified frontend module scope and backend integration contract expectations for QA SSE events."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Verified required frontend quality commands, unit test expectations, streaming UI states, and forbidden unsafe rendering patterns."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Verified QA changes stay under apps/web/src pages, features, and api boundaries."}

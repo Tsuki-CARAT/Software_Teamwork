@@ -6,6 +6,7 @@ import { InlineNotice, StateBlock } from '@/components/common'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { getCitationAvailabilityText } from '@/features/qa'
 import type { QACitation, QAMessage, QAThinkingStep } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -22,6 +23,7 @@ function CitationTooltip({ c }: { c: QACitation }) {
   const docName = c.documentName ?? c.docName ?? '未知文档'
   const text = c.text ?? c.contentPreview ?? ''
   const score = c.score ?? 0
+  const availabilityText = getCitationAvailabilityText(c)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -35,14 +37,21 @@ function CitationTooltip({ c }: { c: QACitation }) {
       </PopoverTrigger>
       <PopoverContent className="w-72">
         <div className="text-sm font-medium">{docName}</div>
-        <div className="mt-1 text-sm italic text-muted-foreground">「{text}」</div>
+        {text ? (
+          <div className="mt-1 text-sm italic text-muted-foreground">「{text}」</div>
+        ) : (
+          <div className="mt-1 text-sm text-muted-foreground">未返回引用预览。</div>
+        )}
         <div className="mt-1 text-xs text-muted-foreground">相关度: {Math.round(score * 100)}%</div>
+        <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          {availabilityText}
+        </div>
       </PopoverContent>
     </Popover>
   )
 }
 
-/* ── Thinking panel ── */
+/* ── Safe processing summary panel ── */
 function ThinkPanel({ steps, done }: { steps: QAThinkingStep[]; done: boolean }) {
   const [open, setOpen] = useState(!done)
 
@@ -64,28 +73,31 @@ function ThinkPanel({ steps, done }: { steps: QAThinkingStep[]; done: boolean })
         ) : (
           <ChevronRight className="size-3 shrink-0" />
         )}
-        <span>思考过程 ({steps.length} 步)</span>
+        <span>处理摘要 ({steps.length} 步)</span>
         {done && <Check className="size-3 shrink-0 text-green-500" />}
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-1 space-y-1 rounded-md border border-border/50 bg-muted/50 p-3">
         {steps.map((s, i) => (
-          <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
             {/* Status dot */}
             <span
               className={cn(
-                'size-1.5 shrink-0 rounded-full',
+                'mt-2 size-1.5 shrink-0 rounded-full',
                 s.status === 'done' && 'bg-green-500',
                 s.status === 'running' && 'bg-primary animate-pulse',
                 s.status === 'pending' && 'bg-muted-foreground/40 animate-pulse',
                 s.status === 'failed' && 'bg-red-500',
               )}
             />
-            <span className="flex-1">{s.label ?? s.type}</span>
-            {s.status === 'done' && <Check className="size-3 shrink-0 text-green-500" />}
+            <span className="min-w-0 flex-1">
+              <span className="block">{s.label ?? s.type}</span>
+              {s.detail && <span className="mt-0.5 block text-xs">{s.detail}</span>}
+            </span>
+            {s.status === 'done' && <Check className="mt-1 size-3 shrink-0 text-green-500" />}
             {s.status === 'running' && (
-              <span className="animate-pulse text-xs text-primary">...</span>
+              <span className="mt-1 animate-pulse text-xs text-primary">...</span>
             )}
-            {s.status === 'failed' && <span className="text-xs text-red-500">失败</span>}
+            {s.status === 'failed' && <span className="mt-1 text-xs text-red-500">失败</span>}
           </div>
         ))}
       </CollapsibleContent>
@@ -281,6 +293,7 @@ type ChatMessagesProps = {
   messages: QAMessage[]
   streaming: boolean
   error: string | null
+  canRetry?: boolean
   suggestedPrompts: string[]
   onSuggestedClick: (prompt: string) => void
   onRetry: () => void
@@ -290,6 +303,7 @@ export default function ChatMessages({
   messages,
   streaming,
   error,
+  canRetry = false,
   suggestedPrompts,
   onSuggestedClick,
   onRetry,
@@ -344,7 +358,12 @@ export default function ChatMessages({
       })}
 
       {/* ── Error ── */}
-      {error && (
+      {error && !canRetry && (
+        <InlineNotice className="mx-4" variant="warning">
+          {error}
+        </InlineNotice>
+      )}
+      {error && canRetry && (
         <InlineNotice
           action={
             <Button variant="destructive" size="sm" onClick={onRetry}>

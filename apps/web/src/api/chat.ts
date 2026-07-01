@@ -1,14 +1,5 @@
 /**
- * Chat SSE streaming + Knowledge query — Gateway OpenAPI paths.
- *
- * SSE endpoint:  POST /qa-sessions/{sessionId}/messages (Accept: text/event-stream)
- * Knowledge:     POST /knowledge-queries
- *
- * Event types per OpenAPI QASseEventType:
- *   message.created  agent.iteration.started  reasoning.step
- *   tool.started     tool.completed           tool.failed
- *   answer.delta     citation.delta           answer.completed
- *   error            heartbeat
+ * Chat SSE streaming + Knowledge query through public Gateway OpenAPI paths.
  */
 
 import type {
@@ -19,11 +10,21 @@ import type {
   QASseEventType,
 } from '@/lib/types'
 
-import { apiClient, buildQuery, gatewayRequest } from './client'
+import { buildQuery, gatewayRequest, streamGateway } from './client'
 
-// ---------------------------------------------------------------------------
-// SSE handlers interface
-// ---------------------------------------------------------------------------
+export type ChatStreamError = {
+  code?: string
+  fatal?: boolean
+  message: string
+  requestId?: string
+  seq: number
+  status?: number
+}
+
+export type ChatAnswerDeltaData = Record<string, unknown> & {
+  content: string
+  seq: number
+}
 
 export interface ChatStreamHandlers {
   onMessageCreated?: (data: Record<string, unknown> & { seq: number }) => void
@@ -32,10 +33,11 @@ export interface ChatStreamHandlers {
   onToolStarted?: (data: Record<string, unknown> & { seq: number }) => void
   onToolCompleted?: (data: Record<string, unknown> & { seq: number }) => void
   onToolFailed?: (data: Record<string, unknown> & { seq: number }) => void
-  onAnswerDelta?: (data: Record<string, unknown> & { seq: number }) => void
+  onAnswerDelta?: (data: ChatAnswerDeltaData) => void
   onCitationDelta?: (data: Record<string, unknown> & { seq: number }) => void
   onAnswerCompleted?: (data: Record<string, unknown> & { seq: number }) => void
-  onError?: (data: { code?: string; message: string; fatal?: boolean; seq: number }) => void
+  onError?: (data: ChatStreamError) => void
+  onDone?: () => void
   onAbort?: () => void
 }
 
@@ -60,7 +62,7 @@ function dispatch(event: QASseEventType, data: unknown, handlers: ChatStreamHand
       handlers.onToolFailed?.(data as Record<string, unknown> & { seq: number })
       break
     case 'answer.delta':
-      handlers.onAnswerDelta?.(data as Record<string, unknown> & { seq: number })
+      handlers.onAnswerDelta?.(data as ChatAnswerDeltaData)
       break
     case 'citation.delta':
       handlers.onCitationDelta?.(data as Record<string, unknown> & { seq: number })
@@ -69,211 +71,156 @@ function dispatch(event: QASseEventType, data: unknown, handlers: ChatStreamHand
       handlers.onAnswerCompleted?.(data as Record<string, unknown> & { seq: number })
       break
     case 'error':
-      handlers.onError?.(data as { code?: string; message: string; fatal?: boolean; seq: number })
+      handlers.onError?.(data as ChatStreamError)
       break
     default:
       break
   }
 }
 
-/** Build auth + request-id headers for SSE requests. */
-function buildStreamHeaders(): HeadersInit {
-  const token = apiClient.getToken()
-  const headers: Record<string, string> = {
-    'X-Request-Id': `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    'Content-Type': 'application/json',
-    Accept: 'text/event-stream',
-  }
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-  return headers
+function parseSsePayload(
+  data: string,
+  fallbackSeq: number,
+  sseId?: string,
+): Record<string, unknown> & {
+  seq: number
+} {
+  const raw = JSON.parse(data) as Record<string, unknown>
+  const idSeq = sseId === undefined || sseId === '' ? undefined : Number(sseId)
+  const seq =
+    typeof idSeq === 'number' && Number.isFinite(idSeq)
+      ? idSeq
+      : typeof raw.eventSeq === 'number'
+        ? raw.eventSeq
+        : typeof raw.seq === 'number'
+          ? raw.seq
+          : fallbackSeq
+
+  return { ...raw, seq }
 }
 
-/** Combine two AbortSignals into one merged signal. */
-function mergeAbortSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
-  if (a.aborted) return a
-  if (b.aborted) return b
-  const controller = new AbortController()
-  const handler = () => controller.abort()
-  a.addEventListener('abort', handler, { once: true })
-  b.addEventListener('abort', handler, { once: true })
-  return controller.signal
+function getAnswerDeltaContent(payload: Record<string, unknown>): string {
+  if (typeof payload.content === 'string') return payload.content
+  if (typeof payload.text === 'string') return payload.text
+  return ''
 }
 
-// ---------------------------------------------------------------------------
-// POST /qa-sessions/{sessionId}/messages  (SSE stream)
-// ---------------------------------------------------------------------------
+function normalizeSsePayload(
+  event: QASseEventType,
+  payload: Record<string, unknown> & { seq: number },
+): Record<string, unknown> & { seq: number } {
+  if (event !== 'answer.delta') return payload
+  return {
+    ...payload,
+    content: getAnswerDeltaContent(payload),
+  }
+}
 
-/**
- * Initiate a streaming QA chat request via SSE.
- *
- * @param sessionId  QA session id (path parameter)
- * @param message    User message text (required body field)
- * @param handlers   Event-type callbacks
- * @param signal     Optional external AbortSignal for cancellation
- * @returns An `abort` function for cancelling the stream
- */
 export function streamChat(
   sessionId: string,
   message: string,
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
 ): { abort: () => void } {
-  const controller = new AbortController()
-  const combinedSignal = signal ? mergeAbortSignals(signal, controller.signal) : controller.signal
+  let fallbackSeq = 0
+  let maxDispatchedSeq: number | undefined
+  let didAbort = false
+  let didReceiveAnswerCompleted = false
+  let didReceiveFatalError = false
 
-  // Shared across then/catch so connection-level errors can compute a seq
-  // that passes the consumer-side monotonic-seq check.
-  let eventSeq = 0
+  const recordDispatchedSeq = (seq: number) => {
+    maxDispatchedSeq = maxDispatchedSeq === undefined ? seq : Math.max(maxDispatchedSeq, seq)
+  }
 
-  // Build request body per CreateQAMessageRequest
-  const body: Record<string, unknown> = { message }
+  const nextSyntheticSeq = () => {
+    maxDispatchedSeq = maxDispatchedSeq === undefined ? 1 : maxDispatchedSeq + 1
+    return maxDispatchedSeq
+  }
 
-  fetch(`${apiClient.baseUrl}/qa-sessions/${encodeURIComponent(sessionId)}/messages`, {
+  const isFatalErrorEvent = (
+    event: QASseEventType,
+    payload: Record<string, unknown> & { seq: number },
+  ): boolean => {
+    return event === 'error' && payload.fatal !== false
+  }
+
+  const stream = streamGateway(`/qa-sessions/${encodeURIComponent(sessionId)}/messages`, {
+    body: { message },
     method: 'POST',
-    headers: buildStreamHeaders(),
-    body: JSON.stringify(body),
-    signal: combinedSignal,
-  })
-    .then(async (res) => {
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        handlers.onError?.({
-          code: String(res.status),
-          message: text || '请求失败',
-          fatal: true,
-          seq: 0,
-        })
-        return
-      }
-
-      const reader = res.body?.getReader()
-      if (!reader) {
-        handlers.onError?.({
-          code: 'no_body',
-          message: '无法读取响应流',
-          fatal: true,
-          seq: 0,
-        })
-        return
-      }
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-      // currentEvent persists across read-loop iterations so that when an
-      // SSE event is split across network chunks the data: line in the
-      // later chunk still sees the event type from the earlier chunk.
-      let currentEvent: string | null = null
-      let currentData: string | null = null
-
-      const flushEvent = () => {
-        if (!currentEvent || currentData === null) return
-        eventSeq++
-        try {
-          const raw: Record<string, unknown> = JSON.parse(currentData)
-          const data = { seq: eventSeq, ...raw } as unknown
-          dispatch(currentEvent as QASseEventType, data, handlers)
-        } catch {
-          // ignore unparseable data lines
-        }
-        currentEvent = null
-        currentData = null
-      }
-
-      const processLines = (lines: string[]) => {
-        for (const line of lines) {
-          // Strip trailing CR for cross-platform compatibility
-          const trimmed = line.endsWith('\r') ? line.slice(0, -1) : line
-
-          if (trimmed === '') {
-            // Blank line — SSE event boundary
-            flushEvent()
-          } else if (trimmed.startsWith('event: ')) {
-            // New event type — flush previous event (if any), then capture
-            flushEvent()
-            currentEvent = trimmed.slice(7).trim()
-          } else if (trimmed.startsWith('data: ')) {
-            currentData = trimmed.slice(6)
-          }
-          // Lines starting with ':' are SSE comments — silently ignored
-        }
-      }
-
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        // Last element may be a partial line; save it for the next read
-        buffer = lines.pop() || ''
-
-        processLines(lines)
-      }
-
-      // Flush decoder remainder + any buffered partial line
-      buffer += decoder.decode()
-      if (buffer.trim()) {
-        processLines(buffer.split('\n'))
-      }
-      // Flush any event that was fully received before stream end
-      flushEvent()
-    })
-    .catch((err) => {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        handlers.onAbort?.()
-        return
-      }
-      // Connection-level errors use seq = eventSeq + 1 so they always pass
-      // the consumer-side monotonic-seq check, even when events have already
-      // been dispatched.
+    onError: (error) => {
+      if (didAbort || didReceiveFatalError) return
+      didReceiveFatalError = true
       handlers.onError?.({
-        code: 'connection_error',
-        message: err instanceof Error ? err.message : '网络异常，请检查连接',
+        code: error.code,
         fatal: true,
-        seq: eventSeq + 1,
+        message: error.message,
+        requestId: error.requestId,
+        seq: nextSyntheticSeq(),
+        status: error.status,
       })
-    })
+    },
+    onEvent: ({ data, event, id }) => {
+      if (event === 'heartbeat') return
+      if (didReceiveFatalError) return
+      fallbackSeq += 1
 
-  return { abort: () => controller.abort() }
+      try {
+        const qaEvent = event as QASseEventType
+        const payload = normalizeSsePayload(qaEvent, parseSsePayload(data, fallbackSeq, id))
+        const isStaleEvent = maxDispatchedSeq !== undefined && payload.seq <= maxDispatchedSeq
+        if (isStaleEvent) return
+        recordDispatchedSeq(payload.seq)
+        if (qaEvent === 'answer.completed') {
+          didReceiveAnswerCompleted = true
+        }
+        if (isFatalErrorEvent(qaEvent, payload)) {
+          didReceiveFatalError = true
+        }
+        dispatch(qaEvent, payload, handlers)
+      } catch {
+        didReceiveFatalError = true
+        stream.abort()
+        handlers.onError?.({
+          code: 'invalid_sse_event',
+          fatal: true,
+          message: '收到无法解析的 QA 流式事件',
+          seq: nextSyntheticSeq(),
+        })
+      }
+    },
+    onDone: () => {
+      if (didAbort || didReceiveFatalError) return
+      if (didReceiveAnswerCompleted) {
+        handlers.onDone?.()
+      } else {
+        didReceiveFatalError = true
+        handlers.onError?.({
+          code: 'stream_ended_without_completion',
+          fatal: true,
+          message: 'QA stream ended before answer.completed',
+          seq: nextSyntheticSeq(),
+        })
+      }
+    },
+    signal,
+  })
+
+  return {
+    abort: () => {
+      didAbort = true
+      stream.abort()
+      handlers.onAbort?.()
+    },
+  }
 }
 
-// ---------------------------------------------------------------------------
-// POST /qa-sessions/{sessionId}/messages  (non-streaming)
-// ---------------------------------------------------------------------------
-
-/**
- * Send a chat message and receive a completed QAMessage response.
- *
- * Unlike `streamChat`, this does NOT set `Accept: text/event-stream`.
- * The server returns a single JSON response containing the created QAMessage.
- *
- * @param sessionId  QA session id (path parameter)
- * @param message    User message text (required body field)
- * @returns The created QAMessage
- */
 export async function sendMessage(sessionId: string, message: string): Promise<QAMessage> {
   return gatewayRequest<QAMessage>(`/qa-sessions/${encodeURIComponent(sessionId)}/messages`, {
-    method: 'POST',
     body: { message },
+    method: 'POST',
   })
 }
 
-// ---------------------------------------------------------------------------
-// GET /qa-sessions/{sessionId}/events?responseRunId=...
-// ---------------------------------------------------------------------------
-
-/**
- * Replay short-lived persisted SSE events for reconnect recovery or debugging.
- *
- * Polls the server for events associated with a specific response run.
- * Useful after a disconnect to recover missed streaming events.
- *
- * @param sessionId      QA session id (path parameter)
- * @param responseRunId  The response run to replay events for (query parameter)
- * @returns Array of QASseEvent objects
- */
 export async function replayEvents(
   sessionId: string,
   responseRunId: string,
@@ -283,19 +230,11 @@ export async function replayEvents(
   )
 }
 
-// ---------------------------------------------------------------------------
-// POST /knowledge-queries
-// ---------------------------------------------------------------------------
-
-/**
- * Run a knowledge-base retrieval query without LLM.
- * Replaces the legacy RAG search endpoint.
- */
 export async function queryKnowledge(
   params: KnowledgeQueryRequest,
 ): Promise<KnowledgeQuerySummary> {
   return gatewayRequest<KnowledgeQuerySummary>('/knowledge-queries', {
-    method: 'POST',
     body: params,
+    method: 'POST',
   })
 }

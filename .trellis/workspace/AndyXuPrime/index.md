@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
+- **Total Sessions**: 25
 - **Last Active**: 2026-06-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~384 | Active |
+| `journal-1.md` | ~879 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,21 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 25 | 2026-06-30 | F-016 malformed stream closure | `2ebcc07` | `Frontend/feat/qa-capability-aligned-chat` |
+| 24 | 2026-06-30 | F-016 citation and EOF follow-up | `67c538d` | `Frontend/feat/qa-capability-aligned-chat` |
+| 23 | 2026-06-30 | F-016 completed message id fallback | `519668d` | `Frontend/feat/qa-capability-aligned-chat` |
+| 22 | 2026-06-30 | F-016 rebase onto develop 92d3afc | `8798068` | `Frontend/feat/qa-capability-aligned-chat` |
+| 21 | 2026-06-30 | F-016 rebase onto develop 6db45e7 | `e481f1e` | `Frontend/feat/qa-capability-aligned-chat` |
+| 20 | 2026-06-30 | F-016 rebase onto develop 74652c3 | `58802c3` | `Frontend/feat/qa-capability-aligned-chat` |
+| 19 | 2026-06-30 | F-016 stream payload review follow-up | `431d35a` | `Frontend/feat/qa-capability-aligned-chat` |
+| 18 | 2026-06-30 | F-016 latest develop rebase | `8eef154` | `Frontend/feat/qa-capability-aligned-chat` |
+| 17 | 2026-06-30 | F-016 SSE id sequence follow-up | `548269b` | `Frontend/feat/qa-capability-aligned-chat` |
+| 16 | 2026-06-30 | F-016 stream error sequence follow-up | `5bd7740` | `Frontend/feat/qa-capability-aligned-chat` |
+| 15 | 2026-06-30 | F-016 archive context cleanup | `bbf7efd` | `Frontend/feat/qa-capability-aligned-chat` |
+| 14 | 2026-06-30 | F-016 stream sequence preservation | `ca333e9` | `Frontend/feat/qa-capability-aligned-chat` |
+| 13 | 2026-06-30 | F-016 completed stream sequence follow-up | `43f11fa` | `Frontend/feat/qa-capability-aligned-chat` |
+| 12 | 2026-06-30 | F-016 PR review follow-up | `25ff65e` | `Frontend/feat/qa-capability-aligned-chat` |
+| 11 | 2026-06-30 | F-016 QA chat capability alignment | `879053b` | `Frontend/feat/qa-capability-aligned-chat` |
 | 10 | 2026-06-30 | Finalize PR 266 archive metadata | `f220499` | `Frontend/test/frontend-critical-flows` |
 | 9 | 2026-06-30 | Update PR 266 after develop rebase | `b6c606d` | `Frontend/test/frontend-critical-flows` |
 | 8 | 2026-06-30 | F-10 frontend critical flow tests | `7d36635` | `Frontend/test/frontend-critical-flows` |

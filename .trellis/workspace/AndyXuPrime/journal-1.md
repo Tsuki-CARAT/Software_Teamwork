@@ -382,3 +382,543 @@ Corrected the archived F-10 task commit reference after rebasing PR 266 onto lat
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: F-016 QA chat capability alignment
+
+**Date**: 2026-06-30
+**Task**: F-016 QA chat capability alignment
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Aligned QA chat SSE errors, tool summaries, citation snapshot messaging, and RAG degradation display with Gateway/backend readiness.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `879053b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 12: F-016 PR review follow-up
+
+**Date**: 2026-06-30
+**Task**: F-016 PR review follow-up
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Addressed PR review findings for QA chat: normalized answer.delta text/content payloads, blocked unsafe free-text tool summaries, added focused regression tests, and reran frontend checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `25ff65e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 13: F-016 completed stream sequence follow-up
+
+**Date**: 2026-06-30
+**Task**: F-016 completed stream sequence follow-up
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Addressed PR review finding by applying monotonic SSE sequence validation to answer.completed, adding a ChatPage regression test for stale completed events, and rerunning frontend checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `43f11fa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 14: F-016 stream sequence preservation
+
+**Date**: 2026-06-30
+**Task**: F-016 stream sequence preservation
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Preserved the remote stream-ordering fix by preventing message payload sequenceNo from overriding cross-event SSE sequence numbers, kept archived task files unchanged, and reran frontend checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ca333e9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 15: F-016 archive context cleanup
+
+**Date**: 2026-06-30
+**Task**: F-016 archive context cleanup
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Replaced archived Trellis context placeholders with real implementation/check references and updated final develop baseline.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bbf7efd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 16: F-016 stream error sequence follow-up
+
+**Date**: 2026-06-30
+**Task**: F-016 stream error sequence follow-up
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Fixed fatal QA stream errors to use the next sequence after the max dispatched stream event and added a regression test for high seq disconnects.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5bd7740` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 17: F-016 SSE id sequence follow-up
+
+**Date**: 2026-06-30
+**Task**: F-016 SSE id sequence follow-up
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Updated QA stream parsing to prefer SSE id as the cross-event sequence and covered stale completed events with id-based regression tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `548269b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 18: F-016 latest develop rebase
+
+**Date**: 2026-06-30
+**Task**: F-016 latest develop rebase
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Rebased F-016 branch onto the latest upstream/develop, refreshed Trellis record hashes, and reran frontend verification.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8eef154` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 19: F-016 stream payload review follow-up
+
+**Date**: 2026-06-30
+**Task**: F-016 stream payload review follow-up
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Handled latest Codex review by accepting backend QA tool/reasoning payload shapes, writing assistantMessageId, and marking malformed non-fatal streams failed instead of pretending replay restored state.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `431d35a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 20: F-016 rebase onto develop 74652c3
+
+**Date**: 2026-06-30
+**Task**: F-016 rebase onto develop 74652c3
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Rebased onto upstream/develop@74652c3 after another develop update, refreshed Trellis records, and reran frontend checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `58802c3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 21: F-016 rebase onto develop 6db45e7
+
+**Date**: 2026-06-30
+**Task**: F-016 rebase onto develop 6db45e7
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Rebased onto upstream/develop@6db45e7 after another develop update, refreshed Trellis records, and reran frontend check, build, unit tests, and diff check.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e481f1e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 22: F-016 rebase onto develop 92d3afc
+
+**Date**: 2026-06-30
+**Task**: F-016 rebase onto develop 92d3afc
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Rebased onto upstream/develop@92d3afc after another develop update, refreshed Trellis records, and reran frontend check, build, unit tests, and diff check.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8798068` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 23: F-016 completed message id fallback
+
+**Date**: 2026-06-30
+**Task**: F-016 completed message id fallback
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Addressed latest Codex review by allowing answer.completed to use messageId as the assistant message id fallback and covered it in the page stream sequencing test.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `519668d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 24: F-016 citation and EOF follow-up
+
+**Date**: 2026-06-30
+**Task**: F-016 citation and EOF follow-up
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Addressed latest Codex review by accepting citation snapshots without messageId and treating normal EOF without answer.completed as a fatal stream error.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `67c538d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 25: F-016 malformed stream closure
+
+**Date**: 2026-06-30
+**Task**: F-016 malformed stream closure
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Closed malformed QA streams as terminal fatal events, ignored later old-stream events, and added regression coverage for malformed SSE followed by late delta/completed events.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2ebcc07` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 26: PR 311 review follow-up
+
+**Date**: 2026-07-01
+**Task**: PR 311 Codex review follow-up
+**Branch**: `Frontend/feat/qa-capability-aligned-chat`
+
+### Summary
+
+Synced the PR branch onto latest `upstream/develop` and addressed the remaining QA chat review items: fatal finalize errors after `answer.completed`, non-retry degradation warnings, and explicit 403/forbidden capability formatting.
+
+### Main Changes
+
+- Kept QA SSE consumption open after `answer.completed` so fatal `error` events before EOF still override the completed UI state.
+- Moved chat input unlock to stream EOF and bound stream patches to the current assistant message, preventing post-completion events from modifying a later reply.
+- Rendered non-retry stream degradation notices as warning alerts without a dead retry button.
+- Added explicit QA capability formatting for `403` / `forbidden` permission denials.
+- Sanitized reasoning step label/detail before display so prompt, raw provider, internal URL, and storage details are not exposed.
+- Captured the QA SSE completion-vs-EOF gotcha in `.trellis/spec/frontend/hook-guidelines.md`.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `73e9f90` | fix(qa): handle finalize stream errors |
+| `19cb6d2` | fix(qa): finalize stream lifecycle |
+
+### Testing
+
+- [OK] `bun run --cwd apps/web test:unit -- chat.test.ts page.test.tsx capability.test.ts`
+- [OK] `bun run --cwd apps/web check`
+- [OK] `bun run --cwd apps/web build`
+- [OK] `bun run --cwd apps/web test:unit`
+- [OK] `git diff --check`
+- [OK] Re-ran after `19cb6d2`: targeted unit tests, `check`, `build`, full `test:unit`, and `git diff --check`.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Push rebased branch to origin with `--force-with-lease`.
+- Confirm PR #311 still targets `develop`.

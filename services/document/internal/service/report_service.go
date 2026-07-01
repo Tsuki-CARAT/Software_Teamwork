@@ -995,9 +995,19 @@ func (s *ReportService) ListSectionVersions(ctx context.Context, reqCtx RequestC
 }
 
 func (s *ReportService) CreateSectionVersion(ctx context.Context, reqCtx RequestContext, reportID, sectionID string, input CreateSectionVersionInput) (ReportSectionVersion, error) {
-	section, err := s.GetSection(ctx, reqCtx, reportID, sectionID)
+	report, err := s.GetReport(ctx, reqCtx, reportID)
 	if err != nil {
 		return ReportSectionVersion{}, err
+	}
+	if report.Status == ReportStatusDeleted || report.DeletedAt != nil {
+		return ReportSectionVersion{}, NewError(CodeConflict, "report has been deleted", nil)
+	}
+	section, err := s.repo.GetReportSectionByID(ctx, sectionID)
+	if err != nil {
+		return ReportSectionVersion{}, mapRepositoryReadError(err, "report section not found")
+	}
+	if section.ReportID != reportID {
+		return ReportSectionVersion{}, NewError(CodeNotFound, "report section not found", nil)
 	}
 	if input.Source != ContentSourceManual && input.Source != ContentSourceAI {
 		return ReportSectionVersion{}, ValidationError(map[string]string{"source": "source must be manual or ai"})
@@ -1009,6 +1019,13 @@ func (s *ReportService) CreateSectionVersion(ctx context.Context, reqCtx Request
 	now := s.now()
 	var created ReportSectionVersion
 	err = s.repo.WithinTx(ctx, func(txRepo ReportRepository) error {
+		currentReport, err := txRepo.GetReportByID(ctx, reportID)
+		if err != nil {
+			return mapRepositoryReadError(err, "report not found")
+		}
+		if currentReport.Status == ReportStatusDeleted || currentReport.DeletedAt != nil {
+			return NewError(CodeConflict, "report has been deleted", nil)
+		}
 		currentSection, err := txRepo.GetReportSectionByIDForUpdate(ctx, sectionID)
 		if err != nil {
 			return mapRepositoryReadError(err, "report section not found")

@@ -802,6 +802,68 @@ func TestCreateSectionVersionConflictsWhileGenerationRunning(t *testing.T) {
 	}
 }
 
+func TestCreateSectionVersionRejectsDeletedReport(t *testing.T) {
+	svc, repo := newTestService()
+	report := mustCreateReport(t, svc, "owner-1")
+	actor := RequestContext{UserID: "owner-1"}
+
+	section, err := svc.CreateSection(context.Background(), actor, report.ID, CreateSectionInput{Title: "Intro", Content: "v1"})
+	if err != nil {
+		t.Fatalf("CreateSection() error = %v", err)
+	}
+	if err := svc.SoftDeleteReport(context.Background(), actor, report.ID); err != nil {
+		t.Fatalf("SoftDeleteReport() error = %v", err)
+	}
+
+	content := "should not apply"
+	_, err = svc.CreateSectionVersion(context.Background(), actor, report.ID, section.ID, CreateSectionVersionInput{
+		Source:  ContentSourceAI,
+		Content: &content,
+	})
+	if code := errorCode(t, err); code != CodeConflict {
+		t.Fatalf("error code = %q, want %q", code, CodeConflict)
+	}
+	if len(repo.sectionVersion[section.ID]) != 0 {
+		t.Fatalf("section versions were created for deleted report: %+v", repo.sectionVersion[section.ID])
+	}
+	if got := repo.sections[section.ID]; got.Content != section.Content || got.Version != section.Version {
+		t.Fatalf("section was modified for deleted report: %+v", got)
+	}
+}
+
+func TestCreateSectionVersionRechecksDeletedReportInsideTransaction(t *testing.T) {
+	svc, repo := newTestService()
+	report := mustCreateReport(t, svc, "owner-1")
+	actor := RequestContext{UserID: "owner-1"}
+
+	section, err := svc.CreateSection(context.Background(), actor, report.ID, CreateSectionInput{Title: "Intro", Content: "v1"})
+	if err != nil {
+		t.Fatalf("CreateSection() error = %v", err)
+	}
+	repo.beforeTx = func(f *fakeReportRepository) {
+		current := f.reports[report.ID]
+		deletedAt := svc.now()
+		current.Status = ReportStatusDeleted
+		current.DeletedAt = &deletedAt
+		f.reports[report.ID] = current
+	}
+
+	content := "should not apply"
+	_, err = svc.CreateSectionVersion(context.Background(), actor, report.ID, section.ID, CreateSectionVersionInput{
+		Source:  ContentSourceAI,
+		Content: &content,
+	})
+	if code := errorCode(t, err); code != CodeConflict {
+		t.Fatalf("error code = %q, want %q", code, CodeConflict)
+	}
+	if len(repo.sectionVersion[section.ID]) != 0 {
+		t.Fatalf("section versions were created after report deletion: %+v", repo.sectionVersion[section.ID])
+	}
+	if got := repo.sections[section.ID]; got.Content != section.Content || got.Version != section.Version {
+		t.Fatalf("section was modified after report deletion: %+v", got)
+	}
+}
+
 func TestCreateSectionVersionRechecksRunningStatusInsideTransaction(t *testing.T) {
 	svc, repo := newTestService()
 	report := mustCreateReport(t, svc, "owner-1")

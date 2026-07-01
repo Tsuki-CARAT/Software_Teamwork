@@ -742,6 +742,11 @@ outline generation -> parse AI response outside transaction -> transaction inser
 - Creating a section version must insert `report_section_versions` and switch
   the current `report_sections` content/tables/version/source flags in the same
   `ReportRepository.WithinTx` operation.
+- Deleted reports are not valid section-version write targets. A report with
+  `ReportStatusDeleted` or non-nil `DeletedAt` must return `409 conflict`
+  before inserting `report_section_versions` or updating `report_sections`;
+  re-check the report state inside the write transaction before the insert and
+  current-section switch.
 - The next version number must be greater than both `ReportSection.version` and
   every existing `ReportSectionVersion.version`.
 - Manual content or table edits through section save/update paths must create a
@@ -765,6 +770,7 @@ outline generation -> parse AI response outside transaction -> transaction inser
 | Condition | Required response / behavior |
 | --- | --- |
 | `source` is not `manual` or `ai` | `400 validation_error` |
+| Report is soft-deleted by status or `deleted_at` | `409 conflict`; do not create a version or mutate the current section |
 | Target section belongs to another report | `404 not_found` |
 | Target section has `generation_status = running` | `409 conflict`; do not create a version |
 | Version insert succeeds but current-section switch fails | Roll back inserted version and return typed dependency/not-found error |
@@ -783,6 +789,8 @@ outline generation -> parse AI response outside transaction -> transaction inser
 ### 6. Tests Required
 
 - Service tests for conflict while generation is running.
+- Service tests for deleted-report rejection, including the case where the
+  report is deleted after the entry check but before the transactional insert.
 - Service tests for version creation plus current-section switch in one
   transaction.
 - Rollback tests where current-section update fails after version insertion.

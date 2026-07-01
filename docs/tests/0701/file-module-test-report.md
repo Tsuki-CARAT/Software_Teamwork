@@ -1,6 +1,6 @@
 # File 模块测试报告
 
-日期：2026-07-01  
+日期：2026-07-01
 范围：`services/file`、File Service 所依赖的 PostgreSQL / MinIO 本地工作区，以及验证 File 能否服务 `knowledge`、`document` 等 owner service 的相关边界。
 
 ## 1. 测试目标
